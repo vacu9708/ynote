@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ynote
+Comment=Engineer-friendly sticky notes for your desktop
+Exec=ynote
+Icon=ynote
+Terminal=false
+StartupNotify=false
+StartupWMClass=Ynote
+Categories=Utility;
