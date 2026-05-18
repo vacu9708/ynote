@@ -31,6 +31,10 @@ install -m 0755 "$ROOT_DIR/packaging/debian/postinst" "$BUILD_DIR/DEBIAN/postins
 install -m 0755 "$ROOT_DIR/packaging/debian/postrm" "$BUILD_DIR/DEBIAN/postrm"
 
 install -m 0755 "$ROOT_DIR/ynote.py" "$BUILD_DIR/usr/share/ynote/ynote.py"
+while IFS= read -r file; do
+    rel="${file#$ROOT_DIR/}"
+    install -D -m 0644 "$file" "$BUILD_DIR/usr/share/ynote/$rel"
+done < <(find "$ROOT_DIR/ynote" -type f -name '*.py' | sort)
 install -m 0644 "$ROOT_DIR/icon.png" "$BUILD_DIR/usr/share/ynote/icon.png"
 install -m 0644 "$ROOT_DIR/icon.png" "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/ynote.png"
 install -m 0644 "$ROOT_DIR/packaging/ynote.desktop" "$BUILD_DIR/usr/share/applications/ynote.desktop"
