@@ -3,7 +3,7 @@ Version: 1.0.0
 Section: utils
 Priority: optional
 Architecture: all
-Maintainer: Youngsik Yang <ynote@example.invalid>
+Maintainer: Youngsik Yang <vacu9708@google.com>
 Depends: python3, python3-gi, gir1.2-gtk-3.0
 Description: Engineer-friendly sticky notes for GNOME desktops
  Ynote is a lightweight GTK desktop notes app for Ubuntu and GNOME-based
