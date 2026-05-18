@@ -1,0 +1,2 @@
+"""Ynote package."""
+
