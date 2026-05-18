@@ -33,7 +33,7 @@ Build the package:
 Install the generated package:
 
 ```bash
-sudo apt install ./dist/ynote_1.0.0_all.deb
+sudo apt install ./dist/ynote_1.1.0_all.deb
 ```
 
 Run Ynote:
