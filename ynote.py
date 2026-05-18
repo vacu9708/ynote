@@ -314,6 +314,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._restore_images(data.get('images', []))
         self.tv.connect('populate-popup', self._on_tv_popup)
         self.tv.connect('key-press-event', self._on_tv_key_press)
+        self.tv.connect('button-press-event', self._on_tv_button_press)
 
         # ---- Search bar (hidden until Ctrl+F) ----
         # Wrapped in a Revealer so the widget is always realized — avoids the
@@ -923,6 +924,28 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._restore_state(self._history[self._hist_pos])
 
     # ------------------------------------------------------------------ key handling
+
+    def _on_tv_button_press(self, tv, event):
+        if event.type != Gdk.EventType.DOUBLE_BUTTON_PRESS or event.button != 1:
+            return False
+        buf = tv.get_buffer()
+        x, y = tv.window_to_buffer_coords(
+            Gtk.TextWindowType.TEXT, int(event.x), int(event.y))
+        _, it = tv.get_iter_at_location(x, y)
+        if not self._iter_has_tag_context(it, self._code_tag):
+            return False
+        clicked_line = it.get_line()
+        first_line = clicked_line
+        while first_line > 0 and self._line_is_fully_tagged(self._code_tag, first_line - 1):
+            first_line -= 1
+        last_line = clicked_line
+        line_count = buf.get_line_count()
+        while last_line < line_count - 1 and self._line_is_fully_tagged(self._code_tag, last_line + 1):
+            last_line += 1
+        start = buf.get_iter_at_line(first_line)
+        _, end = self._line_bounds(last_line)
+        buf.select_range(start, end)
+        return True
 
     def _on_tv_key_press(self, tv, event):
         state = event.state & Gtk.accelerator_get_default_mod_mask()
