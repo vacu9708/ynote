@@ -303,6 +303,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                                         right_margin=8,
                                         pixels_above_lines=2,
                                         pixels_below_lines=2)
+        self._hl_tag.set_priority(buf.get_tag_table().get_size() - 1)
         for s, e in data.get('bold_ranges', []):
             buf.apply_tag(self._bold_tag,
                           buf.get_iter_at_offset(s),
