@@ -303,7 +303,9 @@ class NoteWindow(Gtk.ApplicationWindow):
                                         right_margin=8,
                                         pixels_above_lines=2,
                                         pixels_below_lines=2)
+        self._emoji_tag = buf.create_tag('emoji', scale=self._emoji_scale())
         self._hl_tag.set_priority(buf.get_tag_table().get_size() - 1)
+        self._refresh_emoji_tags()
         for s, e in data.get('bold_ranges', []):
             buf.apply_tag(self._bold_tag,
                           buf.get_iter_at_offset(s),
@@ -825,8 +827,11 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._pending_code_inserts.pop(0)
             if self._pending_code_inserts else False)
         if not apply_code or not text:
+            if text:
+                self._refresh_emoji_tags()
             return
 
+        self._refresh_emoji_tags()
         if text == '\n':
             return
 
@@ -904,6 +909,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(state.get('images', []))
+        self._refresh_emoji_tags()
         self._restoring = False
         self._queue_save()
 
@@ -1263,6 +1269,42 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _apply_note_font(self):
         css = f'textview {{ font-size: {self._font_size}px; }}'.encode()
         self._font_prov.load_from_data(css)
+        if hasattr(self, '_emoji_tag'):
+            self._emoji_tag.set_property('scale', self._emoji_scale())
+
+    def _emoji_scale(self):
+        return (self._font_size + 3) / self._font_size
+
+    def _is_emoji_char(self, char):
+        codepoint = ord(char)
+        return (
+            char in ('\u200d', '\ufe0e', '\ufe0f')
+            or 0x1F000 <= codepoint <= 0x1FAFF
+            or 0x2600 <= codepoint <= 0x27BF
+        )
+
+    def _refresh_emoji_tags(self):
+        buf = self.tv.get_buffer()
+        start = buf.get_start_iter()
+        end = buf.get_end_iter()
+        buf.remove_tag(self._emoji_tag, start, end)
+
+        it = start.copy()
+        range_start = None
+        while it.compare(end) < 0:
+            char = it.get_char()
+            next_it = it.copy()
+            next_it.forward_char()
+            if self._is_emoji_char(char):
+                if range_start is None:
+                    range_start = it.copy()
+            elif range_start is not None:
+                buf.apply_tag(self._emoji_tag, range_start, it)
+                range_start = None
+            it = next_it
+
+        if range_start is not None:
+            buf.apply_tag(self._emoji_tag, range_start, end)
 
     def _build_font_popover(self):
         self._font_popover = Gtk.Popover(relative_to=self._fontsize_btn)
