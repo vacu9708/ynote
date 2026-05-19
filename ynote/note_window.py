@@ -733,7 +733,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         if apply_bold:
             self._apply_tag_to_non_newline_chars(buf, self._bold_tag, start, end)
         if apply_code and text != '\n':
-            self._apply_tag_to_non_newline_chars(buf, self._code_tag, start, end)
+            for line in range(start.get_line(), end.get_line() + 1):
+                self._tag_code_line(line)
             self._remove_redundant_code_anchors(start.get_line(), end.get_line())
         self._refresh_emoji_tags()
 
