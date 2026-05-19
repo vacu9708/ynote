@@ -30,7 +30,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                              'code': data.get('code_ranges', []),
                              'images': data.get('images', [])}]
         self._hist_pos  = 0
-        self._pending_code_inserts = []
+        self._bold_active = False
+        self._pending_format_inserts = []
         self._image_widgets = []
         self._title_drag = None
 
@@ -134,11 +135,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         text_group.get_style_context().add_class('tool-group')
         btn_row.pack_start(text_group, False, False, 0)
 
-        bold_btn = Gtk.Button(label='B')
-        bold_btn.set_tooltip_text('Bold  (Ctrl+B)')
-        bold_btn.set_can_focus(False)
-        bold_btn.connect('clicked', lambda _: self._toggle_bold())
-        text_group.pack_start(bold_btn, False, False, 0)
+        self._bold_btn = Gtk.Button(label='B')
+        self._bold_btn.set_tooltip_text('Bold  (Ctrl+B)')
+        self._bold_btn.set_can_focus(False)
+        self._bold_btn.connect('clicked', lambda _: self._toggle_bold())
+        text_group.pack_start(self._bold_btn, False, False, 0)
 
         bullet_btn = Gtk.Button(label='•')
         bullet_btn.set_tooltip_text('Bullet list')
@@ -177,7 +178,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, min_btn, close_btn, del_btn,
-                    bold_btn, bullet_btn, code_btn, image_btn,
+                    self._bold_btn, bullet_btn, code_btn, image_btn,
                     self._fontsize_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
@@ -713,29 +714,28 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_buf_insert_text(self, buf, location, text, length):
         if self._restoring:
             return
-        self._pending_code_inserts.append(
-            self._iter_has_tag_context(location, self._code_tag))
+        self._pending_format_inserts.append(
+            (self._bold_active,
+             self._iter_has_tag_context(location, self._code_tag)))
 
     def _after_buf_insert_text(self, buf, location, text, length):
         if self._restoring:
             return
-        apply_code = (
-            self._pending_code_inserts.pop(0)
-            if self._pending_code_inserts else False)
-        if not apply_code or not text:
-            if text:
-                self._refresh_emoji_tags()
-            return
-
-        self._refresh_emoji_tags()
-        if text == '\n':
+        apply_bold, apply_code = (
+            self._pending_format_inserts.pop(0)
+            if self._pending_format_inserts else (False, False))
+        if not text:
             return
 
         end = location.copy()
         start = end.copy()
         start.backward_chars(len(text))
-        self._apply_tag_to_non_newline_chars(buf, self._code_tag, start, end)
-        self._remove_redundant_code_anchors(start.get_line(), end.get_line())
+        if apply_bold:
+            self._apply_tag_to_non_newline_chars(buf, self._bold_tag, start, end)
+        if apply_code and text != '\n':
+            self._apply_tag_to_non_newline_chars(buf, self._code_tag, start, end)
+            self._remove_redundant_code_anchors(start.get_line(), end.get_line())
+        self._refresh_emoji_tags()
 
     def _apply_tag_to_non_newline_chars(self, buf, tag, start, end):
         it = start.copy()
@@ -1004,7 +1004,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _toggle_tag(self, tag):
         buf = self.tv.get_buffer()
         if not buf.get_has_selection():
-            return
+            return False
         start, end = buf.get_selection_bounds()
         it, all_tagged = start.copy(), True
         while it.compare(end) < 0:
@@ -1022,9 +1022,12 @@ class NoteWindow(Gtk.ApplicationWindow):
             buf.apply_tag(tag, start, end)
         self._take_snapshot()
         self._queue_save()
+        return True
 
     def _toggle_bold(self):
-        self._toggle_tag(self._bold_tag)
+        if not self._toggle_tag(self._bold_tag):
+            self._bold_active = not self._bold_active
+            self._refresh_format_buttons()
 
     def _toggle_bullet(self):
         buf = self.tv.get_buffer()
@@ -1081,6 +1084,13 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         self._take_snapshot()
         self._queue_save()
+
+    def _refresh_format_buttons(self):
+        ctx = self._bold_btn.get_style_context()
+        if self._bold_active:
+            ctx.add_class('pinned')
+        else:
+            ctx.remove_class('pinned')
 
     def _on_tv_popup(self, _, menu):
         redo_item = Gtk.MenuItem(label='Redo  (Ctrl+Y)')
