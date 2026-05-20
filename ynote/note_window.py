@@ -126,6 +126,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         del_btn.connect('clicked', lambda _: self.app.delete_note(self.note_id))
         note_group.pack_start(del_btn, False, False, 0)
 
+        hidden_btn = Gtk.Button(label='▤')
+        hidden_btn.set_tooltip_text('Hidden Notes')
+        hidden_btn.connect('clicked',
+                           lambda _: self.app.show_hidden_notes_manager(self))
+        note_group.pack_start(hidden_btn, False, False, 0)
+
         # Visual/semantic split between note actions and text-editing actions.
         split = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
         split.get_style_context().add_class('tool-separator')
@@ -143,7 +149,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         text_group.pack_start(self._bold_btn, False, False, 0)
 
         bullet_btn = Gtk.Button(label='•')
-        bullet_btn.set_tooltip_text('Bullet list')
+        bullet_btn.set_tooltip_text('Bullet list  (Ctrl+8)')
         bullet_btn.set_can_focus(False)
         bullet_btn.connect('clicked', lambda _: self._toggle_bullet())
         text_group.pack_start(bullet_btn, False, False, 0)
@@ -153,12 +159,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         code_btn.set_can_focus(False)
         code_btn.connect('clicked', lambda _: self._toggle_code_block())
         text_group.pack_start(code_btn, False, False, 0)
-
-        image_btn = Gtk.Button(label='🖼')
-        image_btn.set_tooltip_text('Insert image')
-        image_btn.set_can_focus(False)
-        image_btn.connect('clicked', lambda _: self._choose_and_insert_image())
-        text_group.pack_start(image_btn, False, False, 0)
 
         self._fontsize_btn = Gtk.Button(label=f'{self._font_size}px')
         self._fontsize_btn.set_tooltip_text('Font size')
@@ -175,7 +175,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, min_btn, close_btn, del_btn,
-                    self._bold_btn, bullet_btn, code_btn, image_btn,
+                    hidden_btn, self._bold_btn, bullet_btn, code_btn,
                     self._fontsize_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
@@ -267,6 +267,10 @@ class NoteWindow(Gtk.ApplicationWindow):
                       lambda *_: self._toggle_search() or True)
         accel.connect(Gdk.KEY_b, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._toggle_bold() or True)
+        accel.connect(Gdk.KEY_8, Gdk.ModifierType.CONTROL_MASK, 0,
+                      lambda *_: self._toggle_bullet() or True)
+        accel.connect(Gdk.KEY_KP_8, Gdk.ModifierType.CONTROL_MASK, 0,
+                      lambda *_: self._toggle_bullet() or True)
         accel.connect(Gdk.KEY_c,
                       Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK,
                       0, lambda *_: self._toggle_code_block() or True)
@@ -1239,6 +1243,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         search_item = Gtk.MenuItem(label='Search  (Ctrl+F)')
         search_item.connect('activate', lambda _: self._toggle_search())
 
+        image_item = Gtk.MenuItem(label='Insert Image')
+        image_item.connect('activate', lambda _: self._choose_and_insert_image())
+
+        menu.prepend(Gtk.SeparatorMenuItem())
+        menu.prepend(image_item)
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(search_item)
         menu.prepend(Gtk.SeparatorMenuItem())
@@ -1251,13 +1260,6 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _show_ctx_menu(self, ev):
         menu = Gtk.Menu()
-
-        restore_item = Gtk.MenuItem(label='Hidden Notes')
-        restore_item.connect('activate',
-                             lambda *_: self.app.show_hidden_notes_manager(self))
-        menu.append(restore_item)
-
-        menu.append(Gtk.SeparatorMenuItem())
 
         edit_title = Gtk.MenuItem(label='Edit Title')
         edit_title.connect('activate', lambda _: self._start_title_edit())
