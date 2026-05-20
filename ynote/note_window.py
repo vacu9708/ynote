@@ -20,6 +20,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.note_id  = data['id']
         self.title    = data['title']
         self._on_top  = data['on_top']
+        self.sort_order = data['sort_order']
         self._font_size = data['font_size']
         self._sid       = None
         self._editing   = False
@@ -294,7 +295,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                 btn_row.reorder_child(grip, 0)
 
         self.connect('configure-event',    self._on_configure)
-        self.connect('focus-in-event',     lambda *_: self.app._on_note_focus_in())
+        self.connect('focus-in-event',     lambda *_: self.app._on_note_focus_in(self))
         self.connect('focus-out-event',    lambda *_: self.app._on_note_focus_out())
         self.connect('window-state-event', self._on_window_state)
         self.connect('delete-event', lambda *_: self.app.quit_app() or True)
@@ -1251,26 +1252,9 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _show_ctx_menu(self, ev):
         menu = Gtk.Menu()
 
-        # Hidden notes submenu
-        hidden = [(nid, w) for nid, w in self.app.notes.items()
-                  if not w.get_visible()]
-        sub = Gtk.Menu()
-        if hidden:
-            for nid, w in hidden:
-                label = w.title or '(untitled)'
-                it = Gtk.MenuItem(label=f'↩  {label}')
-                it.connect('activate', lambda _, n=nid: self.app.show_note(n))
-                sub.append(it)
-            sub.append(Gtk.SeparatorMenuItem())
-            show_all = Gtk.MenuItem(label='Restore All Notes')
-            show_all.connect('activate', lambda _: self.app.show_all())
-            sub.append(show_all)
-        else:
-            no_item = Gtk.MenuItem(label='No hidden notes')
-            no_item.set_sensitive(False)
-            sub.append(no_item)
         restore_item = Gtk.MenuItem(label='Hidden Notes')
-        restore_item.set_submenu(sub)
+        restore_item.connect('activate',
+                             lambda *_: self.app.show_hidden_notes_manager(self))
         menu.append(restore_item)
 
         menu.append(Gtk.SeparatorMenuItem())
@@ -1399,6 +1383,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         return dict(id=self.note_id, x=x, y=y, w=w, h=h,
                     text=text, title=self.title, on_top=self._on_top,
                     hidden=not self.get_visible(),
+                    sort_order=self.sort_order,
                     bold_ranges=self._get_tag_ranges(self._bold_tag),
                     code_ranges=self._get_tag_ranges(self._code_tag),
                     images=self._get_images_state(),
