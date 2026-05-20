@@ -13,6 +13,7 @@ def test_normalize_note_data_fills_defaults_for_old_saved_notes():
     assert note['h'] == 300
     assert note['on_top'] is False
     assert note['hidden'] is False
+    assert note['sort_order'] == 0.0
     assert note['bold_ranges'] == []
     assert note['code_ranges'] == []
     assert note['images'] == []
@@ -46,6 +47,7 @@ def test_normalize_note_data_casts_boolean_and_integer_fields():
             'h': '400',
             'on_top': 1,
             'hidden': '',
+            'sort_order': '2.5',
             'font_size': '18',
         }
     )
@@ -56,4 +58,5 @@ def test_normalize_note_data_casts_boolean_and_integer_fields():
     assert note['h'] == 400
     assert note['on_top'] is True
     assert note['hidden'] is False
+    assert note['sort_order'] == 2.5
     assert note['font_size'] == 18

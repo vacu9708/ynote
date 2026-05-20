@@ -10,6 +10,7 @@ DEFAULT_NOTE = {
     'h': 300,
     'on_top': False,
     'hidden': False,
+    'sort_order': 0.0,
     'bold_ranges': [],
     'code_ranges': [],
     'images': [],
@@ -29,6 +30,7 @@ def normalize_note_data(data, note_id_factory=None):
     note['text'] = note.get('text') or ''
     note['on_top'] = bool(note.get('on_top', False))
     note['hidden'] = bool(note.get('hidden', False))
+    note['sort_order'] = float(note.get('sort_order') or 0.0)
     note['bold_ranges'] = list(note.get('bold_ranges') or [])
     note['code_ranges'] = list(note.get('code_ranges') or [])
     note['images'] = list(note.get('images') or [])
@@ -38,4 +40,3 @@ def normalize_note_data(data, note_id_factory=None):
         note[key] = int(note.get(key, DEFAULT_NOTE[key]))
 
     return note
-

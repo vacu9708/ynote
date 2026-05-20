@@ -13,6 +13,7 @@ from .images import (
     image_files_from_metadata,
     referenced_image_files,
 )
+from .note_manager_window import HiddenNotesWindow
 from .note_window import NoteWindow
 from .storage import load_notes, save_notes
 from .styles import BASE_CSS
@@ -26,6 +27,8 @@ class PostItApp(Gtk.Application):
         self._status_icon  = None
         self._tray_menu    = None
         self._notes_raised = False
+        self._hidden_notes_window = None
+        self._current_note = None
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -87,7 +90,9 @@ class PostItApp(Gtk.Application):
             self.raise_all()
             self._notes_raised = True
 
-    def _on_note_focus_in(self):
+    def _on_note_focus_in(self, note=None):
+        if note is not None:
+            self._current_note = note
         self._notes_raised = True
 
     def _on_note_focus_out(self):
@@ -116,25 +121,8 @@ class PostItApp(Gtk.Application):
     def _rebuild_indicator_menu(self):
         menu = Gtk.Menu()
 
-        hidden = [(nid, w) for nid, w in self.notes.items() if not w.get_visible()]
-
         restore_item = Gtk.MenuItem(label='Hidden Notes')
-        sub = Gtk.Menu()
-        if hidden:
-            for nid, w in hidden:
-                label = w.title or '(untitled)'
-                it = Gtk.MenuItem(label=f'↩  {label}')
-                it.connect('activate', lambda _, n=nid: self.show_note(n))
-                sub.append(it)
-            sub.append(Gtk.SeparatorMenuItem())
-            show_all = Gtk.MenuItem(label='Restore All Notes')
-            show_all.connect('activate', lambda _: self.show_all())
-            sub.append(show_all)
-        else:
-            no_item = Gtk.MenuItem(label='No hidden notes')
-            no_item.set_sensitive(False)
-            sub.append(no_item)
-        restore_item.set_submenu(sub)
+        restore_item.connect('activate', lambda *_: self.show_hidden_notes_manager())
         menu.append(restore_item)
         menu.append(Gtk.SeparatorMenuItem())
 
@@ -150,6 +138,7 @@ class PostItApp(Gtk.Application):
 
         menu.show_all()
         self._tray_menu = menu
+        self._refresh_hidden_notes_manager()
 
     # ------------------------------------------------------------------ notes
 
@@ -229,6 +218,58 @@ class PostItApp(Gtk.Application):
             w.hide()
         self._rebuild_indicator_menu()
         self.save_all()
+
+    def hidden_notes(self):
+        return sorted(
+            [(nid, w) for nid, w in self.notes.items() if not w.get_visible()],
+            key=lambda item: (
+                item[1].sort_order,
+                item[1].title.lower(),
+                item[0],
+            ),
+        )
+
+    def move_hidden_note(self, note_id, direction):
+        note = self.notes.get(note_id)
+        if note is None or note.get_visible():
+            return
+
+        siblings = self.hidden_notes()
+        index = next((i for i, (nid, _) in enumerate(siblings)
+                      if nid == note_id), None)
+        if index is None:
+            return
+
+        target = index + direction
+        if target < 0 or target >= len(siblings):
+            return
+
+        siblings[index], siblings[target] = siblings[target], siblings[index]
+        self._assign_sort_order(siblings)
+        self.save_all()
+        self._rebuild_indicator_menu()
+
+    def _assign_sort_order(self, notes):
+        for index, (_, note) in enumerate(notes):
+            note.sort_order = float(index)
+
+    def show_hidden_notes_manager(self, parent_note=None):
+        if parent_note is None:
+            parent_note = self._current_note
+        if self._hidden_notes_window is None:
+            self._hidden_notes_window = HiddenNotesWindow(self)
+            self._hidden_notes_window.connect(
+                'destroy', lambda *_: self._clear_hidden_notes_manager())
+        self._hidden_notes_window.set_parent_note(parent_note)
+        self._hidden_notes_window.refresh()
+        self._hidden_notes_window.present()
+
+    def _clear_hidden_notes_manager(self):
+        self._hidden_notes_window = None
+
+    def _refresh_hidden_notes_manager(self):
+        if self._hidden_notes_window is not None:
+            self._hidden_notes_window.refresh()
 
     def _referenced_image_files(self, data=None, include_history=True):
         if data is None:
