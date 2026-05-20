@@ -6,7 +6,7 @@ box.hdr {
 }
 box.hdr > eventbox { min-height: 26px; }
 box.btmbar {
-    padding: 3px 5px 3px 3px;
+    padding: 3px 0;
     background: #E8D800;
     min-height: 30px;
 }
@@ -74,4 +74,3 @@ box.search-bar entry {
     font-size: 12px;
 }
 """
-
