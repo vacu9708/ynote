@@ -35,6 +35,10 @@ class PostItApp(Gtk.Application):
         os.makedirs(CONF_DIR, exist_ok=True)
         os.makedirs(IMAGES_DIR, exist_ok=True)
 
+        settings = Gtk.Settings.get_default()
+        if settings is not None:
+            settings.set_property('gtk-tooltip-timeout', 0)
+
         if os.path.exists(ICON_PATH):
             Gtk.Window.set_default_icon_from_file(ICON_PATH)
 
