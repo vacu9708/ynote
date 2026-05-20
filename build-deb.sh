@@ -13,7 +13,7 @@ fi
 
 VERSION="$(awk '/^Version: / { print $2; exit }' "$CONTROL_FILE")"
 PACKAGE="$(awk '/^Package: / { print $2; exit }' "$CONTROL_FILE")"
-DEB_FILE="$DIST_DIR/${PACKAGE}_${VERSION}_all.deb"
+DEB_FILE="$DIST_DIR/${PACKAGE}_${VERSION}.deb"
 BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ynote-deb.XXXXXX")"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 chmod 0755 "$BUILD_DIR"
