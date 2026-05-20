@@ -8,22 +8,23 @@ Ynote is a lightweight GTK desktop notes app for Ubuntu and GNOME-based Linux sy
 It is built for the kind of notes engineers keep beside their editor: command/code snippets,
 debugging context, screenshots, and reminders that should always stay visible.
 
-## Origin
-
-Ynote started from a practical need while working as an embedded software
-engineer: I needed a sticky note app for Ubuntu to handle the kinds of
-notes engineers keep beside their editor. I could not find one that fit that
-workflow well, so I built Ynote with help from Codex and Claude.
-
 ## Highlights
 
 - Floating desktop notes with automatic local saving
 - Always-on-top pinning for notes you need beside your editor
 - Rich text basics: bold text, bullet lists, undo/redo, and per-note font size
 - Code blocks for commands and snippets
-- Image insertion and image paste support
+- Image insertion from the text context menu and image paste support
 - Search inside a note
-- Hide notes and restore them later from the tray/menu
+- Hidden notes manager with manual ordering and double-click restore
+
+## Usage Notes
+
+- Use the `▤` toolbar button or the tray menu to open the hidden notes manager.
+- Use `↑` / `↓` in the hidden notes manager to order hidden notes.
+- Double-click a hidden note in the manager to restore it.
+- Right-click inside a note to insert an image from the text context menu.
+- Use `Ctrl+8` to toggle bullet-list formatting.
 
 ## Architecture
 
@@ -48,6 +49,7 @@ flowchart TD
     subgraph AppLayer["Application Layer"]
         App["ynote/app.py<br/>Gtk.Application lifecycle"]
         Window["ynote/note_window.py<br/>note window + GTK interactions"]
+        Manager["ynote/note_manager_window.py<br/>hidden notes manager"]
     end
 
     subgraph Domain["Testable Domain Logic"]
@@ -67,6 +69,7 @@ flowchart TD
 
     Launcher --> Main --> App
     App --> Window
+    App --> Manager
     App --> Storage
     App --> Images
     Window --> Models
@@ -79,7 +82,7 @@ flowchart TD
 
     classDef module fill:#FFFFFF,stroke:#4A5568,stroke-width:1px,color:#1A202C
 
-    class Launcher,Main,App,Window,Models,Storage,Images,Config,Styles,Tests module
+    class Launcher,Main,App,Window,Manager,Models,Storage,Images,Config,Styles,Tests module
 
     style Startup fill:#E8F3FF,stroke:#2F6FAB,stroke-width:1px,color:#102A43
     style AppLayer fill:#FFF4D6,stroke:#B7791F,stroke-width:1px,color:#3D2C00
@@ -151,8 +154,9 @@ Diagram notes:
 | Area | Module | Responsibility |
 | --- | --- | --- |
 | Entrypoint | `ynote.py`, `ynote/main.py` | Preserve `python3 ynote.py` source-checkout execution and handle Wayland-to-X11 restart behavior |
-| Application | `ynote/app.py` | Own the GTK application lifecycle, tray menu, note collection, save coordination, and shutdown |
-| Window/UI | `ynote/note_window.py` | Build and manage note windows, text editing, shortcuts, search, image insertion, and window behavior |
+| Application | `ynote/app.py` | Own the GTK application lifecycle, tray menu, note collection, hidden-note ordering, save coordination, and shutdown |
+| Window/UI | `ynote/note_window.py` | Build and manage note windows, text editing, shortcuts, search, text context-menu actions, and window behavior |
+| Hidden notes manager | `ynote/note_manager_window.py` | List hidden notes, restore notes, and reorder hidden notes through a dedicated GTK window |
 | Data model | `ynote/models.py` | Normalize saved note data and preserve backward-compatible defaults |
 | Persistence | `ynote/storage.py` | Load and save `notes.json` with atomic replacement |
 | Images | `ynote/images.py` | Normalize image metadata, track references, and remove orphaned copied images |
@@ -217,7 +221,8 @@ precise window positioning, always-on-top notes, tray/status-icon behavior, and
 raising/lowering note windows, are more reliable under X11/XWayland than native
 Wayland.
 
-When Ynote detects a Wayland session, it automatically restarts itself with:
+When Ynote detects a Wayland session, it automatically restarts itself with the
+X11 backend enabled.
 
 ## Data Location
 
