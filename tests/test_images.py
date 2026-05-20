@@ -1,5 +1,6 @@
 from ynote.images import (
     cleanup_orphaned_images,
+    image_files_from_metadata,
     image_path,
     normalize_image_meta,
     referenced_image_files,
@@ -36,6 +37,15 @@ def test_image_path_resolves_relative_files_under_images_dir(tmp_path):
 
 def test_image_path_returns_absolute_files_unchanged(tmp_path):
     assert image_path({'file': '/tmp/photo.png'}, tmp_path) == '/tmp/photo.png'
+
+
+def test_image_files_from_metadata_uses_basenames_and_ignores_absolute_paths():
+    assert image_files_from_metadata([
+        {'file': 'one.png'},
+        {'file': 'nested/two.jpg'},
+        {'file': '/tmp/external.png'},
+        {'file': ''},
+    ]) == {'one.png', 'two.jpg'}
 
 
 def test_referenced_image_files_uses_basenames_and_ignores_absolute_paths():

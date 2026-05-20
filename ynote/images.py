@@ -28,15 +28,20 @@ def image_path(meta, images_dir):
     return os.path.join(os.fspath(images_dir), os.path.basename(name))
 
 
+def image_files_from_metadata(images):
+    files = set()
+    for meta in images or []:
+        name = meta.get('file', '')
+        if name and not os.path.isabs(name):
+            files.add(os.path.basename(name))
+    return files
+
+
 def referenced_image_files(notes_data, history_files=()):
     referenced = set()
 
     for note in notes_data or []:
-        for meta in note.get('images', []):
-            name = meta.get('file', '')
-            if not name or os.path.isabs(name):
-                continue
-            referenced.add(os.path.basename(name))
+        referenced.update(image_files_from_metadata(note.get('images', [])))
 
     for name in history_files or ():
         if name and not os.path.isabs(name):
