@@ -9,7 +9,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 
 from .config import CODE_ANCHOR, IMAGE_ANCHOR, IMAGES_DIR
-from .images import image_path, normalize_image_meta
+from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .models import normalize_note_data
 
 class NoteWindow(Gtk.ApplicationWindow):
@@ -233,6 +233,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.tv.connect('populate-popup', self._on_tv_popup)
         self.tv.connect('key-press-event', self._on_tv_key_press)
         self.tv.connect('button-press-event', self._on_tv_button_press)
+        self.tv.connect('copy-clipboard', self._on_copy_clipboard)
+        self.tv.connect('cut-clipboard', self._on_cut_clipboard)
+        self.tv.connect('paste-clipboard', self._on_paste_clipboard)
 
         # ---- Search bar (hidden until Ctrl+F) ----
         # Wrapped in a Revealer so the widget is always realized — avoids the
@@ -519,10 +522,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def history_image_files(self):
         files = set()
         for state in self._history:
-            for meta in state.get('images', []):
-                name = meta.get('file', '')
-                if name and not os.path.isabs(name):
-                    files.add(os.path.basename(name))
+            files.update(image_files_from_metadata(state.get('images', [])))
         return files
 
     def _save_pixbuf_to_images_dir(self, pixbuf, original_name='pasted-image.png'):
@@ -659,6 +659,141 @@ class NoteWindow(Gtk.ApplicationWindow):
                 self.app.save_all()
                 return
             it.forward_char()
+
+    # ------------------------------------------------------------------ rich clipboard
+
+    def _get_tag_ranges_between(self, tag, start_offset, end_offset):
+        ranges = []
+        for tag_start, tag_end in self._get_tag_ranges(tag):
+            clipped_start = max(tag_start, start_offset)
+            clipped_end = min(tag_end, end_offset)
+            if clipped_start < clipped_end:
+                ranges.append([
+                    clipped_start - start_offset,
+                    clipped_end - start_offset,
+                ])
+        return ranges
+
+    def _get_images_between(self, start, end):
+        images = []
+        start_offset = start.get_offset()
+        it = start.copy()
+        while it.compare(end) < 0:
+            anchor = it.get_child_anchor()
+            if anchor is not None and hasattr(anchor, 'ynote_image'):
+                meta = self._normalize_image_meta(anchor.ynote_image)
+                meta['offset'] = it.get_offset() - start_offset
+                images.append(meta)
+            it.forward_char()
+        return images
+
+    def _selected_rich_state(self):
+        buf = self.tv.get_buffer()
+        if not buf.get_has_selection():
+            return None
+
+        start, end = buf.get_selection_bounds()
+        start_offset = start.get_offset()
+        end_offset = end.get_offset()
+        return {
+            'text': buf.get_slice(start, end, True),
+            'bold': self._get_tag_ranges_between(
+                self._bold_tag, start_offset, end_offset),
+            'code': self._get_tag_ranges_between(
+                self._code_tag, start_offset, end_offset),
+            'images': self._get_images_between(start, end),
+        }
+
+    def _copy_rich_selection_to_clipboard(self):
+        state = self._selected_rich_state()
+        if state is None:
+            return False
+
+        self.app._rich_clipboard = state
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clipboard.set_text(state['text'], -1)
+        try:
+            clipboard.store()
+        except Exception:
+            pass
+        return True
+
+    def _paste_rich_clipboard_if_available(self):
+        state = getattr(self.app, '_rich_clipboard', None)
+        if not state:
+            return False
+
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        try:
+            current_text = clipboard.wait_for_text()
+        except Exception:
+            current_text = None
+        if current_text != state.get('text', ''):
+            return False
+
+        self._insert_rich_state_at_cursor(state)
+        return True
+
+    def _insert_rich_state_at_cursor(self, state):
+        buf = self.tv.get_buffer()
+        text = state.get('text', '')
+
+        self._restoring = True
+        if buf.get_has_selection():
+            start, end = buf.get_selection_bounds()
+            insert_offset = start.get_offset()
+            buf.delete(start, end)
+        else:
+            insert_offset = buf.get_iter_at_mark(buf.get_insert()).get_offset()
+
+        insert_iter = buf.get_iter_at_offset(insert_offset)
+        buf.insert(insert_iter, text)
+
+        for rel_start, rel_end in state.get('bold', []):
+            buf.apply_tag(
+                self._bold_tag,
+                buf.get_iter_at_offset(insert_offset + rel_start),
+                buf.get_iter_at_offset(insert_offset + rel_end))
+
+        for rel_start, rel_end in state.get('code', []):
+            buf.apply_tag(
+                self._code_tag,
+                buf.get_iter_at_offset(insert_offset + rel_start),
+                buf.get_iter_at_offset(insert_offset + rel_end))
+
+        images = []
+        for meta in state.get('images', []):
+            image_meta = self._normalize_image_meta(meta, include_offset=True)
+            image_meta['offset'] = insert_offset + image_meta.get('offset', 0)
+            images.append(image_meta)
+        self._restore_images(images)
+
+        end_offset = insert_offset + len(text)
+        buf.place_cursor(buf.get_iter_at_offset(end_offset))
+        self._refresh_emoji_tags()
+        self._restoring = False
+        self._take_snapshot()
+        self._queue_save()
+        self.tv.grab_focus()
+
+    def _on_copy_clipboard(self, tv):
+        if self._copy_rich_selection_to_clipboard():
+            tv.stop_emission_by_name('copy-clipboard')
+
+    def _on_cut_clipboard(self, tv):
+        if not self._copy_rich_selection_to_clipboard():
+            return
+
+        buf = self.tv.get_buffer()
+        start, end = buf.get_selection_bounds()
+        buf.delete(start, end)
+        self._take_snapshot()
+        self._queue_save()
+        tv.stop_emission_by_name('cut-clipboard')
+
+    def _on_paste_clipboard(self, tv):
+        if self._paste_rich_clipboard_if_available() or self._paste_image_if_available():
+            tv.stop_emission_by_name('paste-clipboard')
 
     # ------------------------------------------------------------------ search
 
@@ -855,6 +990,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         state = event.state & Gtk.accelerator_get_default_mod_mask()
         if (state == Gdk.ModifierType.CONTROL_MASK
                 and Gdk.keyval_to_lower(event.keyval) == Gdk.KEY_v):
+            if self._paste_rich_clipboard_if_available():
+                return True
             if self._paste_image_if_available():
                 return True
             return False

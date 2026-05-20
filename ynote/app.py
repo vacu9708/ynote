@@ -8,7 +8,11 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
 from .config import APP_ID, CONF_DIR, ICON_PATH, IMAGES_DIR, NOTES_FILE
-from .images import cleanup_orphaned_images, referenced_image_files
+from .images import (
+    cleanup_orphaned_images,
+    image_files_from_metadata,
+    referenced_image_files,
+)
 from .note_window import NoteWindow
 from .storage import load_notes, save_notes
 from .styles import BASE_CSS
@@ -236,6 +240,10 @@ class PostItApp(Gtk.Application):
         if include_history:
             for w in self.notes.values():
                 history_files.update(w.history_image_files())
+            rich_clipboard = getattr(self, '_rich_clipboard', None)
+            if rich_clipboard:
+                history_files.update(
+                    image_files_from_metadata(rich_clipboard.get('images', [])))
 
         return referenced_image_files(data, history_files)
 
