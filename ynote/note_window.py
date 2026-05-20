@@ -95,7 +95,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._bottom_bar_box.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
         self._bottom_bar_box.connect('button-press-event', self._on_bottom_bar_click)
 
-        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         btn_row.get_style_context().add_class('btmbar')
         self._bottom_bar_box.add(btn_row)
 
@@ -158,10 +158,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         image_btn.set_can_focus(False)
         image_btn.connect('clicked', lambda _: self._choose_and_insert_image())
         text_group.pack_start(image_btn, False, False, 0)
-
-        font_sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        font_sep.get_style_context().add_class('tool-separator')
-        text_group.pack_start(font_sep, False, False, 4)
 
         self._fontsize_btn = Gtk.Button(label=f'{self._font_size}px')
         self._fontsize_btn.set_tooltip_text('Font size')
