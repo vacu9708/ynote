@@ -2,7 +2,7 @@
 
 Engineer-friendly sticky notes for Linux desktops.
 
-![Ynote screenshot](assets/screenshots/ynote-main.png)
+![Ynote screenshot](assets/Ynote-main.png)
 
 Ynote is a lightweight GTK desktop notes app for Ubuntu and GNOME-based Linux systems.
 It is built for the kind of notes engineers keep beside their editor: command/code snippets,
@@ -187,7 +187,7 @@ Build the package:
 Install the generated package:
 
 ```bash
-sudo apt install ./dist/ynote_1.3.0_all.deb
+sudo apt install ./dist/ynote_1.4.0.deb
 ```
 
 Run Ynote:
