@@ -12,7 +12,8 @@ debugging context, screenshots, and reminders that should always stay visible.
 
 - Floating desktop notes with automatic local saving
 - Always-on-top pinning for notes you need beside your editor
-- Rich text basics: bold text, bullet lists, undo/redo, and per-note font size
+- Rich text basics: bold text, bullet lists, backtick-triggered text, undo/redo,
+  and per-note font size
 - Code blocks for commands and snippets
 - Image insertion from the text context menu and image paste support
 - Search inside a note
@@ -24,7 +25,12 @@ debugging context, screenshots, and reminders that should always stay visible.
 - Use `↑` / `↓` in the hidden notes manager to order hidden notes.
 - Double-click a hidden note in the manager to restore it.
 - Right-click inside a note to insert an image from the text context menu.
+- Select text and right-click to apply backtick formatting.
+- Type matching backticks around text to remove the backticks and apply italic,
+  underline, and red styling.
 - Use `Ctrl+8` to toggle bullet-list formatting.
+- Press `Tab` on a bullet line to indent it into a nested bullet.
+- Press `Backspace` on an empty bullet line to remove the bullet point.
 
 ## Architecture
 

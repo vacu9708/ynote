@@ -13,6 +13,7 @@ DEFAULT_NOTE = {
     'sort_order': 0.0,
     'bold_ranges': [],
     'code_ranges': [],
+    'backtick_ranges': [],
     'images': [],
     'font_size': 14,
 }
@@ -33,6 +34,7 @@ def normalize_note_data(data, note_id_factory=None):
     note['sort_order'] = float(note.get('sort_order') or 0.0)
     note['bold_ranges'] = list(note.get('bold_ranges') or [])
     note['code_ranges'] = list(note.get('code_ranges') or [])
+    note['backtick_ranges'] = list(note.get('backtick_ranges') or [])
     note['images'] = list(note.get('images') or [])
     note['font_size'] = int(note.get('font_size') or DEFAULT_NOTE['font_size'])
 
