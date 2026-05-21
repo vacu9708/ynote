@@ -7,7 +7,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
-from .config import APP_ID, CONF_DIR, ICON_PATH, IMAGES_DIR, NOTES_FILE
+from .config import APP_ID, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR, NOTES_FILE
 from .images import (
     cleanup_orphaned_images,
     image_files_from_metadata,
@@ -294,10 +294,10 @@ class PostItApp(Gtk.Application):
     def set_rich_clipboard(self, state):
         self._rich_clipboard = state
         self._rich_clipboard_owned = True
-        self._ignore_next_clipboard_owner_change = True
+        self._ignore_next_clipboard_owner_change = True 
 
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(state.get('text', ''), -1)
+        clipboard.set_text(state.get('text', '').replace(CODE_ANCHOR, ''), -1)
         GLib.idle_add(self._finish_rich_clipboard_claim)
 
     def _finish_rich_clipboard_claim(self):
