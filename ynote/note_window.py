@@ -722,26 +722,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         if state is None:
             return False
 
-        self.app._rich_clipboard = state
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(state['text'], -1)
-        try:
-            clipboard.store()
-        except Exception:
-            pass
+        self.app.set_rich_clipboard(state)
         return True
 
     def _paste_rich_clipboard_if_available(self):
-        state = getattr(self.app, '_rich_clipboard', None)
+        state = self.app.rich_clipboard_state()
         if not state:
-            return False
-
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        try:
-            current_text = clipboard.wait_for_text()
-        except Exception:
-            current_text = None
-        if current_text != state.get('text', ''):
             return False
 
         self._insert_rich_state_at_cursor(state)
