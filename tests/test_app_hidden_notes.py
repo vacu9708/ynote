@@ -52,3 +52,27 @@ def test_move_hidden_note_reorders_hidden_notes():
     assert app.notes['c'].sort_order == 2.0
     assert app.save_calls == 1
     assert app.menu_rebuilds == 1
+
+
+def test_clipboard_owner_change_clears_rich_clipboard_state():
+    app = make_app({})
+    app._rich_clipboard = {'text': 'same text'}
+    app._rich_clipboard_owned = True
+    app._ignore_next_clipboard_owner_change = False
+
+    app._on_clipboard_owner_change()
+
+    assert app.rich_clipboard_state() is None
+
+
+def test_own_clipboard_change_keeps_rich_clipboard_state_once():
+    app = make_app({})
+    state = {'text': 'same text'}
+    app._rich_clipboard = state
+    app._rich_clipboard_owned = True
+    app._ignore_next_clipboard_owner_change = True
+
+    app._on_clipboard_owner_change()
+
+    assert app.rich_clipboard_state() == state
+    assert app._ignore_next_clipboard_owner_change is False
