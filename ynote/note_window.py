@@ -29,6 +29,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._history   = [{'text': data.get('text', ''),
                              'bold': data.get('bold_ranges', []),
                              'code': data.get('code_ranges', []),
+                             'backtick': data.get('backtick_ranges', []),
                              'images': data.get('images', [])}]
         self._hist_pos  = 0
         self._bold_active = False
@@ -215,6 +216,11 @@ class NoteWindow(Gtk.ApplicationWindow):
                                         right_margin=8,
                                         pixels_above_lines=2,
                                         pixels_below_lines=2)
+        self._backtick_tag = buf.create_tag(
+            'backtick',
+            style=Pango.Style.ITALIC,
+            underline=Pango.Underline.SINGLE,
+            foreground='#C53030')
         self._emoji_tag = buf.create_tag('emoji', scale=self._emoji_scale())
         self._hl_tag.set_priority(buf.get_tag_table().get_size() - 1)
         self._refresh_emoji_tags()
@@ -224,6 +230,10 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(e))
         for s, e in data.get('code_ranges', []):
             buf.apply_tag(self._code_tag,
+                          buf.get_iter_at_offset(s),
+                          buf.get_iter_at_offset(e))
+        for s, e in data.get('backtick_ranges', []):
+            buf.apply_tag(self._backtick_tag,
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(data.get('images', []))
@@ -702,6 +712,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                 self._bold_tag, start_offset, end_offset),
             'code': self._get_tag_ranges_between(
                 self._code_tag, start_offset, end_offset),
+            'backtick': self._get_tag_ranges_between(
+                self._backtick_tag, start_offset, end_offset),
             'images': self._get_images_between(start, end),
         }
 
@@ -759,6 +771,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         for rel_start, rel_end in state.get('code', []):
             buf.apply_tag(
                 self._code_tag,
+                buf.get_iter_at_offset(insert_offset + rel_start),
+                buf.get_iter_at_offset(insert_offset + rel_end))
+
+        for rel_start, rel_end in state.get('backtick', []):
+            buf.apply_tag(
+                self._backtick_tag,
                 buf.get_iter_at_offset(insert_offset + rel_start),
                 buf.get_iter_at_offset(insert_offset + rel_end))
 
@@ -872,6 +890,8 @@ class NoteWindow(Gtk.ApplicationWindow):
             for line in range(start.get_line(), end.get_line() + 1):
                 self._tag_code_line(line)
             self._remove_redundant_code_anchors(start.get_line(), end.get_line())
+        if '`' in text:
+            self._format_backtick_wrapped_text()
         self._refresh_emoji_tags()
 
     def _apply_tag_to_non_newline_chars(self, buf, tag, start, end):
@@ -906,6 +926,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         if (last['text'] == state['text']
                 and last['bold'] == state['bold']
                 and last.get('code', []) == state['code']
+                and last.get('backtick', []) == state['backtick']
                 and last.get('images', []) == state['images']):
             return False
         # Truncate any redo history
@@ -923,6 +944,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             'text': buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True),
             'bold': self._get_tag_ranges(self._bold_tag),
             'code': self._get_tag_ranges(self._code_tag),
+            'backtick': self._get_tag_ranges(self._backtick_tag),
             'images': self._get_images_state(),
         }
 
@@ -933,12 +955,18 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf.set_text(state['text'])
         buf.remove_tag(self._bold_tag, buf.get_start_iter(), buf.get_end_iter())
         buf.remove_tag(self._code_tag, buf.get_start_iter(), buf.get_end_iter())
+        buf.remove_tag(
+            self._backtick_tag, buf.get_start_iter(), buf.get_end_iter())
         for s, e in state.get('bold', []):
             buf.apply_tag(self._bold_tag,
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         for s, e in state.get('code', []):
             buf.apply_tag(self._code_tag,
+                          buf.get_iter_at_offset(s),
+                          buf.get_iter_at_offset(e))
+        for s, e in state.get('backtick', []):
+            buf.apply_tag(self._backtick_tag,
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(state.get('images', []))
@@ -997,12 +1025,31 @@ class NoteWindow(Gtk.ApplicationWindow):
                 return True
             return False
 
-        if event.keyval not in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
-            return False
         buf = tv.get_buffer()
         if buf.get_has_selection():
             return False
         cursor = buf.get_iter_at_mark(buf.get_insert())
+        cursor_line = cursor.get_line()
+
+        if (state == 0 and event.keyval == Gdk.KEY_Tab
+                and self._line_has_bullet(cursor_line)):
+            self._indent_bullet_line(cursor_line)
+            return True
+
+        if (state == Gdk.ModifierType.SHIFT_MASK
+                and event.keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab)
+                and self._line_has_bullet(cursor_line)):
+            self._outdent_bullet_line(cursor_line)
+            return True
+
+        if (state == 0 and event.keyval == Gdk.KEY_BackSpace
+                and self._line_is_empty_bullet(cursor_line)):
+            self._remove_empty_bullet_line(cursor_line)
+            return True
+
+        if event.keyval not in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            return False
+
         if self._line_is_fully_tagged(self._code_tag, cursor.get_line()):
             line_start, line_end = self._line_bounds(cursor.get_line())
             line_text = buf.get_text(line_start, line_end, False)
@@ -1034,18 +1081,79 @@ class NoteWindow(Gtk.ApplicationWindow):
         line_end = line_start.copy()
         line_end.forward_to_line_end()
         line_text = buf.get_text(line_start, line_end, False)
-        if not line_text.startswith('• '):
+        parts = self._bullet_parts(line_text)
+        if parts is None:
             return False
-        if line_text == '• ':
-            # Empty bullet — remove marker and stop the list
-            prefix_end = line_start.copy()
-            prefix_end.forward_chars(2)
-            buf.delete(line_start, prefix_end)
+        indent, body = parts
+        if body.strip() == '':
+            # Empty bullet: remove the current marker and stop the list.
+            self._remove_empty_bullet_line(cursor_line)
             return True
-        buf.insert_at_cursor('\n• ')
+        buf.insert_at_cursor(f'\n{indent}• ')
         return True
 
     # ------------------------------------------------------------------ formatting
+
+    def _line_indent_len(self, text):
+        index = 0
+        while index < len(text) and text[index] in (' ', '\t'):
+            index += 1
+        return index
+
+    def _bullet_parts(self, text):
+        indent_len = self._line_indent_len(text)
+        if not text[indent_len:].startswith('• '):
+            return None
+        return text[:indent_len], text[indent_len + 2:]
+
+    def _line_bullet_parts(self, line):
+        buf = self.tv.get_buffer()
+        line_start, line_end = self._line_bounds(line)
+        text = buf.get_text(line_start, line_end, False)
+        return self._bullet_parts(text)
+
+    def _line_has_bullet(self, line):
+        return self._line_bullet_parts(line) is not None
+
+    def _line_is_empty_bullet(self, line):
+        parts = self._line_bullet_parts(line)
+        return parts is not None and parts[1].strip() == ''
+
+    def _line_bullet_marker_bounds(self, line):
+        buf = self.tv.get_buffer()
+        line_start, line_end = self._line_bounds(line)
+        text = buf.get_text(line_start, line_end, False)
+        parts = self._bullet_parts(text)
+        if parts is None:
+            return None
+        marker_start = line_start.copy()
+        marker_start.forward_chars(len(parts[0]))
+        marker_end = marker_start.copy()
+        marker_end.forward_chars(2)
+        return marker_start, marker_end
+
+    def _indent_bullet_line(self, line):
+        buf = self.tv.get_buffer()
+        line_start = buf.get_iter_at_line(line)
+        buf.insert(line_start, '    ')
+
+    def _outdent_bullet_line(self, line):
+        buf = self.tv.get_buffer()
+        line_start, line_end = self._line_bounds(line)
+        text = buf.get_text(line_start, line_end, False)
+        parts = self._bullet_parts(text)
+        if parts is None or not parts[0]:
+            return
+
+        remove_count = 1 if parts[0].startswith('\t') else min(4, len(parts[0]))
+        remove_end = line_start.copy()
+        remove_end.forward_chars(remove_count)
+        buf.delete(line_start, remove_end)
+
+    def _remove_empty_bullet_line(self, line):
+        buf = self.tv.get_buffer()
+        line_start, line_end = self._line_bounds(line)
+        buf.delete(line_start, line_end)
 
     def _selected_or_cursor_lines(self):
         buf = self.tv.get_buffer()
@@ -1168,16 +1276,56 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._bold_active = not self._bold_active
             self._refresh_format_buttons()
 
+    def _toggle_backtick_format(self):
+        self._toggle_tag(self._backtick_tag)
+
+    def _format_backtick_wrapped_text(self):
+        buf = self.tv.get_buffer()
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        pairs = []
+        open_offset = None
+        for offset, char in enumerate(text):
+            if char != '`':
+                continue
+            if open_offset is None:
+                open_offset = offset
+            elif offset > open_offset + 1:
+                pairs.append((open_offset, offset))
+                open_offset = None
+            else:
+                open_offset = None
+
+        if not pairs:
+            return
+
+        if self._snap_sid:
+            GLib.source_remove(self._snap_sid)
+            self._snap_sid = None
+            self._take_snapshot()
+
+        for open_offset, close_offset in reversed(pairs):
+            close_start = buf.get_iter_at_offset(close_offset)
+            close_end = buf.get_iter_at_offset(close_offset + 1)
+            buf.delete(close_start, close_end)
+
+            open_start = buf.get_iter_at_offset(open_offset)
+            open_end = buf.get_iter_at_offset(open_offset + 1)
+            buf.delete(open_start, open_end)
+
+            styled_start = buf.get_iter_at_offset(open_offset)
+            styled_end = buf.get_iter_at_offset(close_offset - 1)
+            buf.apply_tag(self._backtick_tag, styled_start, styled_end)
+
+        self._take_snapshot()
+        self._queue_save()
+
     def _toggle_bullet(self):
         buf = self.tv.get_buffer()
         first_line, last_line = self._selected_or_cursor_lines()
 
         all_bulleted = True
         for ln in range(first_line, last_line + 1):
-            it = buf.get_iter_at_line(ln)
-            end = it.copy()
-            end.forward_to_line_end()
-            if not buf.get_text(it, end, False).startswith('• '):
+            if not self._line_has_bullet(ln):
                 all_bulleted = False
                 break
 
@@ -1189,14 +1337,18 @@ class NoteWindow(Gtk.ApplicationWindow):
         for ln in range(last_line, first_line - 1, -1):
             line_start = buf.get_iter_at_line(ln)
             if all_bulleted:
-                line_end_prefix = line_start.copy()
-                line_end_prefix.forward_chars(2)
-                buf.delete(line_start, line_end_prefix)
+                marker_bounds = self._line_bullet_marker_bounds(ln)
+                if marker_bounds is not None:
+                    marker_start, marker_end = marker_bounds
+                    buf.delete(marker_start, marker_end)
             else:
                 line_end = line_start.copy()
                 line_end.forward_to_line_end()
-                if not buf.get_text(line_start, line_end, False).startswith('• '):
-                    buf.insert(line_start, '• ')
+                text = buf.get_text(line_start, line_end, False)
+                if self._bullet_parts(text) is None:
+                    insert_at = line_start.copy()
+                    insert_at.forward_chars(self._line_indent_len(text))
+                    buf.insert(insert_at, '• ')
 
         self._take_snapshot()
         self._queue_save()
@@ -1248,6 +1400,11 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(image_item)
+        if self.tv.get_buffer().get_has_selection():
+            backtick_item = Gtk.MenuItem(label='Backtick Format')
+            backtick_item.connect('activate',
+                                  lambda _: self._toggle_backtick_format())
+            menu.prepend(backtick_item)
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(search_item)
         menu.prepend(Gtk.SeparatorMenuItem())
@@ -1388,6 +1545,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                     sort_order=self.sort_order,
                     bold_ranges=self._get_tag_ranges(self._bold_tag),
                     code_ranges=self._get_tag_ranges(self._code_tag),
+                    backtick_ranges=self._get_tag_ranges(self._backtick_tag),
                     images=self._get_images_state(),
                     font_size=self._font_size)
 
