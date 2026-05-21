@@ -29,6 +29,9 @@ class PostItApp(Gtk.Application):
         self._notes_raised = False
         self._hidden_notes_window = None
         self._current_note = None
+        self._rich_clipboard = None
+        self._rich_clipboard_owned = False
+        self._ignore_next_clipboard_owner_change = False
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -41,6 +44,9 @@ class PostItApp(Gtk.Application):
 
         if os.path.exists(ICON_PATH):
             Gtk.Window.set_default_icon_from_file(ICON_PATH)
+
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clipboard.connect('owner-change', self._on_clipboard_owner_change)
 
         prov = Gtk.CssProvider()
         prov.load_from_data(BASE_CSS)
@@ -274,6 +280,31 @@ class PostItApp(Gtk.Application):
     def _refresh_hidden_notes_manager(self):
         if self._hidden_notes_window is not None:
             self._hidden_notes_window.refresh()
+
+    def set_rich_clipboard(self, state):
+        self._rich_clipboard = state
+        self._rich_clipboard_owned = True
+        self._ignore_next_clipboard_owner_change = True
+
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clipboard.set_text(state.get('text', ''), -1)
+        GLib.idle_add(self._finish_rich_clipboard_claim)
+
+    def _finish_rich_clipboard_claim(self):
+        self._ignore_next_clipboard_owner_change = False
+        return False
+
+    def _on_clipboard_owner_change(self, *_):
+        if self._ignore_next_clipboard_owner_change:
+            self._ignore_next_clipboard_owner_change = False
+            return
+        self._rich_clipboard = None
+        self._rich_clipboard_owned = False
+
+    def rich_clipboard_state(self):
+        if not self._rich_clipboard_owned:
+            return None
+        return self._rich_clipboard
 
     def _referenced_image_files(self, data=None, include_history=True):
         if data is None:
