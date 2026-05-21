@@ -54,6 +54,18 @@ def test_move_hidden_note_reorders_hidden_notes():
     assert app.menu_rebuilds == 1
 
 
+def test_tray_click_creates_note_when_none_are_visible():
+    app = make_app({'a': StubNote('Hidden')})
+    app._notes_raised = False
+    app.new_note_calls = 0
+    app.new_note = lambda: setattr(app, 'new_note_calls', app.new_note_calls + 1)
+
+    app._on_tray_click(None)
+
+    assert app.new_note_calls == 1
+    assert app._notes_raised is True
+
+
 def test_clipboard_owner_change_clears_rich_clipboard_state():
     app = make_app({})
     app._rich_clipboard = {'text': 'same text'}
