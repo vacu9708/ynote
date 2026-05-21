@@ -90,6 +90,11 @@ class PostItApp(Gtk.Application):
         self._rebuild_indicator_menu()
 
     def _on_tray_click(self, _):
+        if not any(w.get_visible() for w in self.notes.values()):
+            self.new_note()
+            self._notes_raised = True
+            return
+
         if self._notes_raised:
             lowerable = [w for w in self.notes.values()
                          if w.get_visible() and not w._on_top]
@@ -132,7 +137,9 @@ class PostItApp(Gtk.Application):
         menu = Gtk.Menu()
 
         restore_item = Gtk.MenuItem(label='Hidden Notes')
-        restore_item.connect('activate', lambda *_: self.show_hidden_notes_manager())
+        restore_item.connect(
+            'activate',
+            lambda *_: self.show_hidden_notes_manager(from_tray=True))
         menu.append(restore_item)
         menu.append(Gtk.SeparatorMenuItem())
 
@@ -263,14 +270,17 @@ class PostItApp(Gtk.Application):
         for index, (_, note) in enumerate(notes):
             note.sort_order = float(index)
 
-    def show_hidden_notes_manager(self, parent_note=None):
-        if parent_note is None:
+    def show_hidden_notes_manager(self, parent_note=None, from_tray=False):
+        if parent_note is None and not from_tray:
             parent_note = self._current_note
         if self._hidden_notes_window is None:
             self._hidden_notes_window = HiddenNotesWindow(self)
             self._hidden_notes_window.connect(
                 'destroy', lambda *_: self._clear_hidden_notes_manager())
-        self._hidden_notes_window.set_parent_note(parent_note)
+        if from_tray:
+            self._hidden_notes_window.set_tray_icon(self._status_icon)
+        else:
+            self._hidden_notes_window.set_parent_note(parent_note)
         self._hidden_notes_window.refresh()
         self._hidden_notes_window.present()
 
