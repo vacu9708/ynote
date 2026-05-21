@@ -187,7 +187,7 @@ Build the package:
 Install the generated package:
 
 ```bash
-sudo apt install ./dist/ynote_1.3.0_all.deb
+sudo apt install ./dist/ynote_1.4.0.deb
 ```
 
 Run Ynote:
