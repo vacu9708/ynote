@@ -60,6 +60,10 @@ class HiddenNotesWindow(Gtk.Window):
         actions.set_spacing(6)
         root.pack_start(actions, False, False, 0)
 
+        self._restore_btn = Gtk.Button(label='Restore')
+        self._restore_btn.connect('clicked', lambda *_: self._restore_selected())
+        actions.add(self._restore_btn)
+
         self._restore_all_btn = Gtk.Button(label='Restore All')
         self._restore_all_btn.connect('clicked', lambda *_: self._restore_all())
         actions.add(self._restore_all_btn)
@@ -173,6 +177,7 @@ class HiddenNotesWindow(Gtk.Window):
         has_note = self._selected_note_id() is not None
         self._up_btn.set_sensitive(has_note)
         self._down_btn.set_sensitive(has_note)
+        self._restore_btn.set_sensitive(has_note)
 
     def _move_selected(self, direction):
         note_id = self._selected_note_id()
@@ -184,6 +189,14 @@ class HiddenNotesWindow(Gtk.Window):
     def _on_row_activated(self, _tree, path, _column):
         tree_iter = self._store.get_iter(path)
         self.app.show_note(self._store[tree_iter][self.NOTE_ID])
+        self.destroy()
+
+    def _restore_selected(self):
+        note_id = self._selected_note_id()
+        if note_id is None:
+            return
+
+        self.app.show_note(note_id)
         self.destroy()
 
     def _restore_all(self):

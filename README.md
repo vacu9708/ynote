@@ -17,13 +17,13 @@ debugging context, screenshots, and reminders that should always stay visible.
 - Code blocks for commands and snippets
 - Image insertion from the text context menu and image paste support
 - Search inside a note
-- Hidden notes manager with manual ordering and double-click restore
+- Hidden notes manager with manual ordering and one-click restore
 
 ## Usage Notes
 
 - Use the `▤` toolbar button or the tray menu to open the hidden notes manager.
 - Use `↑` / `↓` in the hidden notes manager to order hidden notes.
-- Double-click a hidden note in the manager to restore it.
+- Select a hidden note and click Restore, or double-click it, to restore it.
 - Right-click inside a note to insert an image from the text context menu.
 - Select text and right-click to apply backtick formatting.
 - Type matching backticks around text to remove the backticks and apply italic,
