@@ -1,11 +1,60 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP="$SCRIPT_DIR/ynote.py"
 ICON="$SCRIPT_DIR/icon.png"
+FORCE_SOURCE_INSTALL=0
+
+usage() {
+    cat <<EOF
+Usage: ./install.sh [--force]
+
+Installs Ynote from this source checkout.
+
+Options:
+  --force   install from source even if the Debian package is installed
+  --help    show this help
+EOF
+}
+
+case "${1:-}" in
+    "")
+        ;;
+    --force)
+        FORCE_SOURCE_INSTALL=1
+        ;;
+    --help|-h)
+        usage
+        exit 0
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac
 
 echo "=== Ynote installer ==="
+
+if dpkg-query -W -f='${Status}' ynote 2>/dev/null | grep -q 'install ok installed'; then
+    if [ "$FORCE_SOURCE_INSTALL" -ne 1 ]; then
+        cat >&2 <<EOF
+Ynote is already installed as a Debian package.
+
+The Debian package installs /usr/bin/ynote, while this source installer creates
+/usr/local/bin/ynote. Because /usr/local/bin usually comes first in PATH, mixing
+the two install methods can make the desktop launcher run the wrong copy.
+
+Choose one install method:
+  Package repair/reinstall: sudo apt install --reinstall ./dist/ynote_1.4.1.deb
+  Switch to source install: sudo apt remove ynote && ./install.sh
+  Force source install:     ./install.sh --force
+EOF
+        exit 1
+    fi
+
+    echo "Warning: forcing a source install over an installed Debian package."
+fi
 
 # 1. Refresh package index and install dependencies
 echo "Updating package lists..."

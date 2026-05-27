@@ -1,6 +1,57 @@
 #!/bin/sh
 set -e
 
+cleanup_legacy_wrapper() {
+    wrapper="/usr/local/bin/ynote"
+
+    if [ ! -f "$wrapper" ]; then
+        return 0
+    fi
+
+    if grep -q 'GDK_BACKEND=x11 exec python3' "$wrapper" 2>/dev/null &&
+       grep -q '/ynote.py' "$wrapper" 2>/dev/null; then
+        rm -f "$wrapper"
+    else
+        echo "ynote: leaving non-package file in place: $wrapper" >&2
+    fi
+}
+
+cleanup_legacy_user_entry() {
+    file="$1"
+    user="$2"
+    group="$3"
+
+    if [ ! -f "$file" ]; then
+        return 0
+    fi
+
+    if grep -q '^Exec=/usr/local/bin/ynote' "$file" 2>/dev/null; then
+        sed -i 's#^Exec=.*#Exec=/usr/bin/ynote#' "$file"
+        chown "$user:$group" "$file" 2>/dev/null || true
+    fi
+}
+
+cleanup_legacy_user_entries() {
+    user="${SUDO_USER:-}"
+
+    if [ -z "$user" ] || [ "$user" = "root" ]; then
+        return 0
+    fi
+
+    home="$(getent passwd "$user" | cut -d: -f6)"
+    group="$(id -gn "$user" 2>/dev/null || printf '%s' "$user")"
+
+    if [ -z "$home" ] || [ ! -d "$home" ]; then
+        return 0
+    fi
+
+    cleanup_legacy_user_entry "$home/.local/share/applications/ynote.desktop" "$user" "$group"
+    cleanup_legacy_user_entry "$home/.config/autostart/ynote.desktop" "$user" "$group"
+}
+
+cleanup_legacy_wrapper
+cleanup_legacy_user_entries
+
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true
 fi

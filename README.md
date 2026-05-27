@@ -187,7 +187,13 @@ Build the package:
 Install the generated package:
 
 ```bash
-sudo apt install ./dist/ynote_1.4.0.deb
+sudo apt install ./dist/ynote_1.4.1.deb
+```
+
+If you are repairing an already-installed copy of the same version, use:
+
+```bash
+sudo apt install --reinstall ./dist/ynote_1.4.1.deb
 ```
 
 Run Ynote:
@@ -206,6 +212,10 @@ For local testing, you can also install from the checkout:
 
 The packaged `.deb` is recommended for normal use because it installs the
 launcher, desktop entry, and icon in standard system locations.
+Use either the Debian package or the manual installer. If you switch from the
+package to the manual install, remove the package first with `sudo apt remove
+ynote`, or run `./install.sh --force` if you intentionally want the source
+checkout to take precedence.
 
 ## Requirements
 
