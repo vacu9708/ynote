@@ -125,13 +125,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         del_btn.set_tooltip_text('Delete Note')
         del_btn.get_style_context().add_class('delete')
         del_btn.connect('clicked', lambda _: self.app.delete_note(self.note_id))
-        note_group.pack_start(del_btn, False, False, 0)
 
         hidden_btn = Gtk.Button(label='▤')
         hidden_btn.set_tooltip_text('Hidden Notes')
         hidden_btn.connect('clicked',
                            lambda _: self.app.show_hidden_notes_manager(self))
         note_group.pack_start(hidden_btn, False, False, 0)
+        note_group.pack_start(del_btn, False, False, 0)
 
         # Visual/semantic split between note actions and text-editing actions.
         split = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
@@ -175,8 +175,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # Right-clicking any bottom-bar button opens the same menu as the title
         # bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
-        for btn in (self._pin_btn, new_btn, min_btn, close_btn, del_btn,
-                    hidden_btn, self._bold_btn, bullet_btn, code_btn,
+        for btn in (self._pin_btn, new_btn, min_btn, close_btn, hidden_btn,
+                    del_btn, self._bold_btn, bullet_btn, code_btn,
                     self._fontsize_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
