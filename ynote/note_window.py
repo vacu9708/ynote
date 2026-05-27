@@ -8,7 +8,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 
-from .config import CODE_ANCHOR, IMAGE_ANCHOR, IMAGES_DIR
+from .config import CODE_ANCHOR, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .models import normalize_note_data
 
@@ -1460,6 +1460,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         edit_title.connect('activate', lambda _: self._start_title_edit())
         menu.append(edit_title)
 
+        about_item = Gtk.MenuItem(label='About')
+        about_item.connect('activate', lambda _: self._show_about_dialog())
+        menu.append(about_item)
+
         menu.append(Gtk.SeparatorMenuItem())
 
         it = Gtk.MenuItem(label='Quit')
@@ -1468,6 +1472,21 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         menu.show_all()
         menu.popup_at_pointer(ev)
+
+    def _show_about_dialog(self):
+        dialog = Gtk.AboutDialog(transient_for=self, modal=True)
+        dialog.set_program_name('Ynote')
+        dialog.set_comments('Engineer-friendly sticky notes for GNOME desktops')
+        dialog.set_authors(['Youngsik Yang'])
+        dialog.set_copyright('Copyright (c) 2026 Youngsik Yang')
+        dialog.set_license_type(Gtk.License.MIT_X11)
+        try:
+            dialog.set_logo(
+                GdkPixbuf.Pixbuf.new_from_file_at_scale(ICON_PATH, 96, 96, True))
+        except GLib.Error:
+            pass
+        dialog.run()
+        dialog.destroy()
 
     def _hide_note(self):
         self.hide()
