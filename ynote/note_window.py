@@ -733,6 +733,56 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._insert_rich_state_at_cursor(state)
         return True
 
+    def _selection_spans_code_lines(self):
+        buf = self.tv.get_buffer()
+        if not buf.get_has_selection():
+            return False
+
+        first_line, last_line = self._selected_or_cursor_lines()
+        return all(
+            self._line_is_fully_tagged(self._code_tag, line)
+            for line in range(first_line, last_line + 1))
+
+    def _paste_plain_text_into_code_selection(self):
+        if not self._selection_spans_code_lines():
+            return False
+
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        text = clipboard.wait_for_text()
+        if text is None:
+            return False
+
+        self._replace_selection_with_code_text(text)
+        return True
+
+    def _replace_selection_with_code_text(self, text):
+        buf = self.tv.get_buffer()
+        start, end = buf.get_selection_bounds()
+        insert_offset = start.get_offset()
+
+        self._restoring = True
+        try:
+            buf.delete(start, end)
+            insert_iter = buf.get_iter_at_offset(insert_offset)
+            buf.insert(insert_iter, text)
+
+            start_line = buf.get_iter_at_offset(insert_offset).get_line()
+            end_iter = buf.get_iter_at_offset(insert_offset + len(text))
+            cursor_mark = buf.create_mark(None, end_iter, False)
+            end_line = end_iter.get_line()
+            for line in range(end_line, start_line - 1, -1):
+                self._tag_code_line(line)
+            self._remove_redundant_code_anchors(start_line, end_line)
+
+            buf.place_cursor(buf.get_iter_at_mark(cursor_mark))
+            buf.delete_mark(cursor_mark)
+            self._refresh_emoji_tags()
+        finally:
+            self._restoring = False
+        self._take_snapshot()
+        self._queue_save()
+        self.tv.grab_focus()
+
     def _insert_rich_state_at_cursor(self, state):
         buf = self.tv.get_buffer()
         text = state.get('text', '')
@@ -797,7 +847,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         tv.stop_emission_by_name('cut-clipboard')
 
     def _on_paste_clipboard(self, tv):
-        if self._paste_rich_clipboard_if_available() or self._paste_image_if_available():
+        if (self._paste_rich_clipboard_if_available()
+                or self._paste_image_if_available()
+                or self._paste_plain_text_into_code_selection()):
             tv.stop_emission_by_name('paste-clipboard')
 
     # ------------------------------------------------------------------ search
