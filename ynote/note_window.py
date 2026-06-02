@@ -1127,6 +1127,12 @@ class NoteWindow(Gtk.ApplicationWindow):
             # Empty bullet: remove the current marker and stop the list.
             self._remove_empty_bullet_line(cursor_line)
             return True
+        marker_len = len(indent) + 2
+        if cursor.get_line_offset() <= marker_len:
+            insert_offset = line_start.get_offset()
+            buf.insert(line_start, f'{indent}• \n')
+            buf.place_cursor(buf.get_iter_at_offset(insert_offset + marker_len))
+            return True
         buf.insert_at_cursor(f'\n{indent}• ')
         return True
 
