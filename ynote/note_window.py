@@ -38,7 +38,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._title_drag = None
 
         self._build(data)
-        self.set_title(self.title or 'New Note')
+        self.set_title(self.title or 'Untitled')
         self.set_default_size(data.get('w', 200), data.get('h', 300))
         self.move(data.get('x', 200), data.get('y', 200))
         self.show_all()
@@ -77,7 +77,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._title_box.connect('button-release-event', self._on_title_release)
         hdr.pack_start(self._title_box, True, True, 0)
 
-        self._title_label = Gtk.Label(label=self.title or 'New Note')
+        self._title_label = Gtk.Label(label=self.title or 'Untitled')
         self._title_label.get_style_context().add_class('title')
         self._title_label.set_xalign(0)
         self._title_label.set_ellipsize(3)  # Pango.EllipsizeMode.END == 3
@@ -107,7 +107,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         btn_row.pack_start(note_group, False, False, 0)
 
         new_btn = Gtk.Button(label='+')
-        new_btn.set_tooltip_text('New Note')
+        new_btn.set_tooltip_text('Untitled')
         new_btn.connect('clicked', lambda _: self.app.new_note(near=self))
         note_group.pack_start(new_btn, False, False, 0)
 
@@ -385,10 +385,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._editing = False
         self.title = entry.get_text().strip()
         self._title_box.remove(entry)
-        self._title_label.set_text(self.title or 'New Note')
+        self._title_label.set_text(self.title or 'Untitled')
         self._title_box.add(self._title_label)
         self._title_label.show()
-        self.set_title(self.title or 'New Note')
+        self.set_title(self.title or 'Untitled')
         self.app._rebuild_indicator_menu()
         self._queue_save()
 

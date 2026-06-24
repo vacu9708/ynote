@@ -136,6 +136,19 @@ class PostItApp(Gtk.Application):
     def _rebuild_indicator_menu(self):
         menu = Gtk.Menu()
 
+        open_notes = sorted(
+            [(nid, w) for nid, w in self.notes.items() if w.get_visible()],
+            key=lambda item: (item[1].title.lower(), item[0]),
+        )
+        for nid, w in open_notes:
+            label = w.title or 'Untitled'
+            item = Gtk.MenuItem(label=label)
+            item.connect('activate', lambda _evt, note=w: (note.present(), note.grab_focus()))
+            menu.append(item)
+
+        if open_notes:
+            menu.append(Gtk.SeparatorMenuItem())
+
         restore_item = Gtk.MenuItem(label='Hidden Notes')
         restore_item.connect(
             'activate',
@@ -143,7 +156,7 @@ class PostItApp(Gtk.Application):
         menu.append(restore_item)
         menu.append(Gtk.SeparatorMenuItem())
 
-        new_note = Gtk.MenuItem(label='New Note')
+        new_note = Gtk.MenuItem(label='Untitled')
         new_note.connect('activate', lambda _: self.new_note())
         menu.append(new_note)
 
