@@ -8,6 +8,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
 from .config import APP_ID, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR, NOTES_FILE
+from .hotkeys import SnapHotkeys
 from .images import (
     cleanup_orphaned_images,
     image_files_from_metadata,
@@ -55,6 +56,11 @@ class PostItApp(Gtk.Application):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         self._setup_status_icon()
+
+        # Ctrl + Super + arrows snap the current note even when no note has
+        # focus. Without python3-xlib only the in-window shortcut works.
+        self._snap_hotkeys = SnapHotkeys(self._on_snap_hotkey)
+        self._snap_hotkeys.start()
 
         self._load()
         self.hold()
@@ -104,6 +110,27 @@ class PostItApp(Gtk.Application):
         else:
             self.raise_all()
             self._notes_raised = True
+
+    def _on_snap_hotkey(self, keys):
+        note = self._current_note
+        if note is None or not note.get_visible():
+            note = next((w for w in self.notes.values() if w.get_visible()), None)
+        if note is None:
+            return False
+        if not note.is_active():
+            self._focus_note(note)
+        note._snap_to(keys)
+        return False
+
+    def _focus_note(self, note):
+        try:
+            from gi.repository import GdkX11
+        except ImportError:
+            note.present()
+            return
+        gdk_win = note.get_window()
+        if gdk_win:
+            gdk_win.focus(GdkX11.x11_get_server_time(gdk_win))
 
     def _on_note_focus_in(self, note=None):
         if note is not None:
