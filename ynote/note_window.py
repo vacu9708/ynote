@@ -11,6 +11,7 @@ from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 from .config import CODE_ANCHOR, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .models import normalize_note_data
+from .snap import snap_rect
 
 class NoteWindow(Gtk.ApplicationWindow):
     def __init__(self, app, data: dict):
@@ -36,6 +37,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._pending_format_inserts = []
         self._image_widgets = []
         self._title_drag = None
+        self._snap_held = []
+        self._snap_pending_move = None
 
         self._build(data)
         self.set_title(self.title or 'Untitled')
@@ -328,7 +331,70 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.connect('focus-in-event',     lambda *_: self.app._on_note_focus_in(self))
         self.connect('focus-out-event',    lambda *_: self.app._on_note_focus_out())
         self.connect('window-state-event', self._on_window_state)
+        self.connect('key-press-event',    self._on_snap_key_press)
+        self.connect('key-release-event',  self._on_snap_key_release)
         self.connect('delete-event', lambda *_: self.app.quit_app() or True)
+
+    # ------------------------------------------------------------------ snapping
+
+    _SNAP_KEYS = {
+        Gdk.KEY_Left: 'left', Gdk.KEY_Right: 'right',
+        Gdk.KEY_Up: 'up', Gdk.KEY_Down: 'down',
+    }
+
+    def _on_snap_key_press(self, _, ev):
+        # Ctrl + Super + arrow snaps the note into a column (see snap.py).
+        # Plain Super + arrows are left to GNOME's own tiling shortcuts.
+        key = self._SNAP_KEYS.get(ev.keyval)
+        if (key is None
+                or not ev.state & Gdk.ModifierType.CONTROL_MASK
+                or not ev.state & (Gdk.ModifierType.SUPER_MASK |
+                                   Gdk.ModifierType.MOD4_MASK)):
+            return False
+        if key in self._snap_held:
+            self._snap_held.remove(key)
+        self._snap_held.append(key)
+        self._snap_to(self._snap_held)
+        return True
+
+    def _on_snap_key_release(self, _, ev):
+        key = self._SNAP_KEYS.get(ev.keyval)
+        if key in self._snap_held:
+            self._snap_held.remove(key)
+        elif ev.keyval in (Gdk.KEY_Super_L, Gdk.KEY_Super_R,
+                           Gdk.KEY_Control_L, Gdk.KEY_Control_R):
+            self._snap_held.clear()
+        return False
+
+    def _snap_to(self, keys):
+        win = self.get_window()
+        if win is None:
+            return
+        display = win.get_display()
+        monitors = [display.get_monitor(i) for i in range(display.get_n_monitors())]
+        areas = []
+        for monitor in monitors:
+            area = monitor.get_workarea()
+            areas.append((area.x, area.y, area.width, area.height))
+        index = monitors.index(display.get_monitor_at_window(win))
+        x, y, w, h = snap_rect(keys, self.get_position() + self.get_size(),
+                               areas, index)
+        if tuple(self.get_size()) == (w, h):
+            self.move(x, y)
+            return
+        # Moving in the same request as a resize lets the window manager keep
+        # the note on screen using its old, larger size, which can leave it a
+        # few pixels off the slot. Move once the new size has been applied.
+        self._snap_pending_move = (x, y, w, h)
+        self.resize(w, h)
+        GLib.timeout_add(300, self._apply_snap_move)
+
+    def _apply_snap_move(self):
+        if self._snap_pending_move is not None:
+            x, y, _, _ = self._snap_pending_move
+            self._snap_pending_move = None
+            self.move(x, y)
+        return False
 
     def _on_window_state(self, _, event):
         if event.new_window_state & Gdk.WindowState.ICONIFIED:
@@ -1625,7 +1691,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._fontsize_btn.set_label(f'{self._font_size}px')
         self._queue_save()
 
-    def _on_configure(self, *_):
+    def _on_configure(self, _, event):
+        pending = self._snap_pending_move
+        if pending is not None and (event.width, event.height) == pending[2:]:
+            self._apply_snap_move()
         self._queue_save()
 
     def _queue_save(self):
