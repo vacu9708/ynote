@@ -20,3 +20,7 @@ CODE_ANCHOR = '\u2060'
 # A line holding exactly this text is drawn as a divider, like in Markdown.
 DIVIDER_TEXT = '---'
 
+# Shown for a note without a title. Kept apart from NEW_NOTE_LABEL, the action
+# that creates a note, so renaming one never changes the other.
+UNTITLED_LABEL = 'Untitled'
+NEW_NOTE_LABEL = 'New Note'

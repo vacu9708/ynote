@@ -7,7 +7,10 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
-from .config import APP_ID, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR, NOTES_FILE
+from .config import (
+    APP_ID, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR, NEW_NOTE_LABEL, NOTES_FILE,
+    UNTITLED_LABEL,
+)
 from .hotkeys import SnapHotkeys
 from .images import (
     cleanup_orphaned_images,
@@ -168,7 +171,7 @@ class PostItApp(Gtk.Application):
             key=lambda item: (item[1].title.lower(), item[0]),
         )
         for nid, w in open_notes:
-            label = w.title or 'Untitled'
+            label = w.title or UNTITLED_LABEL
             item = Gtk.MenuItem(label=label)
             item.connect('activate', lambda _evt, note=w: (note.present(), note.grab_focus()))
             menu.append(item)
@@ -183,7 +186,7 @@ class PostItApp(Gtk.Application):
         menu.append(restore_item)
         menu.append(Gtk.SeparatorMenuItem())
 
-        new_note = Gtk.MenuItem(label='Untitled')
+        new_note = Gtk.MenuItem(label=NEW_NOTE_LABEL)
         new_note.connect('activate', lambda _: self.new_note())
         menu.append(new_note)
 
