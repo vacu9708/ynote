@@ -12,7 +12,7 @@ echo "Updating package lists..."
 sudo apt-get update -qq
 
 echo "Installing system dependencies..."
-sudo apt-get install -y python3-gi gir1.2-gtk-3.0
+sudo apt-get install -y python3-gi gir1.2-gtk-3.0 python3-xlib
 
 # AppIndicator3 adds a system-tray icon; app works fine without it
 if sudo apt-get install -y gir1.2-appindicator3-0.1 2>/dev/null; then

@@ -18,6 +18,7 @@ debugging context, screenshots, and reminders that should always stay visible.
 - Image insertion from the text context menu and image paste support
 - Search inside a note
 - Hidden notes manager with manual ordering and one-click restore
+- Keyboard snapping of notes into half-width columns on each monitor
 
 ## Usage Notes
 
@@ -31,6 +32,14 @@ debugging context, screenshots, and reminders that should always stay visible.
 - Use `Ctrl+8` to toggle bullet-list formatting.
 - Press `Tab` on a bullet line to indent it into a nested bullet.
 - Press `Backspace` on an empty bullet line to remove the bullet point.
+- Drag any edge or corner of a note to resize it.
+- Use `Ctrl+Super+arrow` to snap the current note into a half-width column on
+  its monitor while keeping its height. It works even when no note has focus
+  and brings the note to the front.
+  - `←` / `→` move it to the left or right column. Pressing again at the edge
+    moves it onto the neighboring monitor.
+  - `↑` / `↓` move it up or down by its own height.
+  - Holding a horizontal and a vertical arrow together sends it to that corner.
 
 ## Architecture
 
@@ -56,12 +65,14 @@ flowchart TD
         App["ynote/app.py<br/>Gtk.Application lifecycle"]
         Window["ynote/note_window.py<br/>note window + GTK interactions"]
         Manager["ynote/note_manager_window.py<br/>hidden notes manager"]
+        Hotkeys["ynote/hotkeys.py<br/>global X11 snap shortcut"]
     end
 
     subgraph Domain["Testable Domain Logic"]
         Models["ynote/models.py<br/>note defaults + schema normalization"]
         Storage["ynote/storage.py<br/>notes.json persistence"]
         Images["ynote/images.py<br/>image references + cleanup"]
+        Snap["ynote/snap.py<br/>note snapping"]
     end
 
     subgraph Support["Shared Support"]
@@ -76,19 +87,22 @@ flowchart TD
     Launcher --> Main --> App
     App --> Window
     App --> Manager
+    App --> Hotkeys
     App --> Storage
     App --> Images
     Window --> Models
     Window --> Images
+    Window --> Snap
     Window --> Config
     App --> Styles
     Tests --> Models
     Tests --> Storage
     Tests --> Images
+    Tests --> Snap
 
     classDef module fill:#FFFFFF,stroke:#4A5568,stroke-width:1px,color:#1A202C
 
-    class Launcher,Main,App,Window,Manager,Models,Storage,Images,Config,Styles,Tests module
+    class Launcher,Main,App,Window,Manager,Hotkeys,Models,Storage,Images,Snap,Config,Styles,Tests module
 
     style Startup fill:#E8F3FF,stroke:#2F6FAB,stroke-width:1px,color:#102A43
     style AppLayer fill:#FFF4D6,stroke:#B7791F,stroke-width:1px,color:#3D2C00
@@ -98,10 +112,10 @@ flowchart TD
 ```
 
 The design keeps desktop-specific GTK code in `note_window.py` and `app.py`,
-while moving persistence, image lifecycle, and note-data rules into pure Python
-modules. Those pure modules are covered by fast unit tests, so regressions in
-saved-note compatibility, image cleanup, and JSON persistence can be caught
-without requiring a graphical desktop session.
+while moving persistence, image lifecycle, note-data rules, and note snapping
+into pure Python modules. Those pure modules are covered by fast unit tests, so
+regressions in saved-note compatibility, image cleanup, JSON persistence, and
+note snapping can be caught without requiring a graphical desktop session.
 
 ### Save and Image Cleanup Flow
 
@@ -209,12 +223,14 @@ launcher, desktop entry, and icon in standard system locations.
 
 ## Requirements
 
-Ynote uses Python, GTK 3, and PyGObject.
+Ynote uses Python, GTK 3, and PyGObject. `python3-xlib` registers the global
+`Ctrl+Super+arrow` snap shortcut; without it the shortcut only works while a
+note has focus.
 
 On Ubuntu/Debian:
 
 ```bash
-sudo apt install python3 python3-gi gir1.2-gtk-3.0
+sudo apt install python3 python3-gi gir1.2-gtk-3.0 python3-xlib
 ```
 
 ### Wayland and GNOME Notes

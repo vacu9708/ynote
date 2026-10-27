@@ -17,3 +17,8 @@ IMAGE_ANCHOR = '\uFFFC'
 # Older versions used NBSP (\u00a0), which renders as a visible space.
 CODE_ANCHOR = '\u2060'
 
+
+# Shown for a note without a title. Kept apart from NEW_NOTE_LABEL, the action
+# that creates a note, so renaming one never changes the other.
+UNTITLED_LABEL = 'Untitled'
+NEW_NOTE_LABEL = 'New Note'
