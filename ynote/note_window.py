@@ -56,8 +56,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.set_wmclass('ynote', 'Ynote')
         self.get_style_context().add_class('note')
 
+        # Overlay lets thin resize strips sit on top of the header and bottom
+        # bar without taking any layout space.
+        overlay = Gtk.Overlay()
+        self.add(overlay)
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.add(root)
+        overlay.add(root)
 
         # ---- Bars ----
         hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
@@ -289,24 +293,36 @@ class NoteWindow(Gtk.ApplicationWindow):
         accel.connect(Gdk.KEY_y, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._redo() or True)
 
-        # Resize grips integrated into the bottom bar
-        for edge, cursor in [
-            (Gdk.WindowEdge.SOUTH_WEST, 'sw-resize'),
-            (Gdk.WindowEdge.SOUTH_EAST, 'se-resize'),
+        # Edge strips on all four sides. The outer 14px of each strip resizes
+        # the matching corner, the rest resizes the edge.
+        W = Gdk.WindowEdge
+        for halign, valign, edges in [
+            (Gtk.Align.FILL,  Gtk.Align.START, (W.NORTH_WEST, W.NORTH, W.NORTH_EAST)),
+            (Gtk.Align.FILL,  Gtk.Align.END,   (W.SOUTH_WEST, W.SOUTH, W.SOUTH_EAST)),
+            (Gtk.Align.START, Gtk.Align.FILL,  (W.NORTH_WEST, W.WEST,  W.SOUTH_WEST)),
+            (Gtk.Align.END,   Gtk.Align.FILL,  (W.NORTH_EAST, W.EAST,  W.SOUTH_EAST)),
         ]:
-            grip = Gtk.EventBox()
-            grip.set_size_request(14, -1)
-            grip.add_events(
-                Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.ENTER_NOTIFY_MASK)
-            grip.connect('button-press-event',
-                         lambda w, ev, e=edge: self._on_resize(w, ev, e))
-            grip.connect('enter-notify-event',
-                         lambda w, ev, c=cursor: self._set_resize_cursor(w, ev, c))
-            if edge == Gdk.WindowEdge.SOUTH_EAST:
-                btn_row.pack_end(grip, False, False, 0)
+            strip = Gtk.EventBox()
+            strip.set_visible_window(False)
+            strip.set_above_child(True)
+            if halign == Gtk.Align.FILL:
+                strip.set_size_request(-1, 5)
             else:
-                btn_row.pack_start(grip, False, False, 0)
-                btn_row.reorder_child(grip, 0)
+                strip.set_size_request(5, -1)
+            strip.set_valign(valign)
+            strip.set_halign(halign)
+            strip.add_events(
+                Gdk.EventMask.BUTTON_PRESS_MASK |
+                Gdk.EventMask.ENTER_NOTIFY_MASK |
+                Gdk.EventMask.POINTER_MOTION_MASK)
+            strip.connect('button-press-event',
+                          lambda w, ev, es=edges: self._on_resize(
+                              w, ev, self._strip_edge(w, ev, es)))
+            strip.connect('enter-notify-event',
+                          lambda w, ev, es=edges: self._set_strip_cursor(w, ev, es))
+            strip.connect('motion-notify-event',
+                          lambda w, ev, es=edges: self._set_strip_cursor(w, ev, es))
+            overlay.add_overlay(strip)
 
         self.connect('configure-event',    self._on_configure)
         self.connect('focus-in-event',     lambda *_: self.app._on_note_focus_in(self))
@@ -404,6 +420,33 @@ class NoteWindow(Gtk.ApplicationWindow):
         if win:
             cur = Gdk.Cursor.new_from_name(Gdk.Display.get_default(), cursor)
             win.set_cursor(cur)
+
+    _EDGE_CURSORS = {
+        Gdk.WindowEdge.NORTH_WEST: 'nw-resize',
+        Gdk.WindowEdge.NORTH:      'n-resize',
+        Gdk.WindowEdge.NORTH_EAST: 'ne-resize',
+        Gdk.WindowEdge.WEST:       'w-resize',
+        Gdk.WindowEdge.EAST:       'e-resize',
+        Gdk.WindowEdge.SOUTH_WEST: 'sw-resize',
+        Gdk.WindowEdge.SOUTH:      's-resize',
+        Gdk.WindowEdge.SOUTH_EAST: 'se-resize',
+    }
+
+    def _strip_edge(self, widget, ev, edges):
+        start, middle, end = edges
+        if widget.get_halign() == Gtk.Align.FILL:
+            pos, length = ev.x, widget.get_allocated_width()
+        else:
+            pos, length = ev.y, widget.get_allocated_height()
+        if pos < 14:
+            return start
+        if pos > length - 14:
+            return end
+        return middle
+
+    def _set_strip_cursor(self, widget, ev, edges):
+        edge = self._strip_edge(widget, ev, edges)
+        self._set_resize_cursor(widget, ev, self._EDGE_CURSORS[edge])
 
 
     # ------------------------------------------------------------------ images
