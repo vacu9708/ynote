@@ -8,7 +8,10 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 
-from .config import CODE_ANCHOR, DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR
+from .config import (
+    CODE_ANCHOR, DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR, NEW_NOTE_LABEL,
+    UNTITLED_LABEL,
+)
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .models import normalize_note_data
 from .snap import snap_rect
@@ -41,7 +44,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._snap_pending_move = None
 
         self._build(data)
-        self.set_title(self.title or 'Untitled')
+        self.set_title(self.title or UNTITLED_LABEL)
         self.set_default_size(data.get('w', 200), data.get('h', 300))
         self.move(data.get('x', 200), data.get('y', 200))
         self.show_all()
@@ -84,7 +87,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._title_box.connect('button-release-event', self._on_title_release)
         hdr.pack_start(self._title_box, True, True, 0)
 
-        self._title_label = Gtk.Label(label=self.title or 'Untitled')
+        self._title_label = Gtk.Label(label=self.title or UNTITLED_LABEL)
         self._title_label.get_style_context().add_class('title')
         self._title_label.set_xalign(0)
         self._title_label.set_ellipsize(3)  # Pango.EllipsizeMode.END == 3
@@ -114,7 +117,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         btn_row.pack_start(note_group, False, False, 0)
 
         new_btn = Gtk.Button(label='+')
-        new_btn.set_tooltip_text('Untitled')
+        new_btn.set_tooltip_text(NEW_NOTE_LABEL)
         new_btn.connect('clicked', lambda _: self.app.new_note(near=self))
         note_group.pack_start(new_btn, False, False, 0)
 
@@ -429,6 +432,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             # second click may never be delivered as DOUBLE_BUTTON_PRESS.  Wait
             # until the pointer actually moves past GTK's drag threshold.
             self._title_drag = (ev.button, ev.x_root, ev.y_root, ev.time)
+            self._release_text_focus()
             return True
         return False
 
@@ -456,7 +460,14 @@ class NoteWindow(Gtk.ApplicationWindow):
         if ev.button == 3:
             self._show_ctx_menu(ev)
             return True
+        if ev.button == 1 and widget is self._bottom_bar_box:
+            self._release_text_focus()
         return False
+
+    def _release_text_focus(self):
+        # Clicking the bars means the user is not typing, so stop the text
+        # cursor from blinking until the text area is clicked again.
+        self.set_focus(None)
 
     def _start_title_edit(self):
         self._editing = True
@@ -479,10 +490,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._editing = False
         self.title = entry.get_text().strip()
         self._title_box.remove(entry)
-        self._title_label.set_text(self.title or 'Untitled')
+        self._title_label.set_text(self.title or UNTITLED_LABEL)
         self._title_box.add(self._title_label)
         self._title_label.show()
-        self.set_title(self.title or 'Untitled')
+        self.set_title(self.title or UNTITLED_LABEL)
         self.app._rebuild_indicator_menu()
         self._queue_save()
 
