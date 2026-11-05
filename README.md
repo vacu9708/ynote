@@ -32,6 +32,8 @@ debugging context, screenshots, and reminders that should always stay visible.
 - Use `Ctrl+8` to toggle bullet-list formatting.
 - Press `Tab` on a bullet line to indent it into a nested bullet.
 - Press `Backspace` on an empty bullet line to remove the bullet point.
+- Type `---` on a line of its own, or choose Insert Divider from the text
+  context menu, to draw a divider. `Backspace` or `Delete` on it removes it.
 - Drag any edge or corner of a note to resize it.
 - Use `Ctrl+Super+arrow` to snap the current note into a half-width column on
   its monitor while keeping its height. It works even when no note has focus

@@ -8,7 +8,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 
-from .config import CODE_ANCHOR, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR
+from .config import CODE_ANCHOR, DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .models import normalize_note_data
 from .snap import snap_rect
@@ -229,6 +229,16 @@ class NoteWindow(Gtk.ApplicationWindow):
             underline=Pango.Underline.SINGLE,
             foreground='#C53030')
         self._emoji_tag = buf.create_tag('emoji', scale=self._emoji_scale())
+        # A line that is exactly DIVIDER_TEXT is drawn as a horizontal rule:
+        # the dashes are hidden and _draw_dividers() paints the line.
+        self._divider_tag = buf.create_tag(
+            'divider',
+            foreground_rgba=Gdk.RGBA(0, 0, 0, 0),
+            pixels_above_lines=4,
+            pixels_below_lines=4)
+        self._divider_lines = []
+        self._cursor_offset = 0
+        buf.connect('mark-set', self._on_mark_set)
         self._hl_tag.set_priority(buf.get_tag_table().get_size() - 1)
         self._refresh_emoji_tags()
         for s, e in data.get('bold_ranges', []):
@@ -244,6 +254,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(data.get('images', []))
+        self._refresh_dividers()
+        self.tv.connect_after('draw', self._draw_dividers)
         self.tv.connect('populate-popup', self._on_tv_popup)
         self.tv.connect('key-press-event', self._on_tv_key_press)
         self.tv.connect('button-press-event', self._on_tv_button_press)
@@ -883,6 +895,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                 self._tag_code_line(line)
             self._remove_redundant_code_anchors(start_line, end_line)
 
+            self._refresh_dividers()
             buf.place_cursor(buf.get_iter_at_mark(cursor_mark))
             buf.delete_mark(cursor_mark)
             self._refresh_emoji_tags()
@@ -932,6 +945,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             images.append(image_meta)
         self._restore_images(images)
 
+        self._refresh_dividers()
         end_offset = insert_offset + len(text)
         buf.place_cursor(buf.get_iter_at_offset(end_offset))
         self._refresh_emoji_tags()
@@ -1061,6 +1075,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_buf_changed(self, buf):
         if self._restoring:
             return
+        self._refresh_dividers()
         self._queue_save()
         if self._snap_sid:
             GLib.source_remove(self._snap_sid)
@@ -1118,6 +1133,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(e))
         self._restore_images(state.get('images', []))
         self._refresh_emoji_tags()
+        self._refresh_dividers()
         self._restoring = False
         self._queue_save()
 
@@ -1189,6 +1205,18 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._outdent_bullet_line(cursor_line)
             return True
 
+        if state == 0 and event.keyval in (Gdk.KEY_BackSpace, Gdk.KEY_Delete):
+            # A divider is removed as a whole, also by Backspace from the
+            # start of the line below it.
+            divider_line = cursor_line
+            if (event.keyval == Gdk.KEY_BackSpace
+                    and cursor.get_line_offset() == 0
+                    and not self._line_is_divider(cursor_line)):
+                divider_line = cursor_line - 1
+            if divider_line >= 0 and self._line_is_divider(divider_line):
+                self._remove_divider_line(divider_line)
+                return True
+
         if (state == 0 and event.keyval == Gdk.KEY_BackSpace
                 and self._line_is_empty_bullet(cursor_line)):
             self._remove_empty_bullet_line(cursor_line)
@@ -1244,6 +1272,101 @@ class NoteWindow(Gtk.ApplicationWindow):
             return True
         buf.insert_at_cursor(f'\n{indent}• ')
         return True
+
+    # ------------------------------------------------------------------ dividers
+
+    def _line_is_divider(self, line):
+        buf = self.tv.get_buffer()
+        if line >= buf.get_line_count():
+            return False
+        start, end = self._line_bounds(line)
+        return (buf.get_text(start, end, False) == DIVIDER_TEXT
+                and not start.has_tag(self._code_tag))
+
+    def _refresh_dividers(self):
+        buf = self.tv.get_buffer()
+        buf.remove_tag(self._divider_tag, buf.get_start_iter(), buf.get_end_iter())
+        self._divider_lines = [line for line in range(buf.get_line_count())
+                               if self._line_is_divider(line)]
+        for line in self._divider_lines:
+            buf.apply_tag(self._divider_tag, *self._line_bounds(line))
+        self.tv.queue_draw()
+
+    def _draw_dividers(self, tv, cr):
+        if not self._divider_lines:
+            return False
+        buf = tv.get_buffer()
+        left = tv.get_left_margin()
+        right = tv.get_allocated_width() - tv.get_right_margin()
+        cr.set_source_rgba(0, 0, 0, 0.3)
+        cr.set_line_width(2)
+        for line in self._divider_lines:
+            y, height = tv.get_line_yrange(buf.get_iter_at_line(line))
+            _, wy = tv.buffer_to_window_coords(
+                Gtk.TextWindowType.WIDGET, 0, y + height // 2)
+            cr.move_to(left, wy)
+            cr.line_to(right, wy)
+        cr.stroke()
+        return False
+
+    def _on_mark_set(self, buf, it, mark):
+        # The cursor never rests on a divider: it skips to the line after it
+        # when moving forward and to the end of the line before it when moving
+        # back. A divider at either end of the note keeps the cursor at its
+        # outer edge instead. The jump runs once GTK has finished the current
+        # cursor movement, since moving the cursor in the middle of it confuses
+        # the text view.
+        if mark is not buf.get_insert():
+            return
+        offset = it.get_offset()
+        previous, self._cursor_offset = self._cursor_offset, offset
+        if not buf.get_has_selection() and it.get_line() in self._divider_lines:
+            GLib.idle_add(self._skip_divider, offset, offset >= previous,
+                          priority=GLib.PRIORITY_HIGH_IDLE)
+
+    def _skip_divider(self, offset, forward):
+        buf = self.tv.get_buffer()
+        it = buf.get_iter_at_mark(buf.get_insert())
+        if (it.get_offset() != offset or buf.get_has_selection()
+                or it.get_line() not in self._divider_lines):
+            return False
+        line = it.get_line()
+        start, end = self._line_bounds(line)
+        if forward:
+            if line + 1 < buf.get_line_count():
+                target = buf.get_iter_at_line(line + 1)
+            else:
+                target = end
+        elif line > 0:
+            target = self._line_bounds(line - 1)[1]
+        else:
+            target = start
+        if not target.equal(it):
+            buf.place_cursor(target)
+        return False
+
+    def _remove_divider_line(self, line):
+        buf = self.tv.get_buffer()
+        start, end = self._line_bounds(line, include_newline=True)
+        if end.is_end() and line > 0:
+            # The last line has no newline of its own; take the one before it.
+            start.backward_char()
+        buf.delete(start, end)
+
+    def _insert_divider(self):
+        buf = self.tv.get_buffer()
+        line = buf.get_iter_at_mark(buf.get_insert()).get_line()
+        start, end = self._line_bounds(line)
+        if buf.get_text(start, end, False).strip():
+            buf.insert(end, '\n' + DIVIDER_TEXT)
+            line += 1
+        else:
+            buf.delete(start, end)
+            buf.insert(start, DIVIDER_TEXT)
+        _, end = self._line_bounds(line)
+        if end.is_end():
+            buf.insert(end, '\n')
+        buf.place_cursor(buf.get_iter_at_line(line + 1))
 
     # ------------------------------------------------------------------ formatting
 
@@ -1551,7 +1674,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         image_item = Gtk.MenuItem(label='Insert Image')
         image_item.connect('activate', lambda _: self._choose_and_insert_image())
 
+        divider_item = Gtk.MenuItem(label='Insert Divider  (---)')
+        divider_item.connect('activate', lambda _: self._insert_divider())
+
         menu.prepend(Gtk.SeparatorMenuItem())
+        menu.prepend(divider_item)
         menu.prepend(image_item)
         if self.tv.get_buffer().get_has_selection():
             backtick_item = Gtk.MenuItem(label='Backtick Format')

@@ -26,6 +26,7 @@ def make_window_with_buffer(text):
     win._code_tag = buf.create_tag('code')
     win._restoring = False
     win._refresh_emoji_tags = lambda: None
+    win._refresh_dividers = lambda: None
     win._take_snapshot = lambda: None
     win._queue_save = lambda: None
     return win, buf

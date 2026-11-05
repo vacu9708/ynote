@@ -17,3 +17,6 @@ IMAGE_ANCHOR = '\uFFFC'
 # Older versions used NBSP (\u00a0), which renders as a visible space.
 CODE_ANCHOR = '\u2060'
 
+# A line holding exactly this text is drawn as a divider, like in Markdown.
+DIVIDER_TEXT = '---'
+
