@@ -121,11 +121,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         new_btn.connect('clicked', lambda _: self.app.new_note(near=self))
         note_group.pack_start(new_btn, False, False, 0)
 
-        min_btn = Gtk.Button(label='−')
-        min_btn.set_tooltip_text('Minimize')
-        min_btn.connect('clicked', lambda _: self.iconify())
-        note_group.pack_start(min_btn, False, False, 0)
-
         close_btn = Gtk.Button(label='✕')
         close_btn.set_tooltip_text('Hide Note')
         close_btn.connect('clicked', lambda _: self._hide_note())
@@ -191,7 +186,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # Right-clicking any bottom-bar button opens the same menu as the title
         # bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
-        for btn in (self._pin_btn, new_btn, min_btn, close_btn, hidden_btn,
+        for btn in (self._pin_btn, new_btn, close_btn, hidden_btn,
                     del_btn, self._bold_btn, backtick_btn, bullet_btn,
                     code_btn, self._fontsize_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
@@ -1745,6 +1740,10 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _show_ctx_menu(self, ev):
         menu = Gtk.Menu()
+
+        minimize_item = Gtk.MenuItem(label='Minimize')
+        minimize_item.connect('activate', lambda _: self.iconify())
+        menu.append(minimize_item)
 
         edit_title = Gtk.MenuItem(label='Edit Title')
         edit_title.connect('activate', lambda _: self._start_title_edit())
