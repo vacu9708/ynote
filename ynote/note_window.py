@@ -1213,6 +1213,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         cursor = buf.get_iter_at_mark(buf.get_insert())
         cursor_line = cursor.get_line()
 
+        if state == 0 and event.keyval == Gdk.KEY_space:
+            line_start = buf.get_iter_at_line(cursor_line)
+            before = buf.get_text(line_start, cursor, False)
+            indent_len = self._line_indent_len(before)
+            if (before[indent_len:] == '-'
+                    and not self._iter_has_tag_context(cursor, self._code_tag)):
+                self._start_bullet_from_dash(cursor_line, indent_len)
+                return True
+
         if (state == 0 and event.keyval == Gdk.KEY_Tab
                 and self._line_has_bullet(cursor_line)):
             self._indent_bullet_line(cursor_line)
@@ -1426,6 +1435,26 @@ class NoteWindow(Gtk.ApplicationWindow):
         marker_end = marker_start.copy()
         marker_end.forward_chars(2)
         return marker_start, marker_end
+
+    def _start_bullet_from_dash(self, line, dash_col):
+        # Typing "- " at the start of a line starts a bullet, like Markdown.
+        # "- " is kept as its own undo step so Ctrl+Z turns it back into text.
+        buf = self.tv.get_buffer()
+        buf.insert_at_cursor(' ')
+        if self._snap_sid:
+            GLib.source_remove(self._snap_sid)
+            self._snap_sid = None
+        self._take_snapshot()
+
+        dash = buf.get_iter_at_line_offset(line, dash_col)
+        dash_end = dash.copy()
+        dash_end.forward_char()
+        buf.delete(dash, dash_end)
+        buf.insert(buf.get_iter_at_line_offset(line, dash_col), '•')
+        if self._snap_sid:
+            GLib.source_remove(self._snap_sid)
+            self._snap_sid = None
+        self._take_snapshot()
 
     def _indent_bullet_line(self, line):
         buf = self.tv.get_buffer()

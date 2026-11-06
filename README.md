@@ -30,7 +30,10 @@ debugging context, screenshots, and reminders that should always stay visible.
   apply backtick formatting.
 - Type matching backticks around text to remove the backticks and apply italic,
   underline, and red styling.
-- Use `Ctrl+8` to toggle bullet-list formatting.
+- Type `-` followed by a space at the start of a line to start a bullet list.
+  Press `Ctrl+Z` right after to keep the plain `- ` instead.
+- Use `Ctrl+8` or the `•` toolbar button to toggle bullet-list formatting on the
+  selected lines.
 - Press `Tab` on a bullet line to indent it into a nested bullet.
 - Press `Backspace` on an empty bullet line to remove the bullet point.
 - Type `---` on a line of its own, or choose Insert Divider from the text
