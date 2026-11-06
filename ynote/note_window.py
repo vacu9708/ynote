@@ -159,6 +159,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._bold_btn.connect('clicked', lambda _: self._toggle_bold())
         text_group.pack_start(self._bold_btn, False, False, 0)
 
+        backtick_btn = Gtk.Button(label='`')
+        backtick_btn.set_tooltip_text('Backtick format  (Ctrl+E)')
+        backtick_btn.set_can_focus(False)
+        backtick_btn.connect('clicked', lambda _: self._toggle_backtick_format())
+        text_group.pack_start(backtick_btn, False, False, 0)
+
         bullet_btn = Gtk.Button(label='•')
         bullet_btn.set_tooltip_text('Bullet list  (Ctrl+8)')
         bullet_btn.set_can_focus(False)
@@ -186,8 +192,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, min_btn, close_btn, hidden_btn,
-                    del_btn, self._bold_btn, bullet_btn, code_btn,
-                    self._fontsize_btn):
+                    del_btn, self._bold_btn, backtick_btn, bullet_btn,
+                    code_btn, self._fontsize_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
 
@@ -299,6 +305,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                       lambda *_: self._toggle_search() or True)
         accel.connect(Gdk.KEY_b, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._toggle_bold() or True)
+        accel.connect(Gdk.KEY_e, Gdk.ModifierType.CONTROL_MASK, 0,
+                      lambda *_: self._toggle_backtick_format() or True)
         accel.connect(Gdk.KEY_8, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._toggle_bullet() or True)
         accel.connect(Gdk.KEY_KP_8, Gdk.ModifierType.CONTROL_MASK, 0,
@@ -1692,7 +1700,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         menu.prepend(divider_item)
         menu.prepend(image_item)
         if self.tv.get_buffer().get_has_selection():
-            backtick_item = Gtk.MenuItem(label='Backtick Format')
+            backtick_item = Gtk.MenuItem(label='Backtick Format  (Ctrl+E)')
             backtick_item.connect('activate',
                                   lambda _: self._toggle_backtick_format())
             menu.prepend(backtick_item)
