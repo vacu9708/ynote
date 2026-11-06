@@ -26,6 +26,8 @@ debugging context, screenshots, and reminders that should always stay visible.
 - Use `↑` / `↓` in the hidden notes manager to order hidden notes.
 - Select a hidden note and click Restore, or double-click it, to restore it.
 - Right-click inside a note to insert an image from the text context menu.
+- Right-click the title bar or bottom bar to minimize the note, edit its title,
+  or quit.
 - Select text and press `Ctrl+E`, the `` ` `` toolbar button, or right-click to
   apply backtick formatting.
 - Type matching backticks around text to remove the backticks and apply italic,
