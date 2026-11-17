@@ -48,7 +48,7 @@ flowchart LR
 
 | Module | Responsibility |
 | --- | --- |
-| `ynote.py`, `ynote/main.py` | Entry point. Handles `--version`, restarts the process on the X11 backend when needed, then runs `PostItApp`. |
+| `ynote.py`, `ynote/main.py` | Entry point. Handles `--version`, selects GTK's X11 backend, then runs `PostItApp`. |
 | `ynote/__init__.py` | Holds `__version__`, the only place the version is set. |
 | `ynote/app.py` | Application lifecycle, tray icon, the set of notes, hidden-note order, the shared rich clipboard, and saving. |
 | `ynote/note_window.py` | One note: its window, text editing and formatting, undo/redo, search, images, and snapping. |
@@ -144,8 +144,8 @@ sequenceDiagram
 
 ## Startup
 
-1. `main()` restarts the process with `GDK_BACKEND=x11` if it was started in
-   a Wayland session. See [Why X11](#why-x11).
+1. `main()` sets `GDK_BACKEND=x11` before GTK loads. Otherwise GTK would pick
+   any Wayland socket it finds. See [Why X11](#why-x11).
 2. `PostItApp.do_startup()` creates the config directories, sets up login
    autostart on an installed app's first run, loads the CSS, creates the tray
    icon, and starts the snap shortcut thread.

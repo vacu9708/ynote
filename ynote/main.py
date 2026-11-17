@@ -2,7 +2,6 @@ import os
 import sys
 
 from . import __version__
-from .app import PostItApp
 
 
 def main(argv=None):
@@ -13,10 +12,11 @@ def main(argv=None):
         print(f'Ynote {__version__}')
         return 0
 
-    if (os.environ.get('WAYLAND_DISPLAY')
-            and os.environ.get('GDK_BACKEND') != 'x11'):
-        os.environ['GDK_BACKEND'] = 'x11'
-        os.execv(sys.executable, [sys.executable] + list(argv))
+    # Ynote needs GTK's X11 backend (see ARCHITECTURE.md). GTK reads this when
+    # it loads, so set it before importing the app. Left unset, GTK prefers any
+    # Wayland socket it finds, even the desktop's own from an SSH session.
+    os.environ['GDK_BACKEND'] = 'x11'
+    from .app import PostItApp
 
     app = PostItApp()
     return app.run(argv)
@@ -24,4 +24,3 @@ def main(argv=None):
 
 if __name__ == '__main__':
     sys.exit(main())
-
