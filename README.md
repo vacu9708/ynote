@@ -26,30 +26,41 @@ Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
 
 Download `ynote_<version>.deb` from the
 [latest release](https://github.com/vacu9708/ynote/releases/latest), then
-install it from the download folder:
+install it from the download folder. `apt` also installs what Ynote needs.
 
 ```bash
-sudo apt install ./ynote_*.deb
+sudo apt install ./ynote_*.deb   # keep the ./
 ```
 
-`apt` installs everything Ynote needs. Keep the `./`; without it `apt` looks
-for a package by that name online. To build the package yourself, see
-[CONTRIBUTING.md](CONTRIBUTING.md#package).
+Open **Ynote** from the app grid, or run `ynote`. From then on it also starts
+when you log in. To turn that off, right-click a note's title bar and uncheck
+**Start at Login**.
 
-Open **Ynote** from the app grid, or run `ynote` in a terminal. The first time
-it starts, it opens one empty note.
+<details>
+<summary>Upgrading from an <code>install.sh</code> install</summary>
 
-From then on, Ynote also starts when you log in. To turn that off, right-click
-a note's title bar or bottom bar and uncheck **Start at Login**.
+Remove what `install.sh` left behind, or the old copy keeps starting instead
+of the package. Then log out and back in.
 
-To uninstall:
+```bash
+sudo rm /usr/local/bin/ynote
+rm ~/.local/share/applications/ynote.desktop ~/.config/autostart/ynote.desktop
+```
+
+</details>
+
+<details>
+<summary>Uninstall</summary>
 
 ```bash
 sudo apt remove ynote
 ```
 
-Your notes stay in `~/.config/ynote/` after uninstalling, and Ynote no longer
-starts at login.
+Your notes stay in `~/.config/ynote/`.
+
+</details>
+
+To build the package yourself, see [CONTRIBUTING.md](CONTRIBUTING.md#package).
 
 ## Using Ynote
 
