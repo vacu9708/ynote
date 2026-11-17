@@ -73,7 +73,7 @@ To build the package yourself, see [CONTRIBUTING.md](CONTRIBUTING.md#package).
 | `+` | Create a new note next to this one. |
 | `✕` | Hide the note. See [Hidden notes](#hidden-notes). |
 | `▤` | Open the list of hidden notes. |
-| `🗑` | Delete the note right away. There is no confirmation. |
+| `🗑` | Delete the note after you confirm. An empty note is deleted right away. |
 | `14px` | Change the note's font size with `A−` and `A+`. |
 | Edges and corners | Drag to resize the note. |
 | Right-click the title bar or bottom bar | Minimize, rename, turn **Start at Login** on or off, open About to see the version, or quit Ynote. |

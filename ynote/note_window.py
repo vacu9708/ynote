@@ -130,7 +130,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         del_btn = Gtk.Button(label='🗑')
         del_btn.set_tooltip_text('Delete Note')
         del_btn.get_style_context().add_class('delete')
-        del_btn.connect('clicked', lambda _: self.app.delete_note(self.note_id))
+        del_btn.connect('clicked', lambda _: self._confirm_delete())
 
         hidden_btn = Gtk.Button(label='▤')
         hidden_btn.set_tooltip_text('Hidden Notes')
@@ -1802,6 +1802,29 @@ class NoteWindow(Gtk.ApplicationWindow):
             pass
         dialog.run()
         dialog.destroy()
+
+    def _confirm_delete(self):
+        # Delete sits next to Hide and cannot be undone, so ask first. An empty
+        # note has nothing to lose and goes without asking.
+        buf = self.tv.get_buffer()
+        if buf.get_char_count() == 0:
+            self.app.delete_note(self.note_id)
+            return
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True,
+            message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.NONE,
+            text=f'Delete "{self.title or UNTITLED_LABEL}"?')
+        dialog.format_secondary_text(
+            'The note and its images are deleted permanently. To keep the note '
+            'but take it off the screen, hide it instead.')
+        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
+        delete_btn = dialog.add_button('Delete', Gtk.ResponseType.ACCEPT)
+        delete_btn.get_style_context().add_class('destructive-action')
+        dialog.set_default_response(Gtk.ResponseType.CANCEL)
+        response = dialog.run()
+        dialog.destroy()
+        if response == Gtk.ResponseType.ACCEPT:
+            self.app.delete_note(self.note_id)
 
     def _hide_note(self):
         self.hide()
