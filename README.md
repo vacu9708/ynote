@@ -90,7 +90,7 @@ your text. Lines in code blocks stay on one line and scroll sideways instead.
 | Bold | `Ctrl+B` or the `B` button |
 | Backtick format | Type text between backticks, like `` `this` ``, or select text and press `Ctrl+E` or the `` ` `` button. The backticks are removed and the text turns red, italic, and underlined. |
 | Bullet list | Type `- ` at the start of a line, or press `Ctrl+8` or the `•` button. `Tab` and `Shift+Tab` change the indent. `Backspace` on an empty bullet removes it. |
-| Code block | `Ctrl+Shift+C` or the `</>` button |
+| Code block | `Ctrl+Shift+C` or the `</>` button. In a code block, double-click a line to select that one command, or triple-click to select the whole block. |
 | Divider | Type `---` on its own line, or right-click and choose **Insert Divider**. `Backspace` or `Delete` removes it. |
 | Image | Paste an image with `Ctrl+V`, or right-click and choose **Insert Image**. Right-click an image to remove it. |
 

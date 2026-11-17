@@ -1252,7 +1252,10 @@ class NoteWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------------ key handling
 
     def _on_tv_button_press(self, tv, event):
-        if event.type != Gdk.EventType.DOUBLE_BUTTON_PRESS or event.button != 1:
+        # In a code block, a double click selects the clicked line, which is
+        # usually one command, and a triple click selects the whole block.
+        multi = (Gdk.EventType.DOUBLE_BUTTON_PRESS, Gdk.EventType.TRIPLE_BUTTON_PRESS)
+        if event.type not in multi or event.button != 1:
             return False
         buf = tv.get_buffer()
         x, y = tv.window_to_buffer_coords(
@@ -1261,6 +1264,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         if not self._iter_has_tag_context(it, self._code_tag):
             return False
         clicked_line = it.get_line()
+        if event.type == Gdk.EventType.DOUBLE_BUTTON_PRESS:
+            # Leave out the newline, so pasting into a terminal does not run
+            # the command right away.
+            buf.select_range(*self._line_bounds(clicked_line))
+            return True
         first_line = clicked_line
         while first_line > 0 and self._line_is_fully_tagged(self._code_tag, first_line - 1):
             first_line -= 1
