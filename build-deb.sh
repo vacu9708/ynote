@@ -11,8 +11,12 @@ if ! command -v dpkg-deb >/dev/null 2>&1; then
     exit 1
 fi
 
-VERSION="$(awk '/^Version: / { print $2; exit }' "$CONTROL_FILE")"
+VERSION="$(sed -n "s/^__version__ = '\(.*\)'$/\1/p" "$ROOT_DIR/ynote/__init__.py")"
 PACKAGE="$(awk '/^Package: / { print $2; exit }' "$CONTROL_FILE")"
+if [ -z "$VERSION" ]; then
+    echo "error: __version__ not found in ynote/__init__.py" >&2
+    exit 1
+fi
 DEB_FILE="$DIST_DIR/${PACKAGE}_${VERSION}.deb"
 BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ynote-deb.XXXXXX")"
 trap 'rm -rf "$BUILD_DIR"' EXIT
@@ -26,7 +30,10 @@ mkdir -p \
     "$BUILD_DIR/usr/share/ynote"
 mkdir -p "$DIST_DIR"
 
-install -m 0644 "$CONTROL_FILE" "$BUILD_DIR/DEBIAN/control"
+# The version comes from ynote/__init__.py, so control does not repeat it.
+awk -v version="$VERSION" '{ print } /^Package: / { print "Version: " version }' \
+    "$CONTROL_FILE" > "$BUILD_DIR/DEBIAN/control"
+chmod 0644 "$BUILD_DIR/DEBIAN/control"
 install -m 0755 "$ROOT_DIR/packaging/debian/postinst" "$BUILD_DIR/DEBIAN/postinst"
 install -m 0755 "$ROOT_DIR/packaging/debian/postrm" "$BUILD_DIR/DEBIAN/postrm"
 

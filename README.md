@@ -65,7 +65,7 @@ starts at login.
 | `🗑` | Delete the note right away. There is no confirmation. |
 | `14px` | Change the note's font size with `A−` and `A+`. |
 | Edges and corners | Drag to resize the note. |
-| Right-click the title bar or bottom bar | Minimize, rename, turn **Start at Login** on or off, About, or quit Ynote. |
+| Right-click the title bar or bottom bar | Minimize, rename, turn **Start at Login** on or off, open About to see the version, or quit Ynote. |
 | Right-click the text | Undo, redo, search, insert an image, or insert a divider. |
 
 Long lines wrap to fit the note and rewrap when you resize it. A word too long

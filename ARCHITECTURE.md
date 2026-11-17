@@ -48,7 +48,8 @@ flowchart LR
 
 | Module | Responsibility |
 | --- | --- |
-| `ynote.py`, `ynote/main.py` | Entry point. Restarts the process on the X11 backend when needed, then runs `PostItApp`. |
+| `ynote.py`, `ynote/main.py` | Entry point. Handles `--version`, restarts the process on the X11 backend when needed, then runs `PostItApp`. |
+| `ynote/__init__.py` | Holds `__version__`, the only place the version is set. |
 | `ynote/app.py` | Application lifecycle, tray icon, the set of notes, hidden-note order, the shared rich clipboard, and saving. |
 | `ynote/note_window.py` | One note: its window, text editing and formatting, undo/redo, search, images, and snapping. |
 | `ynote/note_manager_window.py` | The Hidden Notes window: list, reorder, and restore hidden notes. |

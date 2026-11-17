@@ -8,9 +8,10 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 
+from . import __version__
 from .config import (
-    CODE_ANCHOR, DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR, NEW_NOTE_LABEL,
-    UNTITLED_LABEL,
+    CODE_ANCHOR, CONF_DIR, DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR,
+    NEW_NOTE_LABEL, PROJECT_DIR, UNTITLED_LABEL,
 )
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .models import normalize_note_data
@@ -1776,10 +1777,24 @@ class NoteWindow(Gtk.ApplicationWindow):
         menu.popup_at_pointer(ev)
 
     def _show_about_dialog(self):
+        home = os.path.expanduser('~')
+
+        def short(path):
+            return '~' + path[len(home):] if path.startswith(home + os.sep) else path
+
         dialog = Gtk.AboutDialog(transient_for=self, modal=True)
         dialog.set_program_name('Ynote')
-        dialog.set_comments('Engineer-friendly sticky notes for GNOME desktops')
-        dialog.set_authors(['Youngsik Yang'])
+        dialog.set_version(__version__)
+        # Where this copy runs from tells the installed package apart from a
+        # source checkout, which is the first thing to check when an update
+        # seems to have no effect.
+        dialog.set_comments(
+            'Engineer-friendly sticky notes\n\n'
+            f'Notes: {short(CONF_DIR)}\n'
+            f'Running from: {short(PROJECT_DIR)}')
+        dialog.set_website('https://github.com/vacu9708/ynote')
+        dialog.set_website_label('github.com/vacu9708/ynote')
+        # The MIT license asks for this notice to travel with the program.
         dialog.set_copyright('Copyright (c) 2026 Youngsik Yang')
         dialog.set_license_type(Gtk.License.MIT_X11)
         try:

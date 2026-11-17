@@ -62,6 +62,9 @@ The package metadata lives in `packaging/debian/`, and the desktop launcher is
 defined in `packaging/ynote.desktop`. Keep the dependency list in
 `packaging/debian/control` and the Requirements section above in sync.
 
+The package version comes from `__version__` in `ynote/__init__.py`, which is
+also what About and `ynote --version` show.
+
 ## README Screenshot
 
 `assets/ynote-screenshot.png` is rendered from the real app, so regenerate it
