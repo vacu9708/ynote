@@ -33,19 +33,11 @@ sudo apt install ./ynote_*.deb
 ```
 
 `apt` installs everything Ynote needs. Keep the `./`; without it `apt` looks
-for a package by that name online.
-
-To build the package yourself instead:
-
-```bash
-git clone https://github.com/vacu9708/ynote.git
-cd ynote
-./build-deb.sh
-sudo apt install ./dist/ynote_*.deb
-```
+for a package by that name online. To build the package yourself, see
+[CONTRIBUTING.md](CONTRIBUTING.md#package).
 
 Open **Ynote** from the app grid, or run `ynote` in a terminal. The first time
-it starts, it opens one empty note. Every change saves automatically.
+it starts, it opens one empty note.
 
 From then on, Ynote also starts when you log in. To turn that off, right-click
 a note's title bar or bottom bar and uncheck **Start at Login**.
@@ -117,11 +109,6 @@ brings back every hidden note, and `↑` / `↓` reorder the list.
 
 Everything is saved locally in `~/.config/ynote/`: note text in `notes.json`
 and inserted images in `images/`. To back up your notes, copy that folder.
-
-## Wayland
-
-On a Wayland session, Ynote runs through XWayland. This is intentional:
-window positioning, always-on-top, and the tray icon work more reliably there.
 
 ## Contributing
 

@@ -1,158 +1,182 @@
 # Ynote Architecture
 
-Ynote is organized as a small GTK desktop application with clear boundaries
-between process startup, application orchestration, window/UI behavior,
-persistence, and testable domain logic.
+Ynote is a single-process GTK 3 app written in Python with PyGObject. One
+`Gtk.Application` (`PostItApp`) owns every note window, and each note is a
+`NoteWindow` holding a `Gtk.TextView`. Everything a user creates is saved
+under `~/.config/ynote/`.
 
-## Module structure
+## Modules
 
-This diagram shows how source files are grouped by responsibility. Runtime GTK
-code lives in the application layer, while persistence, image rules, and note
-schema rules live in pure Python modules that can be tested without opening a
-desktop window.
-
-```mermaid
-flowchart TD
-    subgraph Startup["Startup Layer"]
-        Launcher["ynote.py<br/>source launcher"]
-        Main["ynote/main.py<br/>entrypoint + X11 restart"]
-    end
-
-    subgraph AppLayer["Application Layer"]
-        App["ynote/app.py<br/>Gtk.Application lifecycle"]
-        Window["ynote/note_window.py<br/>note window + GTK interactions"]
-        Manager["ynote/note_manager_window.py<br/>hidden notes manager"]
-        Hotkeys["ynote/hotkeys.py<br/>global X11 snap shortcut"]
-    end
-
-    subgraph Domain["Testable Domain Logic"]
-        Models["ynote/models.py<br/>note defaults + schema normalization"]
-        Storage["ynote/storage.py<br/>notes.json persistence"]
-        Images["ynote/images.py<br/>image references + cleanup"]
-        Snap["ynote/snap.py<br/>note snapping"]
-    end
-
-    subgraph Support["Shared Support"]
-        Config["ynote/config.py<br/>paths + constants"]
-        Styles["ynote/styles.py<br/>GTK CSS"]
-    end
-
-    subgraph TestLayer["Quality Layer"]
-        Tests["tests/<br/>fast unit tests"]
-    end
-
-    Launcher --> Main --> App
-    App --> Window
-    App --> Manager
-    App --> Hotkeys
-    App --> Storage
-    App --> Images
-    Window --> Models
-    Window --> Images
-    Window --> Snap
-    Window --> Config
-    App --> Styles
-    Tests --> Models
-    Tests --> Storage
-    Tests --> Images
-    Tests --> Snap
-
-    classDef module fill:#FFFFFF,stroke:#4A5568,stroke-width:1px,color:#1A202C
-
-    class Launcher,Main,App,Window,Manager,Hotkeys,Models,Storage,Images,Snap,Config,Styles,Tests module
-
-    style Startup fill:#E8F3FF,stroke:#2F6FAB,stroke-width:1px,color:#102A43
-    style AppLayer fill:#FFF4D6,stroke:#B7791F,stroke-width:1px,color:#3D2C00
-    style Domain fill:#E8F8EF,stroke:#2F855A,stroke-width:1px,color:#143C2B
-    style Support fill:#F2ECFF,stroke:#6B46C1,stroke-width:1px,color:#2D1B69
-    style TestLayer fill:#FFE8E8,stroke:#C53030,stroke-width:1px,color:#5A1111
-```
-
-The design keeps desktop-specific GTK code in `note_window.py` and `app.py`,
-while moving persistence, image lifecycle, note-data rules, and note snapping
-into pure Python modules. Those pure modules are covered by fast unit tests, so
-regressions in saved-note compatibility, image cleanup, JSON persistence, and
-note snapping can be caught without requiring a graphical desktop session.
-
-## Save and Image Cleanup Flow
-
-This diagram shows what happens when Ynote saves notes. `PostItApp.save_all()`
-collects the current state from every live `NoteWindow`, writes that state to
-`notes.json`, and keeps image files that are still referenced by current notes
-or runtime undo/redo history. Internally, `save_all()` calls `w.to_dict()` and
-`w.history_image_files()` for each live note window.
+This diagram shows which module owns or uses which. The pure modules have no
+GTK dependency, so they are unit-tested without a display.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#FFFFFF', 'primaryTextColor': '#1A202C', 'primaryBorderColor': '#4A5568', 'lineColor': '#64748B', 'edgeLabelBackground': '#FFFFFF', 'titleColor': '#1A202C'}}}%%
 flowchart LR
-    subgraph Runtime["Runtime State"]
-        Windows["Live note windows<br/>(NoteWindow objects)"]
+    Main["ynote.py, main.py<br/>entry point"]
+
+    subgraph GTK["GTK layer"]
+        App["app.py<br/>PostItApp"]
+        Window["note_window.py<br/>NoteWindow"]
+        Manager["note_manager_window.py<br/>Hidden Notes window"]
+        Hotkeys["hotkeys.py<br/>snap shortcut thread"]
     end
 
-    subgraph SaveCoord["Save Coordination"]
-        SaveAll["Save coordinator<br/>(PostItApp.save_all())"]
-        Serializer["Note serializer<br/>(w.to_dict())"]
-        HistoryCollector["History image collector<br/>(w.history_image_files())"]
-        ReferenceSet["Image reference set<br/>(referenced_image_files())"]
+    subgraph Pure["Pure logic, unit-tested"]
+        Storage["storage.py"]
+        Images["images.py"]
+        Autostart["autostart.py"]
+        Models["models.py"]
+        Snap["snap.py"]
     end
 
-    subgraph Persistence["Local Persistence"]
-        NotesWriter["Notes file writer<br/>(save_notes())"]
-        ImageCleaner["Image cleanup worker<br/>(cleanup_orphaned_images())"]
-        NotesFile[("Notes JSON file<br/>~/.config/ynote/notes.json")]
-        ImagesDir[("Copied images directory<br/>~/.config/ynote/images/")]
-    end
+    Main -->|starts| App
+    App -->|owns one per note| Window
+    App -->|owns| Manager
+    App -->|owns| Hotkeys
+    App -->|uses| Storage
+    App -->|uses| Images
+    App -->|uses| Autostart
+    Window -->|uses| Models
+    Window -->|uses| Snap
 
-    Windows -->|"live windows"| SaveAll
-    SaveAll -->|"calls"| Serializer
-    SaveAll -->|"calls"| HistoryCollector
-    Serializer -->|"note dict list"| NotesWriter
-    NotesWriter -->|"writes notes JSON"| NotesFile
-    Serializer -->|"current image refs"| ReferenceSet
-    HistoryCollector -->|"history image refs"| ReferenceSet
-    ReferenceSet -->|"referenced filenames"| ImageCleaner
-    ImagesDir -->|"copied image files"| ImageCleaner
-    ImageCleaner -->|"removes orphan files"| ImagesDir
-
-    classDef data fill:#FFFFFF,stroke:#4A5568,stroke-width:1px,color:#1A202C
-
-    class Windows,SaveAll,Serializer,HistoryCollector,ReferenceSet,NotesWriter,NotesFile,ImageCleaner,ImagesDir data
-
-    style Runtime fill:#E8F3FF,stroke:#2F6FAB,stroke-width:1px,color:#102A43
-    style SaveCoord fill:#E8F8EF,stroke:#2F855A,stroke-width:1px,color:#143C2B
-    style Persistence fill:#FFF4D6,stroke:#B7791F,stroke-width:1px,color:#3D2C00
+    classDef node fill:#FFFFFF,stroke:#4A5568,color:#1A202C
+    class Main,App,Window,Manager,Hotkeys,Storage,Images,Autostart,Models,Snap node
+    style GTK fill:#FFF4D6,stroke:#B7791F,color:#3D2C00
+    style Pure fill:#E8F8EF,stroke:#2F855A,color:#143C2B
 ```
 
-Diagram notes:
+| Module | Responsibility |
+| --- | --- |
+| `ynote.py`, `ynote/main.py` | Entry point. Restarts the process on the X11 backend when needed, then runs `PostItApp`. |
+| `ynote/app.py` | Application lifecycle, tray icon, the set of notes, hidden-note order, the shared rich clipboard, and saving. |
+| `ynote/note_window.py` | One note: its window, text editing and formatting, undo/redo, search, images, and snapping. |
+| `ynote/note_manager_window.py` | The Hidden Notes window: list, reorder, and restore hidden notes. |
+| `ynote/hotkeys.py` | Grabs `Ctrl+Super+arrow` on the X root window in a background thread. |
+| `ynote/models.py` | Fills defaults into saved note data, so older `notes.json` files still load. |
+| `ynote/storage.py` | Reads JSON files and writes them atomically. |
+| `ynote/images.py` | Image metadata, and finding and deleting image files no note uses. |
+| `ynote/snap.py` | Computes a snapped note rectangle from monitor work areas. |
+| `ynote/autostart.py` | The per-user login autostart entry. |
+| `ynote/config.py`, `ynote/styles.py` | Paths, constants, and GTK CSS. |
 
-- `Note serializer` returns the current note dictionaries by using `w.to_dict()`.
-- `History image collector` returns image references still reachable through undo/redo history.
-- Image cleanup keeps every referenced filename and removes only orphaned copied image files.
+## Note data model
 
-## Module Responsibilities
+`notes.json` is a list with one object per note. Formatting is stored as
+character ranges over plain text, not as markup:
 
-| Area | Module | Responsibility |
-| --- | --- | --- |
-| Entrypoint | `ynote.py`, `ynote/main.py` | Preserve `python3 ynote.py` source-checkout execution and handle Wayland-to-X11 restart behavior |
-| Application | `ynote/app.py` | Own the GTK application lifecycle, tray menu, note collection, hidden-note ordering, save coordination, and shutdown |
-| Window/UI | `ynote/note_window.py` | Build and manage note windows, text editing, shortcuts, search, text context-menu actions, and window behavior |
-| Hidden notes manager | `ynote/note_manager_window.py` | List hidden notes, restore notes, and reorder hidden notes through a dedicated GTK window |
-| Data model | `ynote/models.py` | Normalize saved note data and preserve backward-compatible defaults |
-| Persistence | `ynote/storage.py` | Load and save `notes.json` with atomic replacement |
-| Images | `ynote/images.py` | Normalize image metadata, track references, and remove orphaned copied images |
-| Styling/config | `ynote/styles.py`, `ynote/config.py` | Keep GTK CSS, paths, IDs, and shared constants out of application logic |
-| Tests | `tests/` | Cover pure logic without requiring a graphical desktop session |
+```json
+{
+  "id": "0b6e…", "title": "tmux", "text": "Sessions\ntmux new -s work",
+  "x": 120, "y": 80, "w": 300, "h": 320,
+  "on_top": false, "hidden": false, "sort_order": 0.0, "font_size": 14,
+  "bold_ranges": [[0, 8]], "code_ranges": [[9, 25]], "backtick_ranges": [],
+  "images": []
+}
+```
 
-`ynote.py` remains as a small source launcher that imports `ynote.main`. This
-keeps existing manual installs and the `python3 ynote.py` development workflow
-working after the implementation moved into the `ynote/` package. The Debian
-package builder installs both the launcher and the package modules.
+| Field | Meaning |
+| --- | --- |
+| `text` | The note text, including the special characters below. |
+| `bold_ranges`, `code_ranges`, `backtick_ranges` | `[start, end)` character offsets into `text`. GTK buffer offsets count characters, so they match Python string indices. |
+| `images` | `{file, original_name, offset}` per image. `offset` is where its placeholder character sits in `text`. |
+| `x`, `y`, `w`, `h` | Window position and size. |
+| `hidden`, `sort_order` | Whether the note is hidden, and its place in the Hidden Notes list. |
+| `on_top`, `font_size` | Always-on-top and the note's font size. |
 
-## Why Ynote Runs on X11
+Some structure lives in the text itself:
 
-Ynote runs through GTK 3's X11 backend, even when launched from a Wayland
-session. Some sticky-note behaviors it relies on, such as precise window
-positioning, always-on-top notes, tray/status-icon behavior, and
-raising/lowering note windows, are more reliable under X11/XWayland than native
-Wayland. `ynote/main.py` restarts the process with `GDK_BACKEND=x11` when it
-detects a Wayland session, and the installed `ynote` launcher sets the same
-variable.
+| In `text` | Meaning |
+| --- | --- |
+| `U+FFFC` (`IMAGE_ANCHOR`) | Where an image is shown. |
+| `U+2060` (`CODE_ANCHOR`) | An invisible character that lets an empty line carry the code tag. It is stripped when text goes to the system clipboard. |
+| `• ` at the start of a line | A bullet. Each nesting level adds four leading spaces. |
+| A line that is exactly `---` | A divider. The dashes are hidden and `_draw_dividers()` paints a line over them. |
+
+Emoji sizing, divider styling, and search highlights are tags derived from the
+text while the app runs, and are never saved.
+
+Other files under `~/.config/ynote/`:
+
+- `images/` holds a copy of every inserted image, named by a UUID, so a note
+  keeps working after the original file moves.
+- `settings.json` records app-wide state. Today that is only whether login
+  autostart was already set up once.
+
+## Editing, undo, and saving
+
+This diagram shows what an edit causes, from the keystroke to the files on
+disk.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'actorBkg': '#FFFFFF', 'actorBorder': '#4A5568', 'actorTextColor': '#1A202C', 'actorLineColor': '#64748B', 'signalColor': '#1A202C', 'signalTextColor': '#1A202C', 'noteBkgColor': '#FFF4D6', 'noteBorderColor': '#B7791F', 'noteTextColor': '#1A202C', 'labelBoxBkgColor': '#E2E8F0', 'labelBoxBorderColor': '#4A5568', 'labelTextColor': '#1A202C', 'loopTextColor': '#1A202C'}}}%%
+sequenceDiagram
+    box rgb(255, 255, 255)
+    actor User
+    participant Buf as Gtk.TextBuffer
+    participant Win as NoteWindow
+    participant App as PostItApp
+    participant Disk as ~/.config/ynote
+    end
+    Note over User,Disk: Edits stay in memory until typing pauses for 600 ms, then every note is saved
+    User->>Buf: keystroke or formatting action
+    Buf->>Win: changed signal
+    Win->>Win: restart the 600 ms snapshot and save timers
+    Note over Win: Snapshot timer fires
+    Win->>Win: append text, ranges, and images to undo history
+    Note over Win,Disk: Save timer fires
+    Win->>App: request to save all notes, save_all()
+    loop every NoteWindow
+        App->>Win: request for the note dict, to_dict()
+        Win-->>App: note dict
+    end
+    App->>Disk: notes.json, written to a temp file and renamed
+    App->>Disk: deletion of image files nothing references
+```
+
+- Moving or resizing a note also starts the save timer.
+- Undo history keeps the last 100 states per note and lives only in memory.
+- While the app runs, an image is kept if a note, any note's undo history, or
+  the rich clipboard still refers to it. That way undo can bring back a
+  deleted image. Quitting saves once more and keeps only images the saved
+  notes use.
+
+## Startup
+
+1. `main()` restarts the process with `GDK_BACKEND=x11` if it was started in
+   a Wayland session. See [Why X11](#why-x11).
+2. `PostItApp.do_startup()` creates the config directories, sets up login
+   autostart on an installed app's first run, loads the CSS, creates the tray
+   icon, and starts the snap shortcut thread.
+3. `_load()` creates a `NoteWindow` for each saved note, or one empty note
+   when there are none, then deletes image files no saved note uses.
+
+## Other mechanisms
+
+- **Global snap shortcut.** GTK only receives keys while a note has focus, so
+  `SnapHotkeys` grabs `Ctrl+Super+arrow` on the X root window through its own
+  python-xlib connection. Its thread hands the held arrows to the GTK main
+  loop with `GLib.idle_add()`. `NoteWindow._snap_to()` then asks
+  `snap.snap_rect()` for the new rectangle. Without python3-xlib, only the
+  in-window shortcut works.
+- **Rich copy and paste between notes.** Copying in a note stores the text,
+  ranges, and images in `PostItApp` and puts plain text on the system
+  clipboard. Pasting uses the stored state only while Ynote still owns the
+  clipboard, so text copied elsewhere afterwards pastes as plain text.
+- **Login autostart.** `autostart.enable_on_first_run()` writes
+  `~/.config/autostart/ynote.desktop` once per user, and only when the
+  `ynote` command is installed. The Start at Login menu item adds or removes
+  that file.
+
+## Why X11
+
+Ynote always runs on GTK's X11 backend, through XWayland on a Wayland session.
+Native Wayland does not let an app place its own windows or keep them on top,
+and Ynote depends on both for saved positions, snapping, and pinning. The
+global shortcut and the tray icon (`Gtk.StatusIcon`) are X11 mechanisms too.
+
+## Testing
+
+The pure modules have unit tests in `tests/`. GTK code is covered by the
+headless smoke test, which launches the real app. See
+[CONTRIBUTING.md](CONTRIBUTING.md#test).

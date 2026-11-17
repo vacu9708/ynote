@@ -42,16 +42,13 @@ Run every check before committing:
 It runs, in order:
 
 1. A Python syntax check.
-2. The unit tests (`python3 -m pytest`). Use `python3 -m pytest` rather than
-   `pytest` when running them alone, so the `ynote` package can be imported.
-3. A headless smoke test (`tests/smoke_launch.py`). It starts the real app in
-   a virtual X server with a throwaway home directory, lets it draw a note
-   that uses each kind of formatting, and fails if any Python error is
-   printed. It is skipped when `xvfb-run` is not installed.
+2. The unit tests. To run only these, use `python3 -m pytest`; plain
+   `pytest` cannot import the `ynote` package.
+3. A headless smoke test, `tests/smoke_launch.py`, which launches the real app
+   and fails on any Python error. It is skipped without `xvfb-run`.
 4. The Debian package build.
 
-The smoke test only checks that the app runs without errors. To test what a
-feature does, add a pytest test under `tests/` instead.
+To test what a feature does, add a pytest test under `tests/`.
 
 ## Package
 
@@ -76,9 +73,3 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 1600x1200x24" \
 ```
 
 The sample notes are defined in `tools/readme_screenshot.py`.
-
-## Future Improvements
-
-- Extract more text-buffer behavior from the GTK layer for deeper automated testing
-- Add focused tests for code block, bullet list, and undo/redo state transitions
-- Continue improving packaging and desktop integration across GNOME environments
