@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 export PYTHONDONTWRITEBYTECODE=1
 
 echo "==> Checking Python syntax"
-python3 -m py_compile ynote.py ynote/*.py tests/*.py
+python3 -m py_compile ynote.py ynote/*.py tests/*.py tools/*.py
 
 echo "==> Running unit tests"
 if ! python3 -c 'import pytest' 2>/dev/null; then

@@ -2,297 +2,133 @@
 
 Engineer-friendly sticky notes for Linux desktops.
 
-![Ynote screenshot](assets/Ynote-main2.png)
+![Two Ynote notes: a debugging note with a command, terminal output, and a cause list, and a tmux cheat sheet](assets/ynote-screenshot.png)
 
-Ynote is a lightweight GTK desktop notes app for Ubuntu and GNOME-based Linux systems.
-It is built for the kind of notes engineers keep beside their editor: command/code snippets,
-debugging context, screenshots, and reminders that should always stay visible.
+Ynote keeps the notes engineers want beside their editor (commands, code
+snippets, debugging context, screenshots, and reminders) in small floating
+windows on the desktop. It runs on Ubuntu 22.04 or later and other GNOME-based
+Linux desktops.
 
-## Highlights
+## Features
 
-- Floating desktop notes with automatic local saving
-- Always-on-top pinning for notes you need beside your editor
-- Rich text basics: bold text, bullet lists, backtick-triggered text, undo/redo,
-  and per-note font size
-- Code blocks for commands and snippets
-- Image insertion from the text context menu and image paste support
+- Floating notes that save automatically
+- Always-on-top pinning
+- Bold text, bullet lists, code blocks, dividers, and backtick formatting for
+  paths and names
+- Images pasted or inserted into notes
 - Search inside a note
-- Hidden notes manager with manual ordering and one-click restore
-- Keyboard snapping of notes into half-width columns on each monitor
-
-## Usage Notes
-
-- Use the `▤` toolbar button or the tray menu to open the hidden notes manager.
-- Use `↑` / `↓` in the hidden notes manager to order hidden notes.
-- Select a hidden note and click Restore, or double-click it, to restore it.
-- Right-click inside a note to insert an image from the text context menu.
-- Right-click the title bar or bottom bar to minimize the note, edit its title,
-  or quit.
-- Select text and press `Ctrl+E`, the `` ` `` toolbar button, or right-click to
-  apply backtick formatting.
-- Type matching backticks around text to remove the backticks and apply italic,
-  underline, and red styling.
-- Type `-` followed by a space at the start of a line to start a bullet list.
-  Press `Ctrl+Z` right after to keep the plain `- ` instead.
-- Use `Ctrl+8` or the `•` toolbar button to toggle bullet-list formatting on the
-  selected lines.
-- Press `Tab` on a bullet line to indent it into a nested bullet.
-- Press `Backspace` on an empty bullet line to remove the bullet point.
-- Type `---` on a line of its own, or choose Insert Divider from the text
-  context menu, to draw a divider. `Backspace` or `Delete` on it removes it.
-- Drag any edge or corner of a note to resize it.
-- Use `Ctrl+Super+arrow` to snap the current note into a half-width column on
-  its monitor while keeping its height. It works even when no note has focus
-  and brings the note to the front.
-  - `←` / `→` move it to the left or right column. Pressing again at the edge
-    moves it onto the neighboring monitor.
-  - `↑` / `↓` move it up or down by its own height.
-  - Holding a horizontal and a vertical arrow together sends it to that corner.
-
-## Architecture
-
-Ynote is organized as a small GTK desktop application with clear boundaries
-between process startup, application orchestration, window/UI behavior,
-persistence, and testable domain logic.
-
-### Module structure
-
-This diagram shows how source files are grouped by responsibility. Runtime GTK
-code lives in the application layer, while persistence, image rules, and note
-schema rules live in pure Python modules that can be tested without opening a
-desktop window.
-
-```mermaid
-flowchart TD
-    subgraph Startup["Startup Layer"]
-        Launcher["ynote.py<br/>source launcher"]
-        Main["ynote/main.py<br/>entrypoint + X11 restart"]
-    end
-
-    subgraph AppLayer["Application Layer"]
-        App["ynote/app.py<br/>Gtk.Application lifecycle"]
-        Window["ynote/note_window.py<br/>note window + GTK interactions"]
-        Manager["ynote/note_manager_window.py<br/>hidden notes manager"]
-        Hotkeys["ynote/hotkeys.py<br/>global X11 snap shortcut"]
-    end
-
-    subgraph Domain["Testable Domain Logic"]
-        Models["ynote/models.py<br/>note defaults + schema normalization"]
-        Storage["ynote/storage.py<br/>notes.json persistence"]
-        Images["ynote/images.py<br/>image references + cleanup"]
-        Snap["ynote/snap.py<br/>note snapping"]
-    end
-
-    subgraph Support["Shared Support"]
-        Config["ynote/config.py<br/>paths + constants"]
-        Styles["ynote/styles.py<br/>GTK CSS"]
-    end
-
-    subgraph TestLayer["Quality Layer"]
-        Tests["tests/<br/>fast unit tests"]
-    end
-
-    Launcher --> Main --> App
-    App --> Window
-    App --> Manager
-    App --> Hotkeys
-    App --> Storage
-    App --> Images
-    Window --> Models
-    Window --> Images
-    Window --> Snap
-    Window --> Config
-    App --> Styles
-    Tests --> Models
-    Tests --> Storage
-    Tests --> Images
-    Tests --> Snap
-
-    classDef module fill:#FFFFFF,stroke:#4A5568,stroke-width:1px,color:#1A202C
-
-    class Launcher,Main,App,Window,Manager,Hotkeys,Models,Storage,Images,Snap,Config,Styles,Tests module
-
-    style Startup fill:#E8F3FF,stroke:#2F6FAB,stroke-width:1px,color:#102A43
-    style AppLayer fill:#FFF4D6,stroke:#B7791F,stroke-width:1px,color:#3D2C00
-    style Domain fill:#E8F8EF,stroke:#2F855A,stroke-width:1px,color:#143C2B
-    style Support fill:#F2ECFF,stroke:#6B46C1,stroke-width:1px,color:#2D1B69
-    style TestLayer fill:#FFE8E8,stroke:#C53030,stroke-width:1px,color:#5A1111
-```
-
-The design keeps desktop-specific GTK code in `note_window.py` and `app.py`,
-while moving persistence, image lifecycle, note-data rules, and note snapping
-into pure Python modules. Those pure modules are covered by fast unit tests, so
-regressions in saved-note compatibility, image cleanup, JSON persistence, and
-note snapping can be caught without requiring a graphical desktop session.
-
-### Save and Image Cleanup Flow
-
-This diagram shows what happens when Ynote saves notes. `PostItApp.save_all()`
-collects the current state from every live `NoteWindow`, writes that state to
-`notes.json`, and keeps image files that are still referenced by current notes
-or runtime undo/redo history. Internally, `save_all()` calls `w.to_dict()` and
-`w.history_image_files()` for each live note window.
-
-```mermaid
-flowchart LR
-    subgraph Runtime["Runtime State"]
-        Windows["Live note windows<br/>(NoteWindow objects)"]
-    end
-
-    subgraph SaveCoord["Save Coordination"]
-        SaveAll["Save coordinator<br/>(PostItApp.save_all())"]
-        Serializer["Note serializer<br/>(w.to_dict())"]
-        HistoryCollector["History image collector<br/>(w.history_image_files())"]
-        ReferenceSet["Image reference set<br/>(referenced_image_files())"]
-    end
-
-    subgraph Persistence["Local Persistence"]
-        NotesWriter["Notes file writer<br/>(save_notes())"]
-        ImageCleaner["Image cleanup worker<br/>(cleanup_orphaned_images())"]
-        NotesFile[("Notes JSON file<br/>~/.config/ynote/notes.json")]
-        ImagesDir[("Copied images directory<br/>~/.config/ynote/images/")]
-    end
-
-    Windows -->|"live windows"| SaveAll
-    SaveAll -->|"calls"| Serializer
-    SaveAll -->|"calls"| HistoryCollector
-    Serializer -->|"note dict list"| NotesWriter
-    NotesWriter -->|"writes notes JSON"| NotesFile
-    Serializer -->|"current image refs"| ReferenceSet
-    HistoryCollector -->|"history image refs"| ReferenceSet
-    ReferenceSet -->|"referenced filenames"| ImageCleaner
-    ImagesDir -->|"copied image files"| ImageCleaner
-    ImageCleaner -->|"removes orphan files"| ImagesDir
-
-    classDef data fill:#FFFFFF,stroke:#4A5568,stroke-width:1px,color:#1A202C
-
-    class Windows,SaveAll,Serializer,HistoryCollector,ReferenceSet,NotesWriter,NotesFile,ImageCleaner,ImagesDir data
-
-    style Runtime fill:#E8F3FF,stroke:#2F6FAB,stroke-width:1px,color:#102A43
-    style SaveCoord fill:#E8F8EF,stroke:#2F855A,stroke-width:1px,color:#143C2B
-    style Persistence fill:#FFF4D6,stroke:#B7791F,stroke-width:1px,color:#3D2C00
-```
-
-Diagram notes:
-
-- `Note serializer` returns the current note dictionaries by using `w.to_dict()`.
-- `History image collector` returns image references still reachable through undo/redo history.
-- Image cleanup keeps every referenced filename and removes only orphaned copied image files.
-
-| Area | Module | Responsibility |
-| --- | --- | --- |
-| Entrypoint | `ynote.py`, `ynote/main.py` | Preserve `python3 ynote.py` source-checkout execution and handle Wayland-to-X11 restart behavior |
-| Application | `ynote/app.py` | Own the GTK application lifecycle, tray menu, note collection, hidden-note ordering, save coordination, and shutdown |
-| Window/UI | `ynote/note_window.py` | Build and manage note windows, text editing, shortcuts, search, text context-menu actions, and window behavior |
-| Hidden notes manager | `ynote/note_manager_window.py` | List hidden notes, restore notes, and reorder hidden notes through a dedicated GTK window |
-| Data model | `ynote/models.py` | Normalize saved note data and preserve backward-compatible defaults |
-| Persistence | `ynote/storage.py` | Load and save `notes.json` with atomic replacement |
-| Images | `ynote/images.py` | Normalize image metadata, track references, and remove orphaned copied images |
-| Styling/config | `ynote/styles.py`, `ynote/config.py` | Keep GTK CSS, paths, IDs, and shared constants out of application logic |
-| Tests | `tests/` | Cover pure logic without requiring a graphical desktop session |
-
-`ynote.py` remains as a small source launcher that imports `ynote.main`. This
-keeps existing manual installs and the `python3 ynote.py` development workflow
-working after the implementation moved into the `ynote/` package. The Debian
-package builder installs both the launcher and the package modules.
+- Hide notes and bring them back later
+- Snap notes into half-screen columns with the keyboard
 
 ## Install
 
-### Debian Package
-
-Build the package:
+Download `ynote_<version>.deb` from the
+[latest release](https://github.com/vacu9708/ynote/releases/latest), then
+install it from the download folder:
 
 ```bash
+sudo apt install ./ynote_*.deb
+```
+
+`apt` installs everything Ynote needs. Keep the `./`; without it `apt` looks
+for a package by that name online.
+
+To build the package yourself instead:
+
+```bash
+git clone https://github.com/vacu9708/ynote.git
+cd ynote
 ./build-deb.sh
+sudo apt install ./dist/ynote_*.deb
 ```
 
-Install the generated package:
+Open **Ynote** from the app grid, or run `ynote` in a terminal. The first time
+it starts, it opens one empty note. Every change saves automatically.
+
+To start Ynote automatically when you log in:
 
 ```bash
-sudo apt install ./dist/ynote_1.6.0.deb
+mkdir -p ~/.config/autostart
+cp /usr/share/applications/ynote.desktop ~/.config/autostart/
 ```
 
-Run Ynote:
+To uninstall:
 
 ```bash
-ynote
+sudo apt remove ynote
 ```
 
-### Manual Install
+Your notes stay in `~/.config/ynote/` after uninstalling.
 
-For local testing, you can also install from the checkout:
+## Using Ynote
 
-```bash
-./install.sh
-```
+### The note window
 
-The packaged `.deb` is recommended for normal use because it installs the
-launcher, desktop entry, and icon in standard system locations.
+| Where | Action |
+| --- | --- |
+| Title bar | Drag to move the note. Double-click to rename it. |
+| `📌` | Keep the note above other windows. Click again to turn it off. |
+| `+` | Create a new note next to this one. |
+| `✕` | Hide the note. See [Hidden notes](#hidden-notes). |
+| `▤` | Open the list of hidden notes. |
+| `🗑` | Delete the note right away. There is no confirmation. |
+| `14px` | Change the note's font size with `A−` and `A+`. |
+| Edges and corners | Drag to resize the note. |
+| Right-click the title bar or bottom bar | Minimize, rename, About, or quit Ynote. |
+| Right-click the text | Undo, redo, search, insert an image, or insert a divider. |
 
-## Requirements
+Long lines wrap to fit the note and rewrap when you resize it. A word too long
+for one line is split, with a `-` shown at the break; the `-` is not added to
+your text. Lines in code blocks stay on one line and scroll sideways instead.
 
-Ynote uses Python, GTK 3, and PyGObject. `python3-xlib` registers the global
-`Ctrl+Super+arrow` snap shortcut; without it the shortcut only works while a
-note has focus.
+### Formatting
 
-On Ubuntu/Debian:
+| Format | How |
+| --- | --- |
+| Bold | `Ctrl+B` or the `B` button |
+| Backtick format | Type text between backticks, like `` `this` ``, or select text and press `Ctrl+E` or the `` ` `` button. The backticks are removed and the text turns red, italic, and underlined. |
+| Bullet list | Type `- ` at the start of a line, or press `Ctrl+8` or the `•` button. `Tab` and `Shift+Tab` change the indent. `Backspace` on an empty bullet removes it. |
+| Code block | `Ctrl+Shift+C` or the `</>` button |
+| Divider | Type `---` on its own line, or right-click and choose **Insert Divider**. `Backspace` or `Delete` removes it. |
+| Image | Paste an image with `Ctrl+V`, or right-click and choose **Insert Image**. Right-click an image to remove it. |
 
-```bash
-sudo apt install python3 python3-gi gir1.2-gtk-3.0 python3-xlib
-```
+Typed `- ` turned into a bullet you didn't want? Press `Ctrl+Z` right away to
+keep the plain text.
 
-### Wayland and GNOME Notes
+### Other shortcuts
 
-Ynote is designed for Ubuntu/GNOME desktops and currently runs through GTK 3's
-X11 backend, even when launched from a Wayland session.
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+F` | Search the note. `Esc` closes the search bar. |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+| `Ctrl+Super+←` / `→` | Snap the note into the left or right half of its monitor. Press again at the edge to move it to the next monitor. |
+| `Ctrl+Super+↑` / `↓` | Move the note up or down by its own height |
+| `Ctrl+Super+` two arrows | Send the note to that corner |
 
-This is intentional. Some sticky-note behaviors that Ynote relies on, such as
-precise window positioning, always-on-top notes, tray/status-icon behavior, and
-raising/lowering note windows, are more reliable under X11/XWayland than native
-Wayland.
+Snapping keeps the note's height and works even when no note has focus.
 
-When Ynote detects a Wayland session, it automatically restarts itself with the
-X11 backend enabled.
+### Hidden notes
 
-## Data Location
+Hiding a note with `✕` takes it off the screen without deleting it. To bring it
+back, click `▤` on any note or choose **Hidden Notes** from the tray icon menu,
+then select the note and click **Restore**, or double-click it. **Restore All**
+brings back every hidden note, and `↑` / `↓` reorder the list.
 
-Notes are stored locally in:
+## Where your notes are stored
 
-```text
-~/.config/ynote/
-```
+Everything is saved locally in `~/.config/ynote/`: note text in `notes.json`
+and inserted images in `images/`. To back up your notes, copy that folder.
 
-The app keeps note text in `notes.json` and stores inserted images under the
-same config directory.
+## Wayland
 
-## Development
+On a Wayland session, Ynote runs through XWayland. This is intentional:
+window positioning, always-on-top, and the tray icon work more reliably there.
 
-Run directly from the repository:
+## Contributing
 
-```bash
-python3 ynote.py
-```
-
-Run the test and packaging checks:
-
-```bash
-./test.sh
-```
-
-Build a fresh Debian package:
-
-```bash
-./build-deb.sh
-```
-
-The package metadata lives in `packaging/debian/`, and the desktop launcher is
-defined in `packaging/ynote.desktop`.
-
-## Future Improvements
-
-- Extract more text-buffer behavior from the GTK layer for deeper automated testing
-- Add focused tests for code block, bullet list, and undo/redo state transitions
-- Continue improving packaging and desktop integration across GNOME environments
+To run Ynote from source, run the tests, or build the package, see
+[CONTRIBUTING.md](CONTRIBUTING.md). For how the code is organized, see
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 
