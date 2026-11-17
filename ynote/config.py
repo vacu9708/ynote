@@ -28,3 +28,11 @@ DIVIDER_TEXT = '---'
 # that creates a note, so renaming one never changes the other.
 UNTITLED_LABEL = 'Untitled'
 NEW_NOTE_LABEL = 'New Note'
+
+
+def display_path(path):
+    """Show a path under the home directory as ~/..., for messages."""
+    home = os.path.expanduser('~')
+    if path.startswith(home + os.sep):
+        return '~' + path[len(home):]
+    return path

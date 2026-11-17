@@ -11,7 +11,7 @@ from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 from . import __version__
 from .config import (
     CODE_ANCHOR, CONF_DIR, DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR,
-    NEW_NOTE_LABEL, PROJECT_DIR, UNTITLED_LABEL,
+    NEW_NOTE_LABEL, PROJECT_DIR, UNTITLED_LABEL, display_path,
 )
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .models import normalize_note_data
@@ -1777,11 +1777,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         menu.popup_at_pointer(ev)
 
     def _show_about_dialog(self):
-        home = os.path.expanduser('~')
-
-        def short(path):
-            return '~' + path[len(home):] if path.startswith(home + os.sep) else path
-
         dialog = Gtk.AboutDialog(transient_for=self, modal=True)
         dialog.set_program_name('Ynote')
         dialog.set_version(__version__)
@@ -1790,8 +1785,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # seems to have no effect.
         dialog.set_comments(
             'Engineer-friendly sticky notes\n\n'
-            f'Notes: {short(CONF_DIR)}\n'
-            f'Running from: {short(PROJECT_DIR)}')
+            f'Notes: {display_path(CONF_DIR)}\n'
+            f'Running from: {display_path(PROJECT_DIR)}')
         dialog.set_website('https://github.com/vacu9708/ynote')
         dialog.set_website_label('github.com/vacu9708/ynote')
         # The MIT license asks for this notice to travel with the program.

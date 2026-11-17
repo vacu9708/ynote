@@ -11,7 +11,7 @@ from gi.repository import Gtk, Gdk, GLib, Gio
 from . import autostart
 from .config import (
     APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR,
-    NEW_NOTE_LABEL, NOTES_FILE, SETTINGS_FILE, UNTITLED_LABEL,
+    NEW_NOTE_LABEL, NOTES_FILE, SETTINGS_FILE, UNTITLED_LABEL, display_path,
 )
 from .hotkeys import SnapHotkeys
 from .images import (
@@ -21,7 +21,7 @@ from .images import (
 )
 from .note_manager_window import HiddenNotesWindow
 from .note_window import NoteWindow
-from .storage import load_notes, save_notes
+from .storage import UnreadableNotesError, load_notes, save_notes, set_aside
 from .styles import BASE_CSS
 
 class PostItApp(Gtk.Application):
@@ -38,6 +38,9 @@ class PostItApp(Gtk.Application):
         self._rich_clipboard = None
         self._rich_clipboard_owned = False
         self._ignore_next_clipboard_owner_change = False
+        # Set when notes.json could not be read. Its images must survive until
+        # the user restores the file, so cleanup is skipped for this run.
+        self._keep_all_images = False
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -217,7 +220,17 @@ class PostItApp(Gtk.Application):
     # ------------------------------------------------------------------ notes
 
     def _load(self):
-        saved = load_notes(NOTES_FILE)
+        try:
+            saved = load_notes(NOTES_FILE)
+        except UnreadableNotesError as e:
+            # Never let the empty note below overwrite a file we could not
+            # read: keep it aside and tell the user where it went.
+            kept = set_aside(NOTES_FILE)
+            print(f'ynote: could not read {NOTES_FILE} ({e}); kept it as {kept}',
+                  file=sys.stderr)
+            self._keep_all_images = True
+            saved = None
+            GLib.idle_add(self._warn_unreadable_notes, kept)
         if not saved:
             self.new_note()
             return
@@ -375,6 +388,26 @@ class PostItApp(Gtk.Application):
             return None
         return self._rich_clipboard
 
+    def _warn_unreadable_notes(self, kept):
+        open_folder = 1
+        dialog = Gtk.MessageDialog(
+            transient_for=next(iter(self.notes.values()), None), modal=True,
+            message_type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.NONE,
+            text='Ynote could not read your notes')
+        dialog.format_secondary_text(
+            f'Your notes file was kept as {display_path(kept)}, and Ynote '
+            'started with an empty note. To get your notes back, quit Ynote, '
+            'fix that file and rename it to notes.json, then start Ynote again.')
+        dialog.add_button('Open Folder', open_folder)
+        dialog.add_button('OK', Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        response = dialog.run()
+        dialog.destroy()
+        if response == open_folder:
+            Gio.AppInfo.launch_default_for_uri(
+                GLib.filename_to_uri(CONF_DIR, None), None)
+        return False
+
     def _referenced_image_files(self, data=None, include_history=True):
         if data is None:
             data = [w.to_dict() for w in self.notes.values()]
@@ -395,6 +428,8 @@ class PostItApp(Gtk.Application):
     def _cleanup_orphaned_images(self, data=None, include_history=True):
         # Delete copied image files that are no longer referenced by any live
         # note or, during runtime, undo/redo history.
+        if self._keep_all_images:
+            return
         referenced = self._referenced_image_files(data, include_history=include_history)
         cleanup_orphaned_images(IMAGES_DIR, referenced)
 

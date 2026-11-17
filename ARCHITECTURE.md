@@ -151,6 +151,10 @@ sequenceDiagram
    icon, and starts the snap shortcut thread.
 3. `_load()` creates a `NoteWindow` for each saved note, or one empty note
    when there are none, then deletes image files no saved note uses.
+   If `notes.json` exists but cannot be read, it is renamed to
+   `notes.json.broken-<time>` instead of being overwritten, the user is
+   warned, and image cleanup is skipped for that run so the kept notes'
+   images survive.
 
 ## Other mechanisms
 
