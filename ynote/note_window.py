@@ -199,7 +199,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         sw = self._sw
 
         self.tv = Gtk.TextView()
-        self.tv.set_wrap_mode(Gtk.WrapMode.NONE)
+        # Soft-wrap prose to the note width so narrow notes stay readable.
+        # Code lines opt out through the code tag's wrap mode.
+        self.tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.tv.set_left_margin(6)
         self.tv.set_right_margin(6)
         self.tv.set_top_margin(4)
@@ -223,6 +225,10 @@ class NoteWindow(Gtk.ApplicationWindow):
                                         background='#EFEFD6',
                                         paragraph_background='#EFEFD6',
                                         foreground='#222',
+                                        # Keep commands on one visual line
+                                        # so a wrap is never mistaken for a
+                                        # line break. Long ones scroll.
+                                        wrap_mode=Gtk.WrapMode.NONE,
                                         left_margin=8,
                                         right_margin=8,
                                         pixels_above_lines=2,
