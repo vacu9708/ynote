@@ -223,7 +223,9 @@ class PostItApp(Gtk.Application):
             x, y = px + pw + 10, py
         else:
             n = len(self.notes)
-            monitor = Gdk.Display.get_default().get_primary_monitor()
+            display = Gdk.Display.get_default()
+            # X servers without a primary monitor set return None here.
+            monitor = display.get_primary_monitor() or display.get_monitor(0)
             geo = monitor.get_geometry()
             x = geo.x + (geo.width  - 238) // 2 + (n * 30) % 90
             y = geo.y + (geo.height - 300) // 2 + (n * 25) % 75
