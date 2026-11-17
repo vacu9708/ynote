@@ -2,12 +2,14 @@
 
 Engineer-friendly sticky notes for Linux desktops.
 
-![Two Ynote notes: a debugging note with a command, terminal output, and a cause list, and a tmux cheat sheet](assets/ynote-screenshot.png)
+![Three Ynote notes: a pinned note debugging a 502 error with a command, a log screenshot, and the cause, a git cheat sheet, and a to-do list](assets/ynote-screenshot.png)
 
 Ynote keeps the notes engineers want beside their editor (commands, code
 snippets, debugging context, screenshots, and reminders) in small floating
-windows on the desktop. It runs on Ubuntu 22.04 or later and other GNOME-based
-Linux desktops.
+windows on the desktop.
+
+Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
+3.10 or later, including Wayland sessions. It is developed on Ubuntu 26.04.
 
 ## Features
 

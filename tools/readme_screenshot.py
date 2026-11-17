@@ -4,7 +4,7 @@
     dbus-run-session -- xvfb-run -a -s "-screen 0 1600x1200x24" \\
         python3 tools/readme_screenshot.py
 
-It opens two sample notes with a throwaway HOME, captures each note window at
+It opens sample notes with a throwaway HOME, captures each note window at
 2x scale, and places them side by side on a plain background in
 assets/ynote-screenshot.png. Rerun it after a visible UI change so the README
 image stays current. dbus-run-session keeps it apart from a running Ynote.
@@ -40,12 +40,13 @@ MARGIN = 28
 GAP = 22
 BACKGROUND = (0.89, 0.91, 0.93)
 
-# Real output of the smoke test on a machine without python3-gi-cairo.
+# Sample log output shown as a pasted screenshot in the first note.
+TERMINAL_IMAGE = 'error-log.png'
 TERMINAL_LINES = [
-    '$ xvfb-run -a python3 tests/smoke_launch.py',
-    'smoke test FAILED',
-    "24x TypeError: Couldn't find foreign struct",
-    "    converter for 'cairo.Context'",
+    ('$ tail -n 2 /var/log/nginx/error.log', (0.62, 0.85, 0.55)),
+    ('[error] upstream timed out (110:', (0.95, 0.45, 0.42)),
+    ('Connection timed out) while reading', (0.88, 0.88, 0.88)),
+    ('response header from upstream', (0.88, 0.88, 0.88)),
 ]
 
 
@@ -81,7 +82,7 @@ class NoteBuilder:
 def write_terminal_image(path):
     # Drawn at 2x so it stays sharp at the note's 2x scale.
     font = Pango.FontDescription('DejaVu Sans Mono 8')
-    pad, line_h, width = 10, 14, 316
+    pad, line_h, width = 10, 14, 300
     height = pad * 2 + line_h * len(TERMINAL_LINES)
     surface = cairo.ImageSurface(cairo.FORMAT_RGB24, width * SCALE,
                                  height * SCALE)
@@ -91,9 +92,7 @@ def write_terminal_image(path):
     cr.paint()
     layout = PangoCairo.create_layout(cr)
     layout.set_font_description(font)
-    colors = [(0.62, 0.85, 0.55), (0.95, 0.45, 0.42),
-              (0.88, 0.88, 0.88), (0.88, 0.88, 0.88)]
-    for i, (text, rgb) in enumerate(zip(TERMINAL_LINES, colors)):
+    for i, (text, rgb) in enumerate(TERMINAL_LINES):
         cr.move_to(pad, pad + i * line_h)
         cr.set_source_rgb(*rgb)
         layout.set_text(text, -1)
@@ -104,63 +103,76 @@ def write_terminal_image(path):
 def sample_notes():
     debug = NoteBuilder()
     debug.line('Repro', 'bold_ranges')
-    debug.line('xvfb-run -a python3 tests/smoke_launch.py', 'code_ranges')
-    debug.image('smoke-output.png')
+    debug.line('curl -i $STAGING/api/orders', 'code_ranges')
+    debug.image(TERMINAL_IMAGE)
     debug.line('Cause', 'bold_ranges')
-    debug.line('• Dividers are drawn with cairo')
-    debug.add('    • ').line('python3-gi-cairo', 'backtick_ranges')
-    debug.add('      is missing from ').line('control', 'backtick_ranges')
+    debug.line('• The monthly report query takes ~75 s')
+    debug.add('    • ').add('proxy_read_timeout', 'backtick_ranges')
+    debug.line(' is 60 s')
     debug.line('---')
-    debug.line('Fix: add it to Depends, then run ./test.sh again before '
-               'tagging the release so the smoke test can confirm it.')
+    debug.add('Fix: paginate the report query. Raising the timeout in ')
+    debug.add('nginx.conf', 'backtick_ranges').line(' would only hide it.')
 
-    tmux = NoteBuilder()
-    tmux.line('Sessions', 'bold_ranges')
-    tmux.line('tmux new -s work', 'code_ranges')
-    tmux.line('tmux attach -t work', 'code_ranges')
-    tmux.line('Panes', 'bold_ranges')
-    tmux.line('Ctrl+b %   split left | right', 'code_ranges')
-    tmux.line('Ctrl+b "   split top / bottom', 'code_ranges')
-    tmux.line('---')
-    tmux.add('Reload ').add('~/.tmux.conf', 'backtick_ranges')
-    tmux.line(' without restarting the server:')
-    tmux.line('tmux source-file ~/.tmux.conf', 'code_ranges')
+    git = NoteBuilder()
+    git.line('Undo', 'bold_ranges')
+    git.line('git reset --soft HEAD~1', 'code_ranges')
+    git.line('git restore --staged <file>', 'code_ranges')
+    git.line('Branches', 'bold_ranges')
+    git.line('git switch -c fix/orders-timeout', 'code_ranges')
+    git.line('git push -u origin HEAD', 'code_ranges')
+    git.line('---')
+    git.add('List branches that are safe to delete with ')
+    git.add('git branch --merged', 'backtick_ranges').line('.')
 
-    return [
-        debug.note('debug', 'CI smoke test', x=0, w=340, h=380, on_top=True),
-        tmux.note('tmux', 'tmux', x=340 + GAP, w=300, h=380),
-    ]
+    today = NoteBuilder()
+    today.line('• Review the orders timeout PR')
+    today.line('• Update the on-call runbook')
+    today.line('    • add the 502 checklist')
+    today.line('• Rotate staging DB password')
+    today.line('---')
+    today.line('1:1 at 3 pm', 'bold_ranges')
+
+    # The bottom bar keeps a note at least about 300 px wide.
+    notes = [('orders', '502 on /api/orders', debug, 340, True),
+             ('git', 'git', git, 310, False),
+             ('today', 'Today', today, 300, False)]
+    out, x = [], 0
+    for note_id, title, builder, width, on_top in notes:
+        out.append(builder.note(note_id, title, x=x, w=width, h=320,
+                                on_top=on_top))
+        x += width + GAP
+    return out
 
 
 def setup_home():
     conf = os.path.join(HOME, '.config', 'ynote')
     os.makedirs(os.path.join(conf, 'images'))
-    write_terminal_image(os.path.join(conf, 'images', 'smoke-output.png'))
+    write_terminal_image(os.path.join(conf, 'images', TERMINAL_IMAGE))
     with open(os.path.join(conf, 'notes.json'), 'w') as f:
         json.dump(sample_notes(), f)
 
 
 def compose(app):
+    # Capture left to right, then lay the captures out by their real widths,
+    # since a note can end up wider than requested.
     windows = sorted(app.notes.values(),
                      key=lambda w: w.get_window().get_origin()[1])
     shots = []
     for w in windows:
         gdk_win = w.get_window()
-        shots.append((gdk_win.get_origin()[1],
-                      Gdk.pixbuf_get_from_window(
-                          gdk_win, 0, 0, gdk_win.get_width(),
-                          gdk_win.get_height())))
+        shots.append(Gdk.pixbuf_get_from_window(
+            gdk_win, 0, 0, gdk_win.get_width(), gdk_win.get_height()))
 
-    right = max(x * SCALE + pb.get_width() for x, pb in shots)
-    bottom = max(pb.get_height() for _x, pb in shots)
-    m = MARGIN * SCALE
-    surface = cairo.ImageSurface(cairo.FORMAT_RGB24, right + 2 * m,
-                                 bottom + 2 * m)
+    m, gap = MARGIN * SCALE, GAP * SCALE
+    width = sum(pb.get_width() for pb in shots) + gap * (len(shots) - 1)
+    height = max(pb.get_height() for pb in shots)
+    surface = cairo.ImageSurface(cairo.FORMAT_RGB24, width + 2 * m,
+                                 height + 2 * m)
     cr = cairo.Context(surface)
     cr.set_source_rgb(*BACKGROUND)
     cr.paint()
-    for x, pb in shots:
-        left = m + x * SCALE
+    left = m
+    for pb in shots:
         # A soft drop shadow made of a few widening translucent rectangles.
         for spread in range(1, 7):
             cr.set_source_rgba(0, 0, 0, 0.035)
@@ -170,6 +182,7 @@ def compose(app):
             cr.fill()
         Gdk.cairo_set_source_pixbuf(cr, pb, left, m)
         cr.paint()
+        left += pb.get_width() + gap
     surface.write_to_png(OUTPUT)
     print(OUTPUT)
 
