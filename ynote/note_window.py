@@ -15,6 +15,7 @@ from .config import (
 )
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .models import normalize_note_data
+from .search import find_matches
 from .snap import snap_rect
 
 class NoteWindow(Gtk.ApplicationWindow):
@@ -278,14 +279,16 @@ class NoteWindow(Gtk.ApplicationWindow):
         # Wrapped in a Revealer so the widget is always realized — avoids the
         # "WIDGET_REALIZED_FOR_EVENT" crash that occurs when showing a widget
         # that was excluded from show_all() and then immediately receiving events.
+        search_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        search_box.get_style_context().add_class('search-bar')
         sbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
-        sbar.get_style_context().add_class('search-bar')
+        search_box.pack_start(sbar, False, False, 0)
         self._search_bar = sbar
 
         self._search_revealer = Gtk.Revealer()
         self._search_revealer.set_transition_type(Gtk.RevealerTransitionType.NONE)
         self._search_revealer.set_reveal_child(False)
-        self._search_revealer.add(sbar)
+        self._search_revealer.add(search_box)
         root.pack_start(self._search_revealer, False, False, 0)
         root.pack_start(self._bottom_bar_box, False, False, 0)
 
@@ -296,9 +299,27 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._search_entry.connect('key-press-event', self._on_search_key)
         sbar.pack_start(self._search_entry, True, True, 0)
 
+        self._all_notes_check = Gtk.CheckButton(label='All notes')
+        self._all_notes_check.set_tooltip_text('Search every note, hidden ones too')
+        self._all_notes_check.connect('toggled', lambda _: self._do_search())
+        sbar.pack_start(self._all_notes_check, False, False, 0)
+
         close_btn = Gtk.Button(label='✕')
         close_btn.connect('clicked', lambda _: self._close_search())
         sbar.pack_start(close_btn, False, False, 0)
+
+        # Matches in every note, shown only in All notes mode.
+        self._results = Gtk.ListBox()
+        self._results.set_activate_on_single_click(True)
+        self._results.connect('row-activated', self._on_result_activated)
+        self._results_scroll = Gtk.ScrolledWindow()
+        self._results_scroll.set_policy(Gtk.PolicyType.NEVER,
+                                        Gtk.PolicyType.AUTOMATIC)
+        self._results_scroll.set_max_content_height(140)
+        self._results_scroll.set_propagate_natural_height(True)
+        self._results_scroll.add(self._results)
+        self._results_scroll.set_no_show_all(True)
+        search_box.pack_start(self._results_scroll, False, False, 0)
 
         # Keyboard shortcuts via AccelGroup (avoids unrealised-widget errors)
         accel = Gtk.AccelGroup()
@@ -1005,6 +1026,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         if ev.keyval == Gdk.KEY_Escape:
             self._close_search()
             return True
+        if (ev.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter)
+                and self._results_scroll.get_visible()):
+            # Enter opens the first match, like picking it from the list.
+            first = self._results.get_row_at_index(0)
+            if first is not None and getattr(first, 'match', None):
+                self._on_result_activated(self._results, first)
+                return True
         return False
 
     def _toggle_search(self):
@@ -1024,6 +1052,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._clear_highlights()
         query = self._search_entry.get_text()
         if not query:
+            self._refresh_results(query)
             return
         buf   = self.tv.get_buffer()
         start = buf.get_start_iter()
@@ -1036,6 +1065,48 @@ class NoteWindow(Gtk.ApplicationWindow):
             m_start, m_end = result
             buf.apply_tag(self._hl_tag, m_start, m_end)
             start = m_end
+        self._refresh_results(query)
+
+    def _refresh_results(self, query):
+        for row in self._results.get_children():
+            self._results.remove(row)
+        if not (query and self._all_notes_check.get_active()):
+            self._results_scroll.hide()
+            return
+        matches = find_matches(self.app.searchable_notes(first=self), query)
+        for m in matches:
+            label = Gtk.Label(xalign=0)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            hidden = '  <i>(hidden)</i>' if m.hidden else ''
+            label.set_markup(f'<b>{GLib.markup_escape_text(m.title)}</b>  '
+                             f'{GLib.markup_escape_text(m.snippet)}{hidden}')
+            row = Gtk.ListBoxRow()
+            row.match = m
+            row.add(label)
+            self._results.add(row)
+        if not matches:
+            row = Gtk.ListBoxRow(activatable=False, selectable=False)
+            row.add(Gtk.Label(label='No matches', xalign=0))
+            self._results.add(row)
+        self._results.show_all()
+        self._results_scroll.show()
+
+    def _on_result_activated(self, _listbox, row):
+        m = getattr(row, 'match', None)
+        if m is not None:
+            self.app.reveal_match(m.note_id, m.start, m.end)
+
+    def buffer_text(self):
+        buf = self.tv.get_buffer()
+        return buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+
+    def show_match(self, start, end):
+        # Select the match and scroll to it once the window has its size.
+        buf = self.tv.get_buffer()
+        buf.select_range(buf.get_iter_at_offset(start), buf.get_iter_at_offset(end))
+        self.tv.grab_focus()
+        GLib.idle_add(lambda: self.tv.scroll_to_mark(
+            buf.get_insert(), 0.1, False, 0, 0) and False)
 
     def _clear_highlights(self):
         buf = self.tv.get_buffer()

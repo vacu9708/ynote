@@ -21,6 +21,7 @@ from .images import (
 )
 from .note_manager_window import HiddenNotesWindow
 from .note_window import NoteWindow
+from .search import Note
 from .storage import UnreadableNotesError, load_notes, save_notes, set_aside
 from .styles import BASE_CSS
 
@@ -276,6 +277,22 @@ class PostItApp(Gtk.Application):
             w.present()
         self._rebuild_indicator_menu()
         self.save_all()
+
+    def searchable_notes(self, first=None):
+        # The searching note first, then visible notes, then hidden ones.
+        windows = sorted(self.notes.values(),
+                         key=lambda w: (w is not first, not w.get_visible()))
+        return [Note(w.note_id, w.title or UNTITLED_LABEL, not w.get_visible(),
+                     w.buffer_text()) for w in windows]
+
+    def reveal_match(self, note_id, start, end):
+        w = self.notes.get(note_id)
+        if w is None:
+            return
+        if not w.get_visible():
+            self.show_note(note_id)
+        w.present()
+        w.show_match(start, end)
 
     def raise_all(self):
         try:

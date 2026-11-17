@@ -101,7 +101,7 @@ keep the plain text.
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+F` | Search the note. `Esc` closes the search bar. |
+| `Ctrl+F` | Search the note. Check **All notes** to list matches in every note, hidden ones too, and click one to open it. `Esc` closes the search bar. |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Ctrl+Super+←` / `→` | Snap the note into the left or right half of its monitor. Press again at the edge to move it to the next monitor. |
 | `Ctrl+Super+↑` / `↓` | Move the note up or down by its own height |

@@ -73,4 +73,14 @@ box.search-bar entry {
     min-height: 22px;
     font-size: 12px;
 }
+box.search-bar checkbutton label,
+box.search-bar list label {
+    font-size: 12px;
+}
+box.search-bar list {
+    background: transparent;
+}
+box.search-bar list row {
+    padding: 2px 4px;
+}
 """

@@ -28,6 +28,7 @@ flowchart LR
         Autostart["autostart.py"]
         Models["models.py"]
         Snap["snap.py"]
+        Search["search.py"]
     end
 
     Main -->|starts| App
@@ -39,9 +40,10 @@ flowchart LR
     App -->|uses| Autostart
     Window -->|uses| Models
     Window -->|uses| Snap
+    Window -->|uses| Search
 
     classDef node fill:#FFFFFF,stroke:#4A5568,color:#1A202C
-    class Main,App,Window,Manager,Hotkeys,Storage,Images,Autostart,Models,Snap node
+    class Main,App,Window,Manager,Hotkeys,Storage,Images,Autostart,Models,Snap,Search node
     style GTK fill:#FFF4D6,stroke:#B7791F,color:#3D2C00
     style Pure fill:#E8F8EF,stroke:#2F855A,color:#143C2B
 ```
@@ -58,6 +60,7 @@ flowchart LR
 | `ynote/storage.py` | Reads JSON files and writes them atomically. |
 | `ynote/images.py` | Image metadata, and finding and deleting image files no note uses. |
 | `ynote/snap.py` | Computes a snapped note rectangle from monitor work areas. |
+| `ynote/search.py` | Finds a query in every note for the search bar's All notes mode. |
 | `ynote/autostart.py` | The per-user login autostart entry. |
 | `ynote/config.py`, `ynote/styles.py` | Paths, constants, and GTK CSS. |
 
