@@ -652,16 +652,19 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._image_widgets.clear()
 
     def _get_images_state(self):
+        # Child anchors read as IMAGE_ANCHOR in the buffer text, so find them
+        # with a string search instead of stepping through every character.
         buf = self.tv.get_buffer()
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
         images = []
-        it = buf.get_start_iter()
-        while not it.is_end():
-            anchor = it.get_child_anchor()
+        offset = text.find(IMAGE_ANCHOR)
+        while offset != -1:
+            anchor = buf.get_iter_at_offset(offset).get_child_anchor()
             if anchor is not None and hasattr(anchor, 'ynote_image'):
                 meta = self._normalize_image_meta(anchor.ynote_image)
-                meta['offset'] = it.get_offset()
+                meta['offset'] = offset
                 images.append(meta)
-            it.forward_char()
+            offset = text.find(IMAGE_ANCHOR, offset + 1)
         return images
 
     def image_file_paths(self):
@@ -1922,19 +1925,19 @@ class NoteWindow(Gtk.ApplicationWindow):
                     font_size=self._font_size)
 
     def _get_tag_ranges(self, tag):
+        # Jump from one toggle of the tag to the next instead of visiting every
+        # character: this runs on every save and undo snapshot.
         buf = self.tv.get_buffer()
         ranges, it = [], buf.get_start_iter()
-        active, start_off = it.has_tag(tag), 0
-        while True:
-            it.forward_char()
-            now = it.has_tag(tag)
-            if it.is_end():
-                if active:
-                    ranges.append([start_off, it.get_offset()])
-                break
-            if now and not active:
-                start_off = it.get_offset()
-            elif not now and active:
-                ranges.append([start_off, it.get_offset()])
-            active = now
+        start = 0 if it.has_tag(tag) else None
+        while it.forward_to_tag_toggle(tag):
+            if it.starts_tag(tag):
+                start = it.get_offset()
+            elif start is not None:
+                ranges.append([start, it.get_offset()])
+                start = None
+        # GTK reports a toggle at the buffer end too, so this only guards
+        # against a range left open.
+        if start is not None:
+            ranges.append([start, buf.get_char_count()])
         return ranges
