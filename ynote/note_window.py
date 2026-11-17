@@ -1755,6 +1755,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         edit_title.connect('activate', lambda _: self._start_title_edit())
         menu.append(edit_title)
 
+        if self.app.autostart_available:
+            login_item = Gtk.CheckMenuItem(label='Start at Login')
+            login_item.set_active(self.app.autostart_enabled())
+            login_item.connect(
+                'toggled', lambda item: self.app.set_autostart(item.get_active()))
+            menu.append(login_item)
+
         about_item = Gtk.MenuItem(label='About')
         about_item.connect('activate', lambda _: self._show_about_dialog())
         menu.append(about_item)

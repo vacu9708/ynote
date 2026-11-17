@@ -45,12 +45,8 @@ sudo apt install ./dist/ynote_*.deb
 Open **Ynote** from the app grid, or run `ynote` in a terminal. The first time
 it starts, it opens one empty note. Every change saves automatically.
 
-To start Ynote automatically when you log in:
-
-```bash
-mkdir -p ~/.config/autostart
-cp /usr/share/applications/ynote.desktop ~/.config/autostart/
-```
+From then on, Ynote also starts when you log in. To turn that off, right-click
+a note's title bar or bottom bar and uncheck **Start at Login**.
 
 To uninstall:
 
@@ -58,7 +54,8 @@ To uninstall:
 sudo apt remove ynote
 ```
 
-Your notes stay in `~/.config/ynote/` after uninstalling.
+Your notes stay in `~/.config/ynote/` after uninstalling, and Ynote no longer
+starts at login.
 
 ## Using Ynote
 
@@ -74,7 +71,7 @@ Your notes stay in `~/.config/ynote/` after uninstalling.
 | `🗑` | Delete the note right away. There is no confirmation. |
 | `14px` | Change the note's font size with `A−` and `A+`. |
 | Edges and corners | Drag to resize the note. |
-| Right-click the title bar or bottom bar | Minimize, rename, About, or quit Ynote. |
+| Right-click the title bar or bottom bar | Minimize, rename, turn **Start at Login** on or off, About, or quit Ynote. |
 | Right-click the text | Undo, redo, search, insert an image, or insert a divider. |
 
 Long lines wrap to fit the note and rewrap when you resize it. A word too long

@@ -1,4 +1,5 @@
 import os
+import shutil
 import signal
 import sys
 import uuid
@@ -7,9 +8,10 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
+from . import autostart
 from .config import (
-    APP_ID, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR, NEW_NOTE_LABEL, NOTES_FILE,
-    UNTITLED_LABEL,
+    APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR,
+    NEW_NOTE_LABEL, NOTES_FILE, SETTINGS_FILE, UNTITLED_LABEL,
 )
 from .hotkeys import SnapHotkeys
 from .images import (
@@ -41,6 +43,12 @@ class PostItApp(Gtk.Application):
         Gtk.Application.do_startup(self)
         os.makedirs(CONF_DIR, exist_ok=True)
         os.makedirs(IMAGES_DIR, exist_ok=True)
+
+        # Autostart runs the `ynote` command, so it only makes sense when the
+        # package is installed, not for a bare source checkout.
+        self.autostart_available = shutil.which('ynote') is not None
+        autostart.enable_on_first_run(
+            AUTOSTART_FILE, SETTINGS_FILE, self.autostart_available)
 
         settings = Gtk.Settings.get_default()
         if settings is not None:
@@ -75,6 +83,12 @@ class PostItApp(Gtk.Application):
         quit_action = Gio.SimpleAction.new('quit', None)
         quit_action.connect('activate', lambda *_: self.quit_app())
         self.add_action(quit_action)
+
+    def autostart_enabled(self):
+        return autostart.is_enabled(AUTOSTART_FILE)
+
+    def set_autostart(self, enabled):
+        autostart.set_enabled(AUTOSTART_FILE, enabled)
 
     def do_activate(self):
         visible = [w for w in self.notes.values() if w.get_visible()]

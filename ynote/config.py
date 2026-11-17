@@ -10,6 +10,10 @@ ICON_PATH = os.path.join(PROJECT_DIR, 'icon.png')
 CONF_DIR = os.path.expanduser('~/.config/ynote')
 NOTES_FILE = os.path.join(CONF_DIR, 'notes.json')
 IMAGES_DIR = os.path.join(CONF_DIR, 'images')
+SETTINGS_FILE = os.path.join(CONF_DIR, 'settings.json')
+
+# Per-user XDG autostart entry that starts Ynote at login.
+AUTOSTART_FILE = os.path.expanduser('~/.config/autostart/ynote.desktop')
 
 IMAGE_ANCHOR = '\uFFFC'
 
