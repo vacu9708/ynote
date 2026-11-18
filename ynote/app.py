@@ -421,9 +421,21 @@ class PostItApp(Gtk.Application):
         response = dialog.run()
         dialog.destroy()
         if response == open_folder:
-            Gio.AppInfo.launch_default_for_uri(
-                GLib.filename_to_uri(CONF_DIR, None), None)
+            self.open_uri(GLib.filename_to_uri(CONF_DIR, None))
         return False
+
+    def open_uri(self, uri):
+        """Open a link or folder in the user's default app."""
+        context = Gdk.Display.get_default().get_app_launch_context()
+        # GDK_BACKEND=x11 is meant for Ynote alone. In a Wayland session the
+        # browser should pick its own backend. Over SSH there is no Wayland
+        # display to inherit, and x11 keeps the app on the forwarded display.
+        if os.environ.get('WAYLAND_DISPLAY'):
+            context.unsetenv('GDK_BACKEND')
+        try:
+            Gio.AppInfo.launch_default_for_uri(uri, context)
+        except GLib.Error as e:
+            print(f'ynote: could not open {uri}: {e.message}', file=sys.stderr)
 
     def _referenced_image_files(self, data=None, include_history=True):
         if data is None:

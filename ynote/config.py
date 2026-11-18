@@ -24,6 +24,12 @@ CODE_ANCHOR = '\u2060'
 # A line holding exactly this text is drawn as a divider, like in Markdown.
 DIVIDER_TEXT = '---'
 
+# List markers are plain text at the start of a line, after any indent, so
+# a note stays readable as text and needs no extra saved fields.
+BULLET_MARKER = '• '
+CHECKBOX_MARKER = '\u2610 '        # ☐, an open to-do
+CHECKED_MARKER = '\u2611 '         # ☑, a done to-do
+
 # Shown for a note without a title. Kept apart from NEW_NOTE_LABEL, the action
 # that creates a note, so renaming one never changes the other.
 UNTITLED_LABEL = 'Untitled'

@@ -10,13 +10,31 @@ from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 
 from . import __version__
 from .config import (
-    CODE_ANCHOR, CONF_DIR, DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR,
-    NEW_NOTE_LABEL, PROJECT_DIR, UNTITLED_LABEL, display_path,
+    BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, CODE_ANCHOR, CONF_DIR,
+    DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR, NEW_NOTE_LABEL,
+    PROJECT_DIR, UNTITLED_LABEL, display_path,
 )
 from .images import image_files_from_metadata, image_path, normalize_image_meta
+from .links import find_links
 from .models import normalize_note_data
 from .search import find_matches
 from .snap import snap_rect
+
+LIST_MARKERS = (BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER)
+CHECK_MARKERS = (CHECKBOX_MARKER, CHECKED_MARKER)
+
+# Pixels around a to-do box that still check it when clicked.
+CHECKBOX_HIT_MARGIN = 6
+
+# What a typed prefix at the start of a line becomes when Space follows it,
+# like Markdown. "• [ ]" is "- [ ]" after "- " has already become a bullet.
+TYPED_MARKERS = {
+    '-': BULLET_MARKER,
+    '[]': CHECKBOX_MARKER, '[ ]': CHECKBOX_MARKER,
+    '[x]': CHECKED_MARKER, '[X]': CHECKED_MARKER,
+    '• []': CHECKBOX_MARKER, '• [ ]': CHECKBOX_MARKER,
+    '• [x]': CHECKED_MARKER, '• [X]': CHECKED_MARKER,
+}
 
 class NoteWindow(Gtk.ApplicationWindow):
     def __init__(self, app, data: dict):
@@ -168,6 +186,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         bullet_btn.connect('clicked', lambda _: self._toggle_bullet())
         text_group.pack_start(bullet_btn, False, False, 0)
 
+        check_btn = Gtk.Button(label=CHECKBOX_MARKER.strip())
+        check_btn.set_tooltip_text('Checklist  (Ctrl+9)')
+        check_btn.set_can_focus(False)
+        check_btn.connect('clicked', lambda _: self._toggle_checklist())
+        text_group.pack_start(check_btn, False, False, 0)
+
         code_btn = Gtk.Button(label='</>')
         code_btn.set_tooltip_text('Code block  (Ctrl+Shift+C)')
         code_btn.set_can_focus(False)
@@ -190,7 +214,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, close_btn, hidden_btn,
                     del_btn, self._bold_btn, backtick_btn, bullet_btn,
-                    code_btn, self._fontsize_btn):
+                    check_btn, code_btn, self._fontsize_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
 
@@ -249,6 +273,12 @@ class NoteWindow(Gtk.ApplicationWindow):
             pixels_above_lines=4,
             pixels_below_lines=4)
         self._divider_lines = []
+        # Derived from the text on every change, like dividers, so neither
+        # is saved: a checked item is grayed out, and URLs are links.
+        self._done_tag = buf.create_tag(
+            'done', foreground='#77775A')
+        self._link_tag = buf.create_tag(
+            'link', foreground='#1A55B0', underline=Pango.Underline.SINGLE)
         self._cursor_offset = 0
         buf.connect('mark-set', self._on_mark_set)
         self._hl_tag.set_priority(buf.get_tag_table().get_size() - 1)
@@ -266,11 +296,15 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(data.get('images', []))
-        self._refresh_dividers()
+        self._refresh_line_styles()
         self.tv.connect_after('draw', self._draw_dividers)
         self.tv.connect('populate-popup', self._on_tv_popup)
         self.tv.connect('key-press-event', self._on_tv_key_press)
         self.tv.connect('button-press-event', self._on_tv_button_press)
+        self.tv.add_events(Gdk.EventMask.POINTER_MOTION_MASK)
+        self.tv.connect('motion-notify-event', self._on_tv_motion)
+        self.tv.set_has_tooltip(True)
+        self.tv.connect('query-tooltip', self._on_tv_query_tooltip)
         self.tv.connect('copy-clipboard', self._on_copy_clipboard)
         self.tv.connect('cut-clipboard', self._on_cut_clipboard)
         self.tv.connect('paste-clipboard', self._on_paste_clipboard)
@@ -334,6 +368,10 @@ class NoteWindow(Gtk.ApplicationWindow):
                       lambda *_: self._toggle_bullet() or True)
         accel.connect(Gdk.KEY_KP_8, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._toggle_bullet() or True)
+        accel.connect(Gdk.KEY_9, Gdk.ModifierType.CONTROL_MASK, 0,
+                      lambda *_: self._toggle_checklist() or True)
+        accel.connect(Gdk.KEY_KP_9, Gdk.ModifierType.CONTROL_MASK, 0,
+                      lambda *_: self._toggle_checklist() or True)
         accel.connect(Gdk.KEY_c,
                       Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK,
                       0, lambda *_: self._toggle_code_block() or True)
@@ -940,7 +978,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                 self._tag_code_line(line)
             self._remove_redundant_code_anchors(start_line, end_line)
 
-            self._refresh_dividers()
+            self._refresh_line_styles()
             buf.place_cursor(buf.get_iter_at_mark(cursor_mark))
             buf.delete_mark(cursor_mark)
             self._refresh_emoji_tags()
@@ -990,7 +1028,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             images.append(image_meta)
         self._restore_images(images)
 
-        self._refresh_dividers()
+        self._refresh_line_styles()
         end_offset = insert_offset + len(text)
         buf.place_cursor(buf.get_iter_at_offset(end_offset))
         self._refresh_emoji_tags()
@@ -1170,7 +1208,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_buf_changed(self, buf):
         if self._restoring:
             return
-        self._refresh_dividers()
+        self._refresh_line_styles()
         self._queue_save()
         if self._snap_sid:
             GLib.source_remove(self._snap_sid)
@@ -1228,7 +1266,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(e))
         self._restore_images(state.get('images', []))
         self._refresh_emoji_tags()
-        self._refresh_dividers()
+        self._refresh_line_styles()
         self._restoring = False
         self._queue_save()
 
@@ -1251,7 +1289,77 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     # ------------------------------------------------------------------ key handling
 
+    def _iter_at_pointer(self, x, y, window=Gtk.TextWindowType.TEXT):
+        """The character under the pointer, or None past the end of a line."""
+        bx, by = self.tv.window_to_buffer_coords(window, int(x), int(y))
+        over, it = self.tv.get_iter_at_location(bx, by)
+        if not over or it.ends_line():
+            return None
+        return it
+
+    def _checkbox_bounds(self, line):
+        """Iters around a to-do's box and the space after it, or None."""
+        parts = self._line_list_parts(line)
+        if parts is None or parts[1] not in CHECK_MARKERS:
+            return None
+        box = self.tv.get_buffer().get_iter_at_line(line)
+        box.forward_chars(len(parts[0]))
+        after = box.copy()
+        after.forward_chars(len(parts[1]))
+        return box, after
+
+    def _checkbox_line_at(self, x, y, window=Gtk.TextWindowType.TEXT):
+        """The line of the to-do box under the pointer, or None.
+
+        The box is a single character, so the target also takes in the space
+        after it and a margin around it, like a check button's label.
+        """
+        bx, by = self.tv.window_to_buffer_coords(window, int(x), int(y))
+        line_start, _ = self.tv.get_line_at_y(by)
+        bounds = self._checkbox_bounds(line_start.get_line())
+        if bounds is None:
+            return None
+        box = self.tv.get_iter_location(bounds[0])
+        body = self.tv.get_iter_location(bounds[1])
+        pad = CHECKBOX_HIT_MARGIN
+        if (box.x - pad <= bx < body.x
+                and box.y - pad <= by < box.y + box.height + pad):
+            return line_start.get_line()
+        return None
+
+    def _link_at(self, it):
+        """The URL of the link under it, or None."""
+        if it is None or not it.has_tag(self._link_tag):
+            return None
+        start, end = it.copy(), it.copy()
+        if not start.starts_tag(self._link_tag):
+            start.backward_to_tag_toggle(self._link_tag)
+        end.forward_to_tag_toggle(self._link_tag)
+        return start.get_text(end)
+
+    def _on_tv_motion(self, tv, event):
+        it = self._iter_at_pointer(event.x, event.y)
+        ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
+        clickable = (self._checkbox_line_at(event.x, event.y) is not None
+                     or (ctrl and self._link_at(it) is not None))
+        window = tv.get_window(Gtk.TextWindowType.TEXT)
+        if window is not None:
+            window.set_cursor(Gdk.Cursor.new_from_name(
+                tv.get_display(), 'pointer' if clickable else 'text'))
+        return False
+
+    def _on_tv_query_tooltip(self, tv, x, y, keyboard_mode, tooltip):
+        if keyboard_mode:
+            return False
+        url = self._link_at(self._iter_at_pointer(x, y, Gtk.TextWindowType.WIDGET))
+        if url is None:
+            return False
+        tooltip.set_text(f'Ctrl+click to open {url}')
+        return True
+
     def _on_tv_button_press(self, tv, event):
+        if event.type == Gdk.EventType.BUTTON_PRESS and event.button == 1:
+            return self._on_tv_single_click(event)
         # In a code block, a double click selects the clicked line, which is
         # usually one command, and a triple click selects the whole block.
         multi = (Gdk.EventType.DOUBLE_BUTTON_PRESS, Gdk.EventType.TRIPLE_BUTTON_PRESS)
@@ -1281,6 +1389,25 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf.select_range(start, end)
         return True
 
+    def _on_tv_single_click(self, event):
+        # A click on a checkbox checks it without moving the cursor. Ctrl+click
+        # opens a link, since a plain click must still place the cursor in it.
+        state = event.state & Gtk.accelerator_get_default_mod_mask()
+        it = self._iter_at_pointer(event.x, event.y)
+        if state == 0:
+            line = self._checkbox_line_at(event.x, event.y)
+            if line is None:
+                return False
+            self._toggle_checked([line])
+            return True
+        if state == Gdk.ModifierType.CONTROL_MASK:
+            url = self._link_at(it)
+            if url is None:
+                return False
+            self.app.open_uri(url)
+            return True
+        return False
+
     def _on_tv_key_press(self, tv, event):
         state = event.state & Gtk.accelerator_get_default_mod_mask()
         if (state == Gdk.ModifierType.CONTROL_MASK
@@ -1292,6 +1419,16 @@ class NoteWindow(Gtk.ApplicationWindow):
             return False
 
         buf = tv.get_buffer()
+        if (state == Gdk.ModifierType.CONTROL_MASK
+                and event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter)):
+            # Ctrl+Enter checks or unchecks the to-dos on the selected lines.
+            first_line, last_line = self._selected_or_cursor_lines()
+            lines = [ln for ln in range(first_line, last_line + 1)
+                     if self._line_list_marker(ln) in CHECK_MARKERS]
+            if lines:
+                self._toggle_checked(lines)
+            return True
+
         if buf.get_has_selection():
             return False
         cursor = buf.get_iter_at_mark(buf.get_insert())
@@ -1301,19 +1438,21 @@ class NoteWindow(Gtk.ApplicationWindow):
             line_start = buf.get_iter_at_line(cursor_line)
             before = buf.get_text(line_start, cursor, False)
             indent_len = self._line_indent_len(before)
-            if (before[indent_len:] == '-'
+            marker = TYPED_MARKERS.get(before[indent_len:])
+            if (marker is not None
                     and not self._iter_has_tag_context(cursor, self._code_tag)):
-                self._start_bullet_from_dash(cursor_line, indent_len)
+                self._start_list_from_typed(
+                    cursor_line, indent_len, len(before) - indent_len, marker)
                 return True
 
         if (state == 0 and event.keyval == Gdk.KEY_Tab
-                and self._line_has_bullet(cursor_line)):
+                and self._line_has_list_marker(cursor_line)):
             self._indent_bullet_line(cursor_line)
             return True
 
         if (state == Gdk.ModifierType.SHIFT_MASK
                 and event.keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab)
-                and self._line_has_bullet(cursor_line)):
+                and self._line_has_list_marker(cursor_line)):
             self._outdent_bullet_line(cursor_line)
             return True
 
@@ -1330,7 +1469,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                 return True
 
         if (state == 0 and event.keyval == Gdk.KEY_BackSpace
-                and self._line_is_empty_bullet(cursor_line)):
+                and self._line_is_empty_list_item(cursor_line)):
             self._remove_empty_bullet_line(cursor_line)
             return True
 
@@ -1368,21 +1507,24 @@ class NoteWindow(Gtk.ApplicationWindow):
         line_end = line_start.copy()
         line_end.forward_to_line_end()
         line_text = buf.get_text(line_start, line_end, False)
-        parts = self._bullet_parts(line_text)
+        parts = self._list_parts(line_text)
         if parts is None:
             return False
-        indent, body = parts
+        indent, marker, body = parts
         if body.strip() == '':
-            # Empty bullet: remove the current marker and stop the list.
+            # Empty item: remove the current marker and stop the list.
             self._remove_empty_bullet_line(cursor_line)
             return True
-        marker_len = len(indent) + 2
+        # The next item of a checklist starts unchecked.
+        if marker == CHECKED_MARKER:
+            marker = CHECKBOX_MARKER
+        marker_len = len(indent) + len(marker)
         if cursor.get_line_offset() <= marker_len:
             insert_offset = line_start.get_offset()
-            buf.insert(line_start, f'{indent}• \n')
+            buf.insert(line_start, f'{indent}{marker}\n')
             buf.place_cursor(buf.get_iter_at_offset(insert_offset + marker_len))
             return True
-        buf.insert_at_cursor(f'\n{indent}• ')
+        buf.insert_at_cursor(f'\n{indent}{marker}')
         return True
 
     # ------------------------------------------------------------------ dividers
@@ -1395,13 +1537,30 @@ class NoteWindow(Gtk.ApplicationWindow):
         return (buf.get_text(start, end, False) == DIVIDER_TEXT
                 and not start.has_tag(self._code_tag))
 
-    def _refresh_dividers(self):
+    def _refresh_line_styles(self):
+        # Styles that follow from the text alone: dividers, checked to-dos and
+        # links. They are worked out again after every change.
         buf = self.tv.get_buffer()
-        buf.remove_tag(self._divider_tag, buf.get_start_iter(), buf.get_end_iter())
+        start, end = buf.get_start_iter(), buf.get_end_iter()
+        for tag in (self._divider_tag, self._done_tag, self._link_tag):
+            buf.remove_tag(tag, start, end)
         self._divider_lines = [line for line in range(buf.get_line_count())
                                if self._line_is_divider(line)]
         for line in self._divider_lines:
             buf.apply_tag(self._divider_tag, *self._line_bounds(line))
+
+        text = buf.get_slice(start, end, True)
+        offset = 0
+        for line in text.split('\n'):
+            parts = self._list_parts(line)
+            if parts is not None and parts[1] == CHECKED_MARKER:
+                body = offset + len(parts[0]) + len(parts[1])
+                buf.apply_tag(self._done_tag, buf.get_iter_at_offset(body),
+                              buf.get_iter_at_offset(offset + len(line)))
+            offset += len(line) + 1
+        for link_start, link_end, _ in find_links(text):
+            buf.apply_tag(self._link_tag, buf.get_iter_at_offset(link_start),
+                          buf.get_iter_at_offset(link_end))
         self.tv.queue_draw()
 
     def _draw_dividers(self, tv, cr):
@@ -1488,57 +1647,89 @@ class NoteWindow(Gtk.ApplicationWindow):
             index += 1
         return index
 
-    def _bullet_parts(self, text):
+    def _list_parts(self, text):
+        """(indent, marker, body) for a bullet or to-do line, else None."""
         indent_len = self._line_indent_len(text)
-        if not text[indent_len:].startswith('• '):
-            return None
-        return text[:indent_len], text[indent_len + 2:]
+        for marker in LIST_MARKERS:
+            if text.startswith(marker, indent_len):
+                return (text[:indent_len], marker,
+                        text[indent_len + len(marker):])
+        return None
 
-    def _line_bullet_parts(self, line):
+    def _line_list_parts(self, line):
         buf = self.tv.get_buffer()
         line_start, line_end = self._line_bounds(line)
         text = buf.get_text(line_start, line_end, False)
-        return self._bullet_parts(text)
+        return self._list_parts(text)
 
-    def _line_has_bullet(self, line):
-        return self._line_bullet_parts(line) is not None
+    def _line_list_marker(self, line):
+        parts = self._line_list_parts(line)
+        return parts and parts[1]
 
-    def _line_is_empty_bullet(self, line):
-        parts = self._line_bullet_parts(line)
-        return parts is not None and parts[1].strip() == ''
+    def _line_has_list_marker(self, line):
+        return self._line_list_parts(line) is not None
 
-    def _line_bullet_marker_bounds(self, line):
-        buf = self.tv.get_buffer()
-        line_start, line_end = self._line_bounds(line)
-        text = buf.get_text(line_start, line_end, False)
-        parts = self._bullet_parts(text)
+    def _line_is_empty_list_item(self, line):
+        parts = self._line_list_parts(line)
+        return parts is not None and parts[2].strip() == ''
+
+    def _line_marker_bounds(self, line):
+        parts = self._line_list_parts(line)
         if parts is None:
             return None
-        marker_start = line_start.copy()
+        marker_start = self.tv.get_buffer().get_iter_at_line(line)
         marker_start.forward_chars(len(parts[0]))
         marker_end = marker_start.copy()
-        marker_end.forward_chars(2)
+        marker_end.forward_chars(len(parts[1]))
         return marker_start, marker_end
 
-    def _start_bullet_from_dash(self, line, dash_col):
-        # Typing "- " at the start of a line starts a bullet, like Markdown.
-        # "- " is kept as its own undo step so Ctrl+Z turns it back into text.
-        buf = self.tv.get_buffer()
-        buf.insert_at_cursor(' ')
+    def _flush_snapshot(self):
         if self._snap_sid:
             GLib.source_remove(self._snap_sid)
             self._snap_sid = None
         self._take_snapshot()
 
-        dash = buf.get_iter_at_line_offset(line, dash_col)
-        dash_end = dash.copy()
-        dash_end.forward_char()
-        buf.delete(dash, dash_end)
-        buf.insert(buf.get_iter_at_line_offset(line, dash_col), '•')
-        if self._snap_sid:
-            GLib.source_remove(self._snap_sid)
-            self._snap_sid = None
-        self._take_snapshot()
+    def _start_list_from_typed(self, line, col, typed_len, marker):
+        # Typing "- " or "[ ] " at the start of a line starts a list item, like
+        # Markdown. The typed text is kept as its own undo step, so Ctrl+Z
+        # turns the item back into what was typed.
+        buf = self.tv.get_buffer()
+        buf.insert_at_cursor(' ')
+        self._flush_snapshot()
+
+        typed = buf.get_iter_at_line_offset(line, col)
+        typed_end = typed.copy()
+        typed_end.forward_chars(typed_len + 1)
+        buf.delete(typed, typed_end)
+        buf.insert(buf.get_iter_at_line_offset(line, col), marker)
+        self._flush_snapshot()
+
+    def _set_line_marker(self, line, marker):
+        """Replace the line's list marker, or add one after its indent."""
+        buf = self.tv.get_buffer()
+        bounds = self._line_marker_bounds(line)
+        if bounds is None:
+            line_start, line_end = self._line_bounds(line)
+            text = buf.get_text(line_start, line_end, False)
+            at = line_start.copy()
+            at.forward_chars(self._line_indent_len(text))
+        else:
+            offset = bounds[0].get_offset()
+            buf.delete(*bounds)
+            at = buf.get_iter_at_offset(offset)
+        if marker:
+            buf.insert(at, marker)
+
+    def _toggle_checked(self, lines):
+        self._flush_snapshot()
+        for line in lines:
+            marker = self._line_list_marker(line)
+            if marker in CHECK_MARKERS:
+                self._set_line_marker(
+                    line, CHECKBOX_MARKER if marker == CHECKED_MARKER
+                    else CHECKED_MARKER)
+        self._flush_snapshot()
+        self._queue_save()
 
     def _indent_bullet_line(self, line):
         buf = self.tv.get_buffer()
@@ -1549,7 +1740,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf = self.tv.get_buffer()
         line_start, line_end = self._line_bounds(line)
         text = buf.get_text(line_start, line_end, False)
-        parts = self._bullet_parts(text)
+        parts = self._list_parts(text)
         if parts is None or not parts[0]:
             return
 
@@ -1728,37 +1919,25 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._queue_save()
 
     def _toggle_bullet(self):
-        buf = self.tv.get_buffer()
+        self._toggle_list((BULLET_MARKER,))
+
+    def _toggle_checklist(self):
+        self._toggle_list(CHECK_MARKERS)
+
+    def _toggle_list(self, kind):
+        # When every line is already this kind of item, the markers go.
+        # Otherwise every line becomes one, replacing any other list marker.
         first_line, last_line = self._selected_or_cursor_lines()
+        lines = range(first_line, last_line + 1)
+        all_kind = all(self._line_list_marker(ln) in kind for ln in lines)
 
-        all_bulleted = True
-        for ln in range(first_line, last_line + 1):
-            if not self._line_has_bullet(ln):
-                all_bulleted = False
-                break
-
-        if self._snap_sid:
-            GLib.source_remove(self._snap_sid)
-            self._snap_sid = None
-            self._take_snapshot()
-
-        for ln in range(last_line, first_line - 1, -1):
-            line_start = buf.get_iter_at_line(ln)
-            if all_bulleted:
-                marker_bounds = self._line_bullet_marker_bounds(ln)
-                if marker_bounds is not None:
-                    marker_start, marker_end = marker_bounds
-                    buf.delete(marker_start, marker_end)
-            else:
-                line_end = line_start.copy()
-                line_end.forward_to_line_end()
-                text = buf.get_text(line_start, line_end, False)
-                if self._bullet_parts(text) is None:
-                    insert_at = line_start.copy()
-                    insert_at.forward_chars(self._line_indent_len(text))
-                    buf.insert(insert_at, '• ')
-
-        self._take_snapshot()
+        self._flush_snapshot()
+        for ln in reversed(lines):
+            if all_kind:
+                self._set_line_marker(ln, None)
+            elif self._line_list_marker(ln) not in kind:
+                self._set_line_marker(ln, kind[0])
+        self._flush_snapshot()
         self._queue_save()
 
     def _toggle_code_block(self):

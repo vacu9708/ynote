@@ -90,11 +90,13 @@ your text. Lines in code blocks stay on one line and scroll sideways instead.
 | Bold | `Ctrl+B` or the `B` button |
 | Backtick format | Type text between backticks, like `` `this` ``, or select text and press `Ctrl+E` or the `` ` `` button. The backticks are removed and the text turns red, italic, and underlined. |
 | Bullet list | Type `- ` at the start of a line, or press `Ctrl+8` or the `•` button. `Tab` and `Shift+Tab` change the indent. `Backspace` on an empty bullet removes it. |
+| Checklist | Type `[ ] ` at the start of a line, or press `Ctrl+9` or the `☐` button. Click a box or press `Ctrl+Enter` to check it. Checked items turn gray. |
+| Link | `http` and `https` URLs become links. `Ctrl+click` one to open it. |
 | Code block | `Ctrl+Shift+C` or the `</>` button. In a code block, double-click a line to select that one command, or triple-click to select the whole block. |
 | Divider | Type `---` on its own line, or right-click and choose **Insert Divider**. `Backspace` or `Delete` removes it. |
 | Image | Paste an image with `Ctrl+V`, or right-click and choose **Insert Image**. Right-click an image to remove it. |
 
-Typed `- ` turned into a bullet you didn't want? Press `Ctrl+Z` right away to
+Typed `- ` or `[ ] ` turned into a list item you didn't want? Press `Ctrl+Z` right away to
 keep the plain text.
 
 ### Other shortcuts

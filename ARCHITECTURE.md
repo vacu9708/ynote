@@ -29,6 +29,7 @@ flowchart LR
         Models["models.py"]
         Snap["snap.py"]
         Search["search.py"]
+        Links["links.py"]
     end
 
     Main -->|starts| App
@@ -41,9 +42,10 @@ flowchart LR
     Window -->|uses| Models
     Window -->|uses| Snap
     Window -->|uses| Search
+    Window -->|uses| Links
 
     classDef node fill:#FFFFFF,stroke:#4A5568,color:#1A202C
-    class Main,App,Window,Manager,Hotkeys,Storage,Images,Autostart,Models,Snap,Search node
+    class Main,App,Window,Manager,Hotkeys,Storage,Images,Autostart,Models,Snap,Search,Links node
     style GTK fill:#FFF4D6,stroke:#B7791F,color:#3D2C00
     style Pure fill:#E8F8EF,stroke:#2F855A,color:#143C2B
 ```
@@ -61,6 +63,7 @@ flowchart LR
 | `ynote/images.py` | Image metadata, and finding and deleting image files no note uses. |
 | `ynote/snap.py` | Computes a snapped note rectangle from monitor work areas. |
 | `ynote/search.py` | Finds a query in every note for the search bar's All notes mode. |
+| `ynote/links.py` | Finds `http` and `https` URLs in note text. |
 | `ynote/autostart.py` | The per-user login autostart entry. |
 | `ynote/config.py`, `ynote/styles.py` | Paths, constants, and GTK CSS. |
 
@@ -94,11 +97,12 @@ Some structure lives in the text itself:
 | --- | --- |
 | `U+FFFC` (`IMAGE_ANCHOR`) | Where an image is shown. |
 | `U+2060` (`CODE_ANCHOR`) | An invisible character that lets an empty line carry the code tag. It is stripped when text goes to the system clipboard. |
-| `• ` at the start of a line | A bullet. Each nesting level adds four leading spaces. |
+| `• `, `☐ `, or `☑ ` at the start of a line | A bullet, an open to-do, or a done to-do. Each nesting level adds four leading spaces. |
 | A line that is exactly `---` | A divider. The dashes are hidden and `_draw_dividers()` paints a line over them. |
 
-Emoji sizing, divider styling, and search highlights are tags derived from the
-text while the app runs, and are never saved.
+Emoji sizing, dividers, grayed-out done to-dos, links, and search
+highlights are tags derived from the text while the app runs, and are never
+saved. A version without one of these features still shows the text as is.
 
 Other files under `~/.config/ynote/`:
 
