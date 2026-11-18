@@ -1113,14 +1113,24 @@ class NoteWindow(Gtk.ApplicationWindow):
             return
         matches = find_matches(self.app.searchable_notes(first=self), query)
         for m in matches:
-            label = Gtk.Label(xalign=0)
-            label.set_ellipsize(Pango.EllipsizeMode.END)
-            hidden = '  <i>(hidden)</i>' if m.hidden else ''
-            label.set_markup(f'<b>{GLib.markup_escape_text(m.title)}</b>  '
-                             f'{GLib.markup_escape_text(m.snippet)}{hidden}')
+            # Only the matching line shrinks to fit, so the title and the
+            # hidden mark stay readable however long the line is.
+            line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            title = Gtk.Label(xalign=0)
+            title.set_markup(f'<b>{GLib.markup_escape_text(m.title)}</b>')
+            title.set_max_width_chars(16)
+            title.set_ellipsize(Pango.EllipsizeMode.END)
+            line.pack_start(title, False, False, 0)
+            snippet = Gtk.Label(label=m.snippet, xalign=0)
+            snippet.set_ellipsize(Pango.EllipsizeMode.END)
+            line.pack_start(snippet, True, True, 0)
+            if m.hidden:
+                hidden = Gtk.Label()
+                hidden.set_markup('<i>(hidden)</i>')
+                line.pack_start(hidden, False, False, 0)
             row = Gtk.ListBoxRow()
             row.match = m
-            row.add(label)
+            row.add(line)
             self._results.add(row)
         if not matches:
             row = Gtk.ListBoxRow(activatable=False, selectable=False)
