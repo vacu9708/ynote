@@ -2,25 +2,28 @@
 
 Engineer-friendly sticky notes for Linux desktops.
 
-![Three Ynote notes: a pinned note debugging a 502 error with a command, a log screenshot, and the cause, a git cheat sheet, and a to-do list](assets/ynote-screenshot.png)
+![Two Ynote notes: a pinned note debugging a 502 error with a command, a log screenshot, and the cause, and a to-do list with a link](assets/ynote-screenshot.png)
 
 Ynote keeps the notes engineers want beside their editor (commands, code
-snippets, debugging context, screenshots, and reminders) in small floating
-windows on the desktop.
+snippets, debugging context, screenshots, and to-dos) in small floating
+windows on the desktop. Hidden notes stay one search away, so Ynote also works
+as a set of runbooks and cheat sheets.
 
 Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
 3.10 or later, including Wayland sessions. It is developed on Ubuntu 26.04.
 
 ## Features
 
-- Floating notes that save automatically
-- Always-on-top pinning
-- Bold text, bullet lists, code blocks, dividers, and backtick formatting for
-  paths and names
+- Floating notes that save automatically, with always-on-top pinning
+- Hide notes you don't need on screen, and find any of them again with
+  **All notes** search
+- Code blocks you can copy one command at a time
+- Checklists, bullet lists, bold text, dividers, links, and backtick
+  formatting for paths and names
 - Images pasted or inserted into notes
-- Search inside a note
-- Hide notes and bring them back later
 - Snap notes into half-screen columns with the keyboard
+
+![Left: a short note's search bar with All notes checked, where searching restart lists the match in that note and matching lines from the hidden notes k8s, nginx, and Deploy. Right: the Hidden Notes window listing six hidden notes with Restore and Restore All buttons](assets/ynote-hidden.png)
 
 ## Install
 
@@ -59,8 +62,6 @@ sudo apt remove ynote
 Your notes stay in `~/.config/ynote/`.
 
 </details>
-
-To build the package yourself, see [CONTRIBUTING.md](CONTRIBUTING.md#package).
 
 ## Using Ynote
 

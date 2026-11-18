@@ -65,13 +65,13 @@ defined in `packaging/ynote.desktop`. Keep the dependency list in
 The package version comes from `__version__` in `ynote/__init__.py`, which is
 also what About and `ynote --version` show.
 
-## README Screenshot
+## README Screenshots
 
-`assets/ynote-screenshot.png` is rendered from the real app, so regenerate it
-after any visible UI change:
+`assets/ynote-screenshot.png` and `assets/ynote-hidden.png` are rendered from
+the real app, so regenerate them after any visible UI change:
 
 ```bash
-dbus-run-session -- xvfb-run -a -s "-screen 0 1600x1200x24" \
+dbus-run-session -- xvfb-run -a -s "-screen 0 2600x1400x24" \
     python3 tools/readme_screenshot.py
 ```
 

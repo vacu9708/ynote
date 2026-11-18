@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Render the README screenshot from the real app in a virtual X server.
 
-    dbus-run-session -- xvfb-run -a -s "-screen 0 1600x1200x24" \\
+    dbus-run-session -- xvfb-run -a -s "-screen 0 2600x1400x24" \\
         python3 tools/readme_screenshot.py
 
-It opens sample notes with a throwaway HOME, captures each note window at
-2x scale, and places them side by side on a plain background in
-assets/ynote-screenshot.png. Rerun it after a visible UI change so the README
-image stays current. dbus-run-session keeps it apart from a running Ynote.
+It opens sample notes with a throwaway HOME and captures note windows at 2x
+scale on a plain background:
+
+- assets/ynote-screenshot.png: the two visible notes side by side.
+- assets/ynote-hidden.png: a short note searching All notes, which lists
+  matches in the hidden sample notes, beside the Hidden Notes window.
+
+Rerun it after a visible UI change so the README images stay current.
+dbus-run-session keeps it apart from a running Ynote.
 """
 import json
 import os
@@ -29,12 +34,15 @@ import gi  # noqa: E402
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
 gi.require_version('PangoCairo', '1.0')
-from gi.repository import Gdk, GLib, Pango, PangoCairo  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 
 from ynote.app import PostItApp  # noqa: E402
 from ynote.config import IMAGE_ANCHOR  # noqa: E402
 
 OUTPUT = os.path.join(ROOT, 'assets', 'ynote-screenshot.png')
+HIDDEN_OUTPUT = os.path.join(ROOT, 'assets', 'ynote-hidden.png')
+SEARCH_NOTE = 'scratch'
+SEARCH_QUERY = 'restart'
 SCALE = 2
 MARGIN = 28
 GAP = 22
@@ -73,10 +81,10 @@ class NoteBuilder:
         self.images.append({'file': file_name, 'offset': len(self.text)})
         return self.add(IMAGE_ANCHOR).add('\n')
 
-    def note(self, note_id, title, x, w, h, on_top=False):
+    def note(self, note_id, title, x, w, h, on_top=False, hidden=False):
         return dict(id=note_id, title=title, text=self.text.rstrip('\n'),
-                    x=x, y=0, w=w, h=h, on_top=on_top, images=self.images,
-                    **self.ranges)
+                    x=x, y=0, w=w, h=h, on_top=on_top, hidden=hidden,
+                    images=self.images, **self.ranges)
 
 
 def write_terminal_image(path):
@@ -113,34 +121,50 @@ def sample_notes():
     debug.add('Fix: paginate the report query. Raising the timeout in ')
     debug.add('nginx.conf', 'backtick_ranges').line(' would only hide it.')
 
-    git = NoteBuilder()
-    git.line('Undo', 'bold_ranges')
-    git.line('git reset --soft HEAD~1', 'code_ranges')
-    git.line('git restore --staged <file>', 'code_ranges')
-    git.line('Branches', 'bold_ranges')
-    git.line('git switch -c fix/orders-timeout', 'code_ranges')
-    git.line('git push -u origin HEAD', 'code_ranges')
-    git.line('---')
-    git.add('List branches that are safe to delete with ')
-    git.add('git branch --merged', 'backtick_ranges').line('.')
-
     today = NoteBuilder()
-    today.line('• Review the orders timeout PR')
-    today.line('• Update the on-call runbook')
-    today.line('    • add the 502 checklist')
-    today.line('• Rotate staging DB password')
+    today.line('☑ Rotate staging DB password')
+    today.line('☐ Review the orders timeout PR')
+    today.line('    https://github.com/acme/shop/pull/482')
+    today.line('☐ Update the on-call runbook')
+    today.line('    ☐ add the 502 checklist')
     today.line('---')
     today.line('1:1 at 3 pm', 'bold_ranges')
 
-    # The bottom bar keeps a note at least about 300 px wide.
+    # The bottom bar keeps a note at least about 335 px wide. A note that
+    # grows past its width would overlap the next one in the capture.
     notes = [('orders', '502 on /api/orders', debug, 340, True),
-             ('git', 'git', git, 310, False),
-             ('today', 'Today', today, 300, False)]
+             ('today', 'Today', today, 340, False)]
     out, x = [], 0
     for note_id, title, builder, width, on_top in notes:
         out.append(builder.note(note_id, title, x=x, w=width, h=320,
                                 on_top=on_top))
         x += width + GAP
+
+    # The note searched in the second picture, placed below the first row so
+    # it stays out of the first picture.
+    scratch = NoteBuilder()
+    scratch.line('api pods stuck after the config change')
+    scratch.line('restart them, then check the logs')
+    note = scratch.note('scratch', 'Scratch', x=0, w=430, h=300)
+    note['y'] = 360
+    out.append(note)
+
+    # Hidden runbooks that the search picture finds.
+    k8s = NoteBuilder()
+    k8s.line('kubectl rollout restart deploy/api', 'code_ranges')
+    nginx = NoteBuilder()
+    nginx.line('sudo systemctl restart nginx', 'code_ranges')
+    deploy = NoteBuilder()
+    deploy.line('• restart the workers last')
+    other = NoteBuilder()
+    other.line('Reference')
+    hidden = [('k8s', 'k8s', k8s), ('nginx', 'nginx', nginx),
+              ('deploy', 'Deploy', deploy), ('psql', 'psql', other),
+              ('tmux', 'tmux', other), ('oncall', 'On-call handoff', other)]
+    for order, (note_id, title, builder) in enumerate(hidden):
+        note = builder.note(note_id, title, x=0, w=340, h=200, hidden=True)
+        note['sort_order'] = float(order)
+        out.append(note)
     return out
 
 
@@ -152,16 +176,13 @@ def setup_home():
         json.dump(sample_notes(), f)
 
 
-def compose(app):
-    # Capture left to right, then lay the captures out by their real widths,
-    # since a note can end up wider than requested.
-    windows = sorted(app.notes.values(),
-                     key=lambda w: w.get_window().get_origin()[1])
-    shots = []
-    for w in windows:
-        gdk_win = w.get_window()
-        shots.append(Gdk.pixbuf_get_from_window(
-            gdk_win, 0, 0, gdk_win.get_width(), gdk_win.get_height()))
+def capture(window):
+    gdk_win = window.get_window()
+    return Gdk.pixbuf_get_from_window(
+        gdk_win, 0, 0, gdk_win.get_width(), gdk_win.get_height())
+
+
+def compose(shots, output):
 
     m, gap = MARGIN * SCALE, GAP * SCALE
     width = sum(pb.get_width() for pb in shots) + gap * (len(shots) - 1)
@@ -183,8 +204,8 @@ def compose(app):
         Gdk.cairo_set_source_pixbuf(cr, pb, left, m)
         cr.paint()
         left += pb.get_width() + gap
-    surface.write_to_png(OUTPUT)
-    print(OUTPUT)
+    surface.write_to_png(output)
+    print(output)
 
 
 def main():
@@ -197,11 +218,42 @@ def main():
         # A blinking text cursor would land in the picture at random.
         for w in app.notes.values():
             w.tv.set_cursor_visible(False)
-        GLib.timeout_add(300, capture)
+        GLib.timeout_add(300, capture_notes)
         return False
 
-    def capture():
-        compose(app)
+    def capture_notes():
+        # Capture left to right, then lay the captures out by their real
+        # widths, since a note can end up wider than requested.
+        windows = sorted((w for w in app.notes.values()
+                          if w.get_visible() and w.note_id != SEARCH_NOTE),
+                         key=lambda w: w.get_window().get_origin()[1])
+        compose([capture(w) for w in windows], OUTPUT)
+
+        note = app.notes[SEARCH_NOTE]
+        note._toggle_search()
+        note._search_entry.set_text(SEARCH_QUERY)
+        note._all_notes_check.set_active(True)
+        GLib.timeout_add(800, capture_search)
+        return False
+
+    def capture_search():
+        note = app.notes[SEARCH_NOTE]
+        # Show the query as typed, without the selection set_text() leaves.
+        end = len(SEARCH_QUERY)
+        note._search_entry.select_region(end, end)
+        GLib.timeout_add(300, lambda: capture_search_now(note))
+        return False
+
+    def capture_search_now(note):
+        shots = [capture(note)]
+        app.show_hidden_notes_manager(parent_note=note)
+        manager = app._hidden_notes_window
+        manager._tree.get_selection().select_path(Gtk.TreePath(0))
+        GLib.timeout_add(500, lambda: capture_hidden(shots, manager))
+        return False
+
+    def capture_hidden(shots, manager):
+        compose(shots + [capture(manager)], HIDDEN_OUTPUT)
         app.quit_app()
         return False
 
