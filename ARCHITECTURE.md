@@ -19,7 +19,6 @@ flowchart LR
         App["app.py<br/>PostItApp"]
         Window["note_window.py<br/>NoteWindow"]
         Manager["note_manager_window.py<br/>Hidden Notes window"]
-        Hotkeys["hotkeys.py<br/>snap shortcut thread"]
     end
 
     subgraph Pure["Pure logic, unit-tested"]
@@ -35,7 +34,6 @@ flowchart LR
     Main -->|starts| App
     App -->|owns one per note| Window
     App -->|owns| Manager
-    App -->|owns| Hotkeys
     App -->|uses| Storage
     App -->|uses| Images
     App -->|uses| Autostart
@@ -45,7 +43,7 @@ flowchart LR
     Window -->|uses| Links
 
     classDef node fill:#FFFFFF,stroke:#4A5568,color:#1A202C
-    class Main,App,Window,Manager,Hotkeys,Storage,Images,Autostart,Models,Snap,Search,Links node
+    class Main,App,Window,Manager,Storage,Images,Autostart,Models,Snap,Search,Links node
     style GTK fill:#FFF4D6,stroke:#B7791F,color:#3D2C00
     style Pure fill:#E8F8EF,stroke:#2F855A,color:#143C2B
 ```
@@ -57,7 +55,6 @@ flowchart LR
 | `ynote/app.py` | Application lifecycle, tray icon, the set of notes, hidden-note order, the shared rich clipboard, and saving. |
 | `ynote/note_window.py` | One note: its window, text editing and formatting, undo/redo, search, images, and snapping. |
 | `ynote/note_manager_window.py` | The Hidden Notes window: list, reorder, and restore hidden notes. |
-| `ynote/hotkeys.py` | Grabs `Ctrl+Super+arrow` on the X root window in a background thread. |
 | `ynote/models.py` | Fills defaults into saved note data, so older `notes.json` files still load. |
 | `ynote/storage.py` | Reads JSON files and writes them atomically. |
 | `ynote/images.py` | Image metadata, and finding and deleting image files no note uses. |
@@ -154,8 +151,8 @@ sequenceDiagram
 1. `main()` sets `GDK_BACKEND=x11` before GTK loads. Otherwise GTK would pick
    any Wayland socket it finds. See [Why X11](#why-x11).
 2. `PostItApp.do_startup()` creates the config directories, sets up login
-   autostart on an installed app's first run, loads the CSS, creates the tray
-   icon, and starts the snap shortcut thread.
+   autostart on an installed app's first run, loads the CSS, and creates the
+   tray icon.
 3. `_load()` creates a `NoteWindow` for each saved note, or one empty note
    when there are none, then deletes image files no saved note uses.
    If `notes.json` exists but cannot be read, it is renamed to
@@ -165,12 +162,6 @@ sequenceDiagram
 
 ## Other mechanisms
 
-- **Global snap shortcut.** GTK only receives keys while a note has focus, so
-  `SnapHotkeys` grabs `Ctrl+Super+arrow` on the X root window through its own
-  python-xlib connection. Its thread hands the held arrows to the GTK main
-  loop with `GLib.idle_add()`. `NoteWindow._snap_to()` then asks
-  `snap.snap_rect()` for the new rectangle. Without python3-xlib, only the
-  in-window shortcut works.
 - **Rich copy and paste between notes.** Copying in a note stores the text,
   ranges, and images in `PostItApp` and puts plain text on the system
   clipboard. Pasting uses the stored state only while Ynote still owns the
@@ -184,8 +175,8 @@ sequenceDiagram
 
 Ynote always runs on GTK's X11 backend, through XWayland on a Wayland session.
 Native Wayland does not let an app place its own windows or keep them on top,
-and Ynote depends on both for saved positions, snapping, and pinning. The
-global shortcut and the tray icon (`Gtk.StatusIcon`) are X11 mechanisms too.
+and Ynote depends on both for saved positions, snapping, and pinning. The tray
+icon (`Gtk.StatusIcon`) is an X11 mechanism too.
 
 ## Testing
 

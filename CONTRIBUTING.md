@@ -8,12 +8,10 @@ code is organized, see [ARCHITECTURE.md](ARCHITECTURE.md).
 Ynote uses Python, GTK 3, and PyGObject. On Ubuntu/Debian:
 
 ```bash
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 python3-xlib
+sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0
 ```
 
 - `python3-gi-cairo` lets PyGObject draw with cairo, which divider lines need.
-- `python3-xlib` registers the global `Ctrl+Super+arrow` snap shortcut. Without
-  it, the shortcut only works while a note has focus.
 
 To run the tests, also install:
 

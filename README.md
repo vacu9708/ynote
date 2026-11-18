@@ -110,8 +110,6 @@ keep the plain text.
 | `Ctrl+Super+↑` / `↓` | Move the note up or down by its own height |
 | `Ctrl+Super+` two arrows | Send the note to that corner |
 
-Snapping keeps the note's height and works even when no note has focus.
-
 ### Hidden notes
 
 Hiding a note with `✕` takes it off the screen without deleting it. To bring it

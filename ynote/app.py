@@ -13,7 +13,6 @@ from .config import (
     APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR,
     NEW_NOTE_LABEL, NOTES_FILE, SETTINGS_FILE, UNTITLED_LABEL, display_path,
 )
-from .hotkeys import SnapHotkeys
 from .images import (
     cleanup_orphaned_images,
     image_files_from_metadata,
@@ -72,11 +71,6 @@ class PostItApp(Gtk.Application):
 
         self._setup_status_icon()
 
-        # Ctrl + Super + arrows snap the current note even when no note has
-        # focus. Without python3-xlib only the in-window shortcut works.
-        self._snap_hotkeys = SnapHotkeys(self._on_snap_hotkey)
-        self._snap_hotkeys.start()
-
         self._load()
         self.hold()
 
@@ -131,17 +125,6 @@ class PostItApp(Gtk.Application):
         else:
             self.raise_all()
             self._notes_raised = True
-
-    def _on_snap_hotkey(self, keys):
-        note = self._current_note
-        if note is None or not note.get_visible():
-            note = next((w for w in self.notes.values() if w.get_visible()), None)
-        if note is None:
-            return False
-        if not note.is_active():
-            self._focus_note(note)
-        note._snap_to(keys)
-        return False
 
     def _focus_note(self, note):
         try:
