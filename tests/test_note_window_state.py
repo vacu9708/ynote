@@ -187,3 +187,15 @@ def test_collapsed_note_keeps_its_button_enabled_to_expand():
 
     assert win._collapse_btn.sensitive
     assert win._collapse_btn.tip == 'Expand'
+
+
+def test_font_size_steps_by_one_and_stays_between_8_and_32():
+    win = make_window()
+    win._apply_note_font = lambda: None
+    win._queue_save = lambda: None
+
+    for start, delta, expected in ((14, +1, 15), (14, -1, 13),
+                                   (8, -1, 8), (32, +1, 32)):
+        win._font_size = start
+        win._change_font_size(delta)
+        assert win._font_size == expected
