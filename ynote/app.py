@@ -21,6 +21,7 @@ from .images import (
 from .note_manager_window import HiddenNotesWindow
 from .note_window import NoteWindow
 from .search import Note
+from .snap import keep_reachable, place_beside
 from .storage import UnreadableNotesError, load_notes, save_notes, set_aside
 from .styles import BASE_CSS
 
@@ -218,7 +219,11 @@ class PostItApp(Gtk.Application):
         if not saved:
             self.new_note()
             return
+        areas, primary = self._work_areas()
         for d in saved:
+            if areas and all(k in d for k in ('x', 'y', 'w', 'h')):
+                d['x'], d['y'] = keep_reachable(
+                    (d['x'], d['y'], d['w'], d['h']), areas, primary)
             w = NoteWindow(self, d)
             self.notes[w.note_id] = w
         self._rebuild_indicator_menu()
@@ -227,21 +232,42 @@ class PostItApp(Gtk.Application):
         self._cleanup_orphaned_images([w.to_dict() for w in self.notes.values()],
                                       include_history=False)
 
+    def _work_areas(self):
+        """Every monitor's work area as (x, y, w, h), and the primary's."""
+        display = Gdk.Display.get_default()
+        if display is None or display.get_n_monitors() == 0:
+            return [], None
+        monitors = [display.get_monitor(i)
+                    for i in range(display.get_n_monitors())]
+        areas = []
+        for m in monitors:
+            a = m.get_workarea()
+            areas.append((a.x, a.y, a.width, a.height))
+        # X servers without a primary monitor set return None here.
+        primary = display.get_primary_monitor()
+        index = monitors.index(primary) if primary in monitors else 0
+        return areas, areas[index]
+
     def new_note(self, near=None):
+        d = {'id': str(uuid.uuid4())}
         if near is not None:
-            px, py = near.get_position()
-            pw, _h = near.get_size()
-            x, y = px + pw + 10, py
-        else:
-            n = len(self.notes)
-            display = Gdk.Display.get_default()
-            # X servers without a primary monitor set return None here.
-            monitor = display.get_primary_monitor() or display.get_monitor(0)
-            geo = monitor.get_geometry()
-            x = geo.x + (geo.width  - 238) // 2 + (n * 30) % 90
-            y = geo.y + (geo.height - 300) // 2 + (n * 25) % 75
-        d = {'id': str(uuid.uuid4()), 'x': x, 'y': y}
+            d['x'], d['y'] = near.get_position()
         w = NoteWindow(self, d)
+        # The window may be wider than its default size because of its
+        # minimum width, so place it once that is known.
+        size = w.get_size()
+        natural = w.get_preferred_size()[1]
+        size = (max(size[0], natural.width), max(size[1], natural.height))
+        areas, primary = self._work_areas()
+        if areas and near is not None:
+            x, y = place_beside(near.get_position() + near.get_size(),
+                                size, areas)
+            w.move(x, y)
+        elif primary is not None:
+            n = len(self.notes)
+            ax, ay, aw, ah = primary
+            w.move(ax + (aw - size[0]) // 2 + (n * 30) % 90,
+                   ay + (ah - size[1]) // 2 + (n * 25) % 75)
         self.notes[w.note_id] = w
         w.tv.grab_focus()
         self.save_all()

@@ -76,3 +76,65 @@ def snap_rect(keys, rect, areas, index):
         else:
             y += -h if key == 'up' else h
     return _place(area, col, y, h)
+
+
+# ------------------------------------------------------------------ placement
+
+GAP = 10
+TITLE_BAR = 30
+
+
+def _inside(rect, area):
+    x, y, w, h = rect
+    ax, ay, aw, ah = area
+    return ax <= x and ay <= y and x + w <= ax + aw and y + h <= ay + ah
+
+
+def _overlap(rect, area):
+    x, y, w, h = rect
+    ax, ay, aw, ah = area
+    ow = min(x + w, ax + aw) - max(x, ax)
+    oh = min(y + h, ay + ah) - max(y, ay)
+    return max(0, ow) * max(0, oh)
+
+
+def _clamp_into(rect, area):
+    x, y, w, h = rect
+    ax, ay, aw, ah = area
+    w, h = min(w, aw), min(h, ah)
+    return (_clamp(x, ax, ax + aw - w), _clamp(y, ay, ay + ah - h), w, h)
+
+
+def _best_area(rect, areas):
+    """The area overlapping rect most, or the first area when none does."""
+    return max(areas, key=lambda a: _overlap(rect, a)) if any(
+        _overlap(rect, a) for a in areas) else areas[0]
+
+
+def place_beside(near, size, areas):
+    """Return (x, y) for a new note of size next to the note rect near.
+
+    The new note goes right of near, else left of it, as long as it lands
+    wholly inside one work area. Otherwise it is pulled into the work area
+    near is mostly on, so it never opens in a gap between monitors.
+    """
+    px, py, pw, _ph = near
+    w, h = size
+    for x in (px + pw + GAP, px - w - GAP):
+        if any(_inside((x, py, w, h), a) for a in areas):
+            return x, py
+    x, y, _w, _h = _clamp_into((px + pw + GAP, py, w, h), _best_area(near, areas))
+    return x, y
+
+
+def keep_reachable(rect, areas, fallback):
+    """Return (x, y) for a saved note so its title bar can be grabbed.
+
+    A note whose title bar is off every monitor, for example after a monitor
+    was unplugged, is pulled into the fallback area. Others stay put.
+    """
+    x, y, w, h = rect
+    if any(_overlap((x, y, w, min(h, TITLE_BAR)), a) for a in areas):
+        return x, y
+    nx, ny, _w, _h = _clamp_into(rect, fallback)
+    return nx, ny

@@ -79,3 +79,40 @@ def test_snap_rect_diagonal_does_not_cross_monitors():
     right_edge = (1000, 0, 1000, 150)
 
     assert snap_rect(['right', 'down'], right_edge, AREAS, 0) == (1000, 650, 1000, 150)
+
+
+from ynote.snap import keep_reachable, place_beside
+
+# Two 2560x1440 monitors, then a 1920x1080 one starting 360px lower.
+TALL_L = (0, 0, 2560, 1440)
+TALL_R = (2560, 0, 2560, 1440)
+SHORT = (5120, 360, 1920, 1080)
+DESK = [TALL_L, TALL_R, SHORT]
+
+
+def test_place_beside_goes_right_when_it_fits():
+    assert place_beside((100, 100, 300, 300), (300, 300), DESK) == (410, 100)
+
+
+def test_place_beside_crosses_monitors_when_it_fits_on_the_next():
+    assert place_beside((2000, 400, 550, 300), (300, 300), DESK) == (2560, 400)
+
+
+def test_place_beside_avoids_the_gap_above_a_lower_monitor():
+    # A note flush with the right monitor's top-right corner: its right side
+    # is above SHORT, where no monitor shows anything, so go left instead.
+    assert place_beside((3840, 0, 1280, 1440), (300, 300), DESK) == (3530, 0)
+
+
+def test_place_beside_clamps_into_the_notes_monitor_when_no_side_fits():
+    assert place_beside((0, 0, 2560, 1440), (300, 300), [TALL_L]) == (2260, 0)
+
+
+def test_keep_reachable_leaves_visible_notes_alone():
+    assert keep_reachable((3840, 0, 1280, 1440), DESK, TALL_L) == (3840, 0)
+    assert keep_reachable((5130, 340, 300, 300), DESK, TALL_L) == (5130, 340)
+
+
+def test_keep_reachable_pulls_in_a_note_whose_title_bar_is_off_screen():
+    assert keep_reachable((5130, 0, 335, 300), DESK, TALL_L) == (2225, 0)
+    assert keep_reachable((9000, 9000, 300, 300), DESK, TALL_L) == (2260, 1140)
