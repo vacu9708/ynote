@@ -115,8 +115,6 @@ popover modelbutton { min-height: 20px; padding: 1px 6px; }
 popover scale { min-height: 16px; }
 popover button.step { min-width: 24px; min-height: 18px; padding: 0 6px; }
 popover scale trough { min-height: 4px; }
-/* A multi-line selection inside a code block is drawn by the note itself. */
-textview.code-selection text selection { background-color: transparent; }
 modelbutton.danger label { color: #C62828; }
 label.title {
     color: #444;
