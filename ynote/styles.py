@@ -114,6 +114,8 @@ box.hdr button.pinned, box.btmbar button.pinned { background: rgba(0,0,0,0.55); 
 popover modelbutton { min-height: 20px; padding: 1px 6px; }
 popover scale { min-height: 16px; }
 popover scale trough { min-height: 4px; }
+/* A multi-line selection inside a code block is drawn by the note itself. */
+textview.code-selection text selection { background-color: transparent; }
 modelbutton.danger label { color: #C62828; }
 label.title {
     color: #444;

@@ -72,6 +72,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._snap_held = []
         self._snap_pending_move = None
         self._normal_geometry = None
+        self._code_selection = None
 
         self._build(data)
         self._apply_color()
@@ -271,8 +272,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._bold_tag = buf.create_tag('bold', weight=Pango.Weight.BOLD)
         self._code_tag = buf.create_tag('code',
                                         family='Ubuntu Mono, DejaVu Sans Mono, monospace',
-                                        background='#EFEFD6',
-                                        paragraph_background='#EFEFD6',
                                         foreground='#222',
                                         # Keep commands on one visual line
                                         # so a wrap is never mistaken for a
@@ -320,6 +319,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(e))
         self._restore_images(data.get('images', []))
         self._refresh_line_styles()
+        # Before the default handler, so the code boxes sit under the text.
+        self.tv.connect('draw', self._draw_code_blocks)
         self.tv.connect_after('draw', self._draw_dividers)
         self.tv.connect('populate-popup', self._on_tv_popup)
         self.tv.connect('key-press-event', self._on_tv_key_press)
@@ -1692,6 +1693,79 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(link_end))
         self.tv.queue_draw()
 
+    def _is_code_line(self, buf, line):
+        # Cheaper than _line_is_fully_tagged(): code is always applied to a
+        # whole line, so the first and last characters tell.
+        start = buf.get_iter_at_line(line)
+        end = start.copy()
+        if not end.ends_line():
+            end.forward_to_line_end()
+        if start.compare(end) == 0 or not start.has_tag(self._code_tag):
+            return False
+        end.backward_char()
+        return end.has_tag(self._code_tag)
+
+    def _draw_code_blocks(self, tv, cr):
+        # Each run of code lines gets one box as wide as its longest line,
+        # instead of the full width of the note.
+        buf = tv.get_buffer()
+        last_line = buf.get_line_count() - 1
+        visible = tv.get_visible_rect()
+        first = tv.get_line_at_y(visible.y)[0].get_line()
+        last = tv.get_line_at_y(visible.y + visible.height)[0].get_line()
+        left = tv.get_left_margin()
+        pad = 8
+        cr.set_source_rgba(self._code_rgba.red, self._code_rgba.green,
+                           self._code_rgba.blue, 1.0)
+        line = first
+        while line <= last:
+            if not self._is_code_line(buf, line):
+                line += 1
+                continue
+            block_start = line
+            while block_start > 0 and self._is_code_line(buf, block_start - 1):
+                block_start -= 1
+            block_end = line
+            while (block_end < last_line
+                   and self._is_code_line(buf, block_end + 1)):
+                block_end += 1
+            right = left
+            for n in range(block_start, block_end + 1):
+                it = buf.get_iter_at_line(n)
+                if not it.ends_line():
+                    it.forward_to_line_end()
+                right = max(right, tv.get_iter_location(it).x)
+            top, _ = tv.get_line_yrange(buf.get_iter_at_line(block_start))
+            y, height = tv.get_line_yrange(buf.get_iter_at_line(block_end))
+            wx, wy = tv.buffer_to_window_coords(
+                Gtk.TextWindowType.WIDGET, left, top)
+            cr.rectangle(wx, wy, right + pad - left, y + height - top)
+            cr.fill()
+            line = block_end + 1
+        if self._code_selection:
+            self._draw_code_selection(tv, cr, buf)
+        return False
+
+    def _draw_code_selection(self, tv, cr, buf):
+        found, color = tv.get_style_context().lookup_color(
+            'theme_selected_bg_color')
+        if not found:
+            color = Gdk.RGBA(0.91, 0.33, 0.13, 1.0)
+        cr.set_source_rgba(color.red, color.green, color.blue, 1.0)
+        sel_start, sel_end = self._code_selection
+        for n in range(buf.get_iter_at_offset(sel_start).get_line(),
+                       buf.get_iter_at_offset(sel_end).get_line() + 1):
+            line_start, line_end = self._line_bounds(n)
+            start = max(line_start.get_offset(), sel_start)
+            end = min(line_end.get_offset(), sel_end)
+            x0 = tv.get_iter_location(buf.get_iter_at_offset(start)).x
+            x1 = tv.get_iter_location(buf.get_iter_at_offset(end)).x
+            y, height = tv.get_line_yrange(line_start)
+            wx, wy = tv.buffer_to_window_coords(
+                Gtk.TextWindowType.WIDGET, x0, y)
+            cr.rectangle(wx, wy, x1 - x0, height)
+            cr.fill()
+
     def _draw_dividers(self, tv, cr):
         if not self._divider_lines:
             return False
@@ -1709,7 +1783,29 @@ class NoteWindow(Gtk.ApplicationWindow):
         cr.stroke()
         return False
 
+    def _refresh_code_selection(self, buf):
+        # GTK paints a selected line break out to the right edge of the note,
+        # so a multi-line selection inside a code block would cover its whole
+        # width. For that case the selection is drawn by _draw_code_blocks()
+        # instead, only as wide as each line's text.
+        selection = None
+        if buf.get_has_selection():
+            start, end = buf.get_selection_bounds()
+            first, last = start.get_line(), end.get_line()
+            if first != last and all(self._is_code_line(buf, n)
+                                     for n in range(first, last + 1)):
+                selection = (start.get_offset(), end.get_offset())
+        if selection != self._code_selection:
+            self._code_selection = selection
+            ctx = self.tv.get_style_context()
+            if selection:
+                ctx.add_class('code-selection')
+            else:
+                ctx.remove_class('code-selection')
+            self.tv.queue_draw()
+
     def _on_mark_set(self, buf, it, mark):
+        self._refresh_code_selection(buf)
         # The cursor never rests on a divider: it skips to the line after it
         # when moving forward and to the end of the line before it when moving
         # back. A divider at either end of the note keeps the cursor at its
@@ -2350,9 +2446,9 @@ class NoteWindow(Gtk.ApplicationWindow):
                     self._color_prov, Gtk.STYLE_PROVIDER_PRIORITY_USER)
         self._color_prov.load_from_data(note_css(self._color, self._opacity).encode())
         # Code blocks follow the note color, so they stay readable on it.
-        bg = code_background(self._color)
-        self._code_tag.set_property('background', bg)
-        self._code_tag.set_property('paragraph_background', bg)
+        self._code_rgba = Gdk.RGBA()
+        self._code_rgba.parse(code_background(self._color))
+        self.tv.queue_draw()
 
     def _show_about_dialog(self):
         dialog = Gtk.AboutDialog(transient_for=self, modal=True)
