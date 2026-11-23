@@ -151,8 +151,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._title_box.connect('button-release-event', self._on_title_release)
         hdr.pack_start(self._title_box, True, True, 0)
 
-        self._title_label = Gtk.Label(label=self.title or UNTITLED_LABEL)
+        self._title_label = Gtk.Label()
         self._title_label.get_style_context().add_class('title')
+        self._show_title()
         self._title_label.set_xalign(0)
         self._title_label.set_ellipsize(3)  # Pango.EllipsizeMode.END == 3
         self._title_box.add(self._title_label)
@@ -595,6 +596,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         # cursor from blinking until the text area is clicked again.
         self.set_focus(None)
 
+    def _show_title(self):
+        """The title on the bar, or a dimmed Untitled when there is none."""
+        self._title_label.set_text(self.title or UNTITLED_LABEL)
+        context = self._title_label.get_style_context()
+        if self.title:
+            context.remove_class('untitled')
+        else:
+            context.add_class('untitled')
+
     def _start_title_edit(self):
         self._editing = True
         self._title_box.remove(self._title_label)
@@ -616,7 +626,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._editing = False
         self.title = entry.get_text().strip()
         self._title_box.remove(entry)
-        self._title_label.set_text(self.title or UNTITLED_LABEL)
+        self._show_title()
         self._title_box.add(self._title_label)
         self._title_label.show()
         self.set_title(self.title or UNTITLED_LABEL)

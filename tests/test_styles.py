@@ -1,6 +1,6 @@
 from ynote.styles import (
-    BASE_CSS, DEFAULT_COLOR, PALETTE, code_background, mix, note_css,
-    swatch_css,
+    BASE_CSS, DEFAULT_COLOR, PALETTE, TITLE_COLOR, code_background, mix,
+    note_css, swatch_css,
 )
 
 
@@ -59,3 +59,28 @@ def test_bars_stay_opaque_at_zero_opacity():
 
     assert 'window.note { background: rgba(191,224,255,0.00); }' in css
     assert 'box.hdr { background: #5AA9E6; }' in css
+
+
+def _luminance(color):
+    channels = []
+    for i in (1, 3, 5):
+        c = int(color[i:i + 2], 16) / 255
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def _contrast(a, b):
+    high, low = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_the_title_is_readable_on_every_bar_color():
+    for name, (_body, bar) in PALETTE.items():
+        assert _contrast(TITLE_COLOR, bar) >= 4.5, name
+
+
+def test_base_css_uses_the_title_color_and_dims_an_untitled_note():
+    css = BASE_CSS.decode()
+    assert f'color: {TITLE_COLOR};' in css
+    assert 'label.title.untitled' in css
+    assert '%(title)s' not in css

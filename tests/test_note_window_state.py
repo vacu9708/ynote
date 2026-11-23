@@ -274,3 +274,19 @@ def test_snapping_a_collapsed_note_sets_its_new_width_in_the_size_request():
 
     assert win.locks == [(True, 500)]  # half of the 1000 px work area
     assert win.resizes == [(500, 28)]
+
+
+def test_a_note_without_a_title_shows_a_dimmed_placeholder():
+    win = NoteWindow.__new__(NoteWindow)
+    win._title_label = Gtk.Label()
+    context = win._title_label.get_style_context()
+
+    win.title = ''
+    win._show_title()
+    assert win._title_label.get_text() == 'Untitled'
+    assert context.has_class('untitled')
+
+    win.title = 'Deploy'
+    win._show_title()
+    assert win._title_label.get_text() == 'Deploy'
+    assert not context.has_class('untitled')

@@ -12,6 +12,10 @@ PALETTE = {
 }
 DEFAULT_COLOR = 'yellow'
 
+# The title sits on the saturated bar. #444 was 3.1:1 on purple and 3.8:1 on
+# blue; this is at least 5:1 on every bar color.
+TITLE_COLOR = '#222222'
+
 CODE_MIX_TARGET = '#EEEEEE'
 CODE_MIX_AMOUNT = 0.7
 
@@ -117,17 +121,23 @@ popover button.step { min-width: 24px; min-height: 18px; padding: 0 6px; }
 popover scale trough { min-height: 4px; }
 modelbutton.danger label { color: #C62828; }
 label.title {
-    color: #444;
+    color: %(title)s;
     font-weight: bold;
     font-size: 16px;
     padding: 0 4px;
+}
+/* A note without a title shows a placeholder that reads as one. */
+label.title.untitled {
+    font-weight: normal;
+    font-style: italic;
+    opacity: 0.6;
 }
 entry.title-edit {
     background: transparent;
     border: 1px solid rgba(0,0,0,0.25);
     border-radius: 3px;
     box-shadow: none;
-    color: #333;
+    color: %(title)s;
     font-weight: bold;
     font-size: 15px;
     min-height: 20px;
@@ -159,4 +169,4 @@ box.search-bar list row {
 }
 """
 
-BASE_CSS = (_BASE + swatch_css()).encode()
+BASE_CSS = (_BASE % {'title': TITLE_COLOR} + swatch_css()).encode()
