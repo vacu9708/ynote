@@ -65,8 +65,8 @@ also what About and `ynote --version` show.
 
 ## README Screenshots
 
-`assets/ynote-screenshot.png`, `assets/ynote-hidden.png`, and `assets/ynote-customize.png` are rendered from
-the real app, so regenerate them after any visible UI change:
+`assets/ynote-screenshot.png`, `assets/ynote-hidden.png`, and
+`assets/ynote-customize.png` are rendered from the real app, so regenerate them after any visible UI change:
 
 ```bash
 dbus-run-session -- xvfb-run -a -s "-screen 0 3000x1400x24" \
@@ -74,3 +74,11 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 3000x1400x24" \
 ```
 
 The sample notes are defined in `tools/readme_screenshot.py`.
+
+`assets/ynote-opacity.png` needs a real compositing X11 desktop, because a
+virtual X server cannot draw see-through windows. Run this instead, and check
+that the picture shows nothing but the sample backdrop and notes:
+
+```bash
+dbus-run-session -- python3 tools/readme_opacity_screenshot.py [monitor]
+```

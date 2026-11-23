@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the README screenshot from the real app in a virtual X server.
 
-    dbus-run-session -- xvfb-run -a -s "-screen 0 3000x1400x24" \\
+    dbus-run-session -- xvfb-run -a -s "-screen 0 2600x1400x24" \\
         python3 tools/readme_screenshot.py
 
 It opens sample notes with a throwaway HOME and captures note windows at 2x
@@ -10,8 +10,6 @@ scale on a plain background:
 - assets/ynote-screenshot.png: the two visible notes side by side.
 - assets/ynote-hidden.png: a short note searching All notes, which lists
   matches in the hidden sample notes, beside the Hidden Notes window.
-- assets/ynote-customize.png: a note with its right-click popover open, beside
-  differently colored notes, two of them collapsed to their title bars.
 
 Rerun it after a visible UI change so the README images stay current.
 dbus-run-session keeps it apart from a running Ynote.
@@ -43,9 +41,6 @@ from ynote.config import IMAGE_ANCHOR  # noqa: E402
 
 OUTPUT = os.path.join(ROOT, 'assets', 'ynote-screenshot.png')
 HIDDEN_OUTPUT = os.path.join(ROOT, 'assets', 'ynote-hidden.png')
-CUSTOMIZE_OUTPUT = os.path.join(ROOT, 'assets', 'ynote-customize.png')
-POPOVER_NOTE = 'release'
-COLUMN_NOTES = ('runbook', 'standup', 'ideas')
 SEARCH_NOTE = 'scratch'
 SEARCH_QUERY = 'restart'
 SCALE = 2
@@ -156,30 +151,6 @@ def sample_notes():
     note['y'] = 360
     out.append(note)
 
-    # Notes for the customize picture, to the right of the first two. The
-    # popover note is tall enough to hold its popover inside the window.
-    release = NoteBuilder()
-    release.line('Release steps', 'bold_ranges')
-    release.line('☑ Bump the version')
-    release.line('☐ Build the package')
-    release.line('☐ Tag and upload')
-    note = release.note(POPOVER_NOTE, 'Release', x=820, w=300, h=360)
-    note['color'] = 'green'
-    out.append(note)
-    column = [('runbook', 'On-call runbook', 'purple', True, 0),
-              ('standup', 'Standup', 'pink', False, 44),
-              ('ideas', 'Ideas', 'gray', True, 232)]
-    standup = NoteBuilder()
-    standup.line('Yesterday: orders timeout', 'bold_ranges')
-    standup.line('Today: paginate the report')
-    standup.line('Blocked: none')
-    for note_id, title, color, collapsed, y in column:
-        builder = standup if note_id == 'standup' else NoteBuilder()
-        note = builder.note(note_id, title, x=1142, w=300,
-                            h=150 if note_id == 'standup' else 300)
-        note.update(y=y, color=color, collapsed=collapsed)
-        out.append(note)
-
     # Hidden runbooks that the search picture finds.
     k8s = NoteBuilder()
     k8s.line('kubectl rollout restart deploy/api', 'code_ranges')
@@ -226,24 +197,7 @@ def capture_from_screen(window):
         gdk_win.get_width(), gdk_win.get_height())
 
 
-def stack(shots, gap):
-    """Stack pixbufs top to bottom into one, on the picture background."""
-    width = max(pb.get_width() for pb in shots)
-    height = sum(pb.get_height() for pb in shots) + gap * (len(shots) - 1)
-    surface = cairo.ImageSurface(cairo.FORMAT_RGB24, width, height)
-    cr = cairo.Context(surface)
-    cr.set_source_rgb(*BACKGROUND)
-    cr.paint()
-    top = 0
-    for pb in shots:
-        Gdk.cairo_set_source_pixbuf(cr, pb, 0, top)
-        cr.paint()
-        top += pb.get_height() + gap
-    return Gdk.pixbuf_get_from_surface(surface, 0, 0, width, height)
-
-
 def compose(shots, output):
-
     m, gap = MARGIN * SCALE, GAP * SCALE
     width = sum(pb.get_width() for pb in shots) + gap * (len(shots) - 1)
     height = max(pb.get_height() for pb in shots)
@@ -285,24 +239,9 @@ def main():
         # Capture left to right, then lay the captures out by their real
         # widths, since a note can end up wider than requested.
         windows = sorted((w for w in app.notes.values()
-                          if w.get_visible() and w.note_id != SEARCH_NOTE
-                          and w.note_id != POPOVER_NOTE
-                          and w.note_id not in COLUMN_NOTES),
+                          if w.get_visible() and w.note_id != SEARCH_NOTE),
                          key=lambda w: w.get_window().get_origin()[1])
         compose([capture(w) for w in windows], OUTPUT)
-
-        note = app.notes[POPOVER_NOTE]
-        event = Gdk.Event.new(Gdk.EventType.BUTTON_PRESS)
-        event.x, event.y = 70, 12
-        note._show_ctx_menu(note._title_box, event)
-        GLib.timeout_add(800, capture_customize)
-        return False
-
-    def capture_customize():
-        note = app.notes[POPOVER_NOTE]
-        column = stack([capture_from_screen(app.notes[i])
-                        for i in COLUMN_NOTES], GAP * SCALE)
-        compose([capture_from_screen(note), column], CUSTOMIZE_OUTPUT)
 
         note = app.notes[SEARCH_NOTE]
         note._toggle_search()
