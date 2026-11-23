@@ -6,8 +6,7 @@ Engineer-friendly sticky notes for Linux desktops.
 
 Ynote keeps the notes engineers want beside their editor (commands, code
 snippets, debugging context, screenshots, and to-dos) in small floating
-windows on the desktop. Hidden notes stay one search away, so Ynote also works
-as a set of runbooks and cheat sheets.
+windows on the desktop.
 
 Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
 3.10 or later, including Wayland sessions. It is developed on Ubuntu 26.04.
@@ -67,6 +66,8 @@ Your notes stay in `~/.config/ynote/`.
 ## Using Ynote
 
 ### The note window
+
+![A green note with its right-click popover open, beside a pink note and two notes collapsed to their title bars](assets/ynote-customize.png)
 
 | Where | Action |
 | --- | --- |

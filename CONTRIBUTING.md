@@ -65,11 +65,11 @@ also what About and `ynote --version` show.
 
 ## README Screenshots
 
-`assets/ynote-screenshot.png` and `assets/ynote-hidden.png` are rendered from
+`assets/ynote-screenshot.png`, `assets/ynote-hidden.png`, and `assets/ynote-customize.png` are rendered from
 the real app, so regenerate them after any visible UI change:
 
 ```bash
-dbus-run-session -- xvfb-run -a -s "-screen 0 2600x1400x24" \
+dbus-run-session -- xvfb-run -a -s "-screen 0 3000x1400x24" \
     python3 tools/readme_screenshot.py
 ```
 
