@@ -417,7 +417,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.connect('window-state-event', self._on_window_state)
         self.connect('key-press-event',    self._on_snap_key_press)
         self.connect('key-release-event',  self._on_snap_key_release)
-        self.connect('delete-event', lambda *_: self.app.quit_app() or True)
+        # The window manager's close button hides the note instead of quitting.
+        self.connect('delete-event', lambda *_: self._hide_note() or True)
 
     # ------------------------------------------------------------------ snapping
 
