@@ -113,6 +113,7 @@ box.hdr button.pinned, box.btmbar button.pinned { background: rgba(0,0,0,0.55); 
    enough for a default 200x300 note. */
 popover modelbutton { min-height: 20px; padding: 1px 6px; }
 popover scale { min-height: 16px; }
+popover button.step { min-width: 24px; min-height: 18px; padding: 0 6px; }
 popover scale trough { min-height: 4px; }
 /* A multi-line selection inside a code block is drawn by the note itself. */
 textview.code-selection text selection { background-color: transparent; }

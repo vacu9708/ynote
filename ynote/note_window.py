@@ -222,13 +222,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         code_btn.connect('clicked', lambda _: self._toggle_code_block())
         text_group.pack_start(code_btn, False, False, 0)
 
-        self._fontsize_btn = Gtk.Button(label=f'{self._font_size}px')
-        self._fontsize_btn.set_tooltip_text('Font size')
-        self._fontsize_btn.set_can_focus(False)
-        self._fontsize_btn.connect('clicked', self._show_font_popover)
-        text_group.pack_start(self._fontsize_btn, False, False, 0)
-        self._build_font_popover()
-
         row_spacer = Gtk.Box()
         row_spacer.set_hexpand(True)
         btn_row.pack_start(row_spacer, True, True, 0)
@@ -238,7 +231,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, close_btn, hidden_btn,
                     self._bold_btn, backtick_btn, bullet_btn,
-                    check_btn, code_btn, self._fontsize_btn):
+                    check_btn, code_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
 
@@ -2381,6 +2374,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         separator()
         self._build_color_row(box)
         self._build_opacity_row(box)
+        self._build_font_row(box)
         separator()
         self._ctx_item(pop, box, 'Minimize', self.iconify)
         if self.app.autostart_available:
@@ -2425,6 +2419,31 @@ class NoteWindow(Gtk.ApplicationWindow):
             swatch.connect('clicked', lambda _, n=name: choose(n))
             swatches[name] = swatch
             row.pack_start(swatch, False, False, 0)
+        box.pack_start(row, False, False, 0)
+
+    def _build_font_row(self, box):
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        row.set_margin_top(4)
+        row.pack_start(Gtk.Label(label='Font size', xalign=0), True, True, 0)
+        size = Gtk.Label(label=f'{self._font_size}px')
+        size.set_width_chars(5)
+
+        def change(delta):
+            self._change_font_size(delta)
+            size.set_text(f'{self._font_size}px')
+
+        for label, tip, delta in (('A−', 'Decrease font size', -1),
+                                  ('A+', 'Increase font size', +1)):
+            button = Gtk.Button(label=label)
+            button.set_tooltip_text(tip)
+            button.set_can_focus(False)
+            button.get_style_context().add_class('step')
+            button.connect('clicked', lambda _, d=delta: change(d))
+            if delta < 0:
+                row.pack_start(button, False, False, 0)
+                row.pack_start(size, False, False, 0)
+            else:
+                row.pack_start(button, False, False, 0)
         box.pack_start(row, False, False, 0)
 
     def _build_opacity_row(self, box):
@@ -2588,34 +2607,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         if range_start is not None:
             buf.apply_tag(self._emoji_tag, range_start, end)
 
-    def _build_font_popover(self):
-        self._font_popover = Gtk.Popover(relative_to=self._fontsize_btn)
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        box.set_border_width(4)
-        self._font_popover.add(box)
-
-        font_down = Gtk.Button(label='A−')
-        font_down.set_tooltip_text('Decrease font size')
-        font_down.set_can_focus(False)
-        font_down.connect('clicked', lambda _: self._change_font_size(-1))
-        box.pack_start(font_down, False, False, 0)
-
-        font_up = Gtk.Button(label='A+')
-        font_up.set_tooltip_text('Increase font size')
-        font_up.set_can_focus(False)
-        font_up.connect('clicked', lambda _: self._change_font_size(+1))
-        box.pack_start(font_up, False, False, 0)
-
-        box.show_all()
-
-    def _show_font_popover(self, *_):
-        self._font_popover.set_relative_to(self._fontsize_btn)
-        self._font_popover.popup()
-
     def _change_font_size(self, delta: int):
         self._font_size = max(8, min(32, self._font_size + delta))
         self._apply_note_font()
-        self._fontsize_btn.set_label(f'{self._font_size}px')
         self._queue_save()
 
     def _on_configure(self, _, event):

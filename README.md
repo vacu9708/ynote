@@ -76,9 +76,8 @@ Your notes stay in `~/.config/ynote/`.
 | `+` | Create a new note next to this one. |
 | `✕` | Hide the note. See [Hidden notes](#hidden-notes). |
 | `▤` | Open the list of hidden notes. |
-| `14px` | Change the note's font size with `A−` and `A+`. |
 | Edges and corners | Drag to resize the note. |
-| Right-click the title bar or bottom bar | Rename the note, set its color and opacity, minimize, turn **Start at Login** on or off, open About to see the version, delete the note after you confirm (an empty note goes right away), or quit Ynote. |
+| Right-click the title bar or bottom bar | Rename the note, set its color, opacity, and font size, minimize, turn **Start at Login** on or off, open About to see the version, delete the note after you confirm (an empty note goes right away), or quit Ynote. |
 | Right-click the text | Undo, redo, search, insert an image, or insert a divider. |
 
 Opacity makes only the note's background see-through, so text and the bars stay
