@@ -1,3 +1,4 @@
+import bisect
 import heapq
 import os
 import shutil
@@ -84,8 +85,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._snap_held = []
         self._snap_pending_move = None
         self._normal_geometry = None
-        # First line -> [first, last, right] of the code block holding it.
-        self._code_block_cache = {}
+        # [first line, last line, right] of each code block drawn so far, in
+        # order. See _watch_code_blocks().
+        self._code_blocks = []
 
         self._build(data)
         self._apply_color()
@@ -1716,53 +1718,92 @@ class NoteWindow(Gtk.ApplicationWindow):
         end.backward_char()
         return end.has_tag(self._code_tag)
 
-    # Measured when a block is first drawn, so a long block is not rescanned on
-    # every draw. Anything that can change a block or its width clears it.
+    # A block's edges and the width of its box are worked out when it is first
+    # drawn and kept in self._code_blocks, since drawing happens on every scroll
+    # and keystroke. An edit forgets only the blocks it touches.
+    EXACT_CODE_BLOCK_LINES = 200
     WIDEST_CODE_LINES = 16
 
     def _watch_code_blocks(self, buf):
-        def drop(*_):
-            self._code_block_cache.clear()
+        # insert-text is handled after the text is in and delete-range before
+        # it is removed, so the line numbers read there are the ones needed.
+        buf.connect_after('insert-text', self._on_code_blocks_insert)
+        buf.connect_after('insert-child-anchor', self._on_code_blocks_anchor)
+        buf.connect('delete-range', self._on_code_blocks_delete)
+        buf.connect('apply-tag', self._on_code_blocks_tag)
+        buf.connect('remove-tag', self._on_code_blocks_tag)
 
-        def drop_for_tag(_buf, tag, *_):
-            # Search highlighting is applied and cleared often and moves nothing.
-            if tag is not self._hl_tag:
-                self._code_block_cache.clear()
+    def _on_code_blocks_insert(self, buf, where, text, _length):
+        lines = text.count('\n')
+        line = where.get_line() - lines
+        self._forget_code_blocks(line, line, lines)
 
-        buf.connect('changed', drop)
-        buf.connect('apply-tag', drop_for_tag)
-        buf.connect('remove-tag', drop_for_tag)
+    def _on_code_blocks_anchor(self, buf, where, _anchor):
+        self._forget_code_blocks(where.get_line(), where.get_line(), 0)
+
+    def _on_code_blocks_delete(self, buf, start, end):
+        first, last = start.get_line(), end.get_line()
+        self._forget_code_blocks(first, last, first - last)
+
+    def _on_code_blocks_tag(self, buf, tag, start, end):
+        # Only tags that decide which lines are code or how wide a line is.
+        # Dividers, links, and checked to-dos are re-applied over the whole
+        # note after every change, and search highlighting comes and goes, yet
+        # none of them moves anything.
+        if tag in (self._code_tag, self._bold_tag, self._backtick_tag):
+            self._forget_code_blocks(start.get_line(), end.get_line(), 0)
+
+    def _forget_code_blocks(self, first, last, delta):
+        """An edit replaced lines `first` to `last` and moved the lines below by
+        `delta`. Blocks it touches are measured again when next drawn, blocks
+        below it move with their lines, and the rest are unchanged."""
+        kept = []
+        for block in self._code_blocks:
+            if block[1] < first - 1:
+                kept.append(block)
+            elif block[0] > last + 1:
+                block[0] += delta
+                block[1] += delta
+                kept.append(block)
+        self._code_blocks[:] = kept
 
     def _code_block(self, tv, buf, line):
         """[first, last, right] of the code block holding the code line `line`.
 
         `right` is where the block's box ends, in buffer coordinates.
         """
-        block = self._code_block_cache.get(line)
-        if block is None:
-            last_line = buf.get_line_count() - 1
-            first = line
-            while first > 0 and self._is_code_line(buf, first - 1):
-                first -= 1
-            last = line
-            while last < last_line and self._is_code_line(buf, last + 1):
-                last += 1
-            block = [first, last, self._code_block_right(tv, buf, first, last)]
-            for n in range(first, last + 1):
-                self._code_block_cache[n] = block
+        blocks = self._code_blocks
+        at = bisect.bisect_right(blocks, line, key=lambda block: block[0])
+        if at and blocks[at - 1][1] >= line:
+            return blocks[at - 1]
+        last_line = buf.get_line_count() - 1
+        first = line
+        while first > 0 and self._is_code_line(buf, first - 1):
+            first -= 1
+        last = line
+        while last < last_line and self._is_code_line(buf, last + 1):
+            last += 1
+        block = [first, last, self._code_block_right(tv, buf, first, last)]
+        blocks.insert(bisect.bisect_right(blocks, first,
+                                          key=lambda b: b[0]), block)
         return block
 
     def _code_block_right(self, tv, buf, first, last):
-        # Code is monospace, so the widest lines are the longest ones. Measuring
-        # only those few, instead of every line, keeps GTK from laying out a
-        # long block that is mostly off screen.
-        start = buf.get_iter_at_line(first)
-        lines = buf.get_slice(start, self._line_bounds(last)[1], True).split('\n')
-        widest = heapq.nlargest(self.WIDEST_CODE_LINES, range(len(lines)),
-                                key=lambda n: cell_width(lines[n]))
+        if last - first < self.EXACT_CODE_BLOCK_LINES:
+            measured = range(first, last + 1)
+        else:
+            # A long block is mostly off screen, and measuring every line makes
+            # GTK lay all of it out. Code is monospace, so the widest lines are
+            # the longest ones: measure only those.
+            start = buf.get_iter_at_line(first)
+            lines = buf.get_slice(start, self._line_bounds(last)[1],
+                                  True).split('\n')
+            widest = heapq.nlargest(self.WIDEST_CODE_LINES, range(len(lines)),
+                                    key=lambda n: cell_width(lines[n]))
+            measured = [first + n for n in widest]
         right = tv.get_left_margin()
-        for n in widest:
-            it = buf.get_iter_at_line(first + n)
+        for line in measured:
+            it = buf.get_iter_at_line(line)
             if not it.ends_line():
                 it.forward_to_line_end()
             right = max(right, tv.get_iter_location(it).x)
@@ -2615,7 +2656,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _apply_note_font(self):
         css = f'textview {{ font-size: {self._font_size}px; }}'.encode()
         self._font_prov.load_from_data(css)
-        self._code_block_cache.clear()
+        self._code_blocks.clear()
         if hasattr(self, '_emoji_tag'):
             self._emoji_tag.set_property('scale', self._emoji_scale())
 
