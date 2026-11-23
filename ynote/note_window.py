@@ -1816,8 +1816,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         # width. For that case the selection is drawn by _draw_code_blocks()
         # instead, only as wide as each line's text.
         selection = None
-        if buf.get_has_selection():
-            start, end = buf.get_selection_bounds()
+        # get_has_selection() lags behind the marks while a selection is being
+        # cleared, so ask for the bounds, which are empty when there is none.
+        # Unpacking them after trusting get_has_selection() raised an error on
+        # every click that cleared a selection.
+        bounds = buf.get_selection_bounds()
+        if bounds:
+            start, end = bounds
             first, last = start.get_line(), end.get_line()
             if first != last and all(self._is_code_line(buf, n)
                                      for n in range(first, last + 1)):
