@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ynote: sticky notes for Linux with code blocks and always-on-top notes</title>
+<meta name="description" content="Ynote is a free, open-source sticky notes app for Linux desktops. Keep commands, code blocks, checklists, screenshots, and to-dos in small always-on-top notes beside your editor.">
+<link rel="canonical" href="https://vacu9708.github.io/ynote/">
+<!-- Search Console: put the google-site-verification meta tag here. -->
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Ynote: sticky notes for Linux for engineers">
+<meta property="og:description" content="Code blocks, checklists, images, searchable hidden notes, and always-on-top pinning in small floating notes.">
+<meta property="og:url" content="https://vacu9708.github.io/ynote/">
+<meta property="og:image" content="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/ynote-screenshot.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Ynote",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Linux (Debian and Ubuntu based, GTK 3)",
+  "description": "Sticky notes for Linux desktops with code blocks, checklists, images, searchable hidden notes, and always-on-top pinning.",
+  "url": "https://vacu9708.github.io/ynote/",
+  "downloadUrl": "https://github.com/vacu9708/ynote/releases/latest",
+  "codeRepository": "https://github.com/vacu9708/ynote",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+
+<style>
+:root {
+  --bg: #fbfaf4;
+  --surface: #ffffff;
+  --text: #1f2430;
+  --muted: #566070;
+  --accent: #8a6d00;
+  --accent-bg: #ffe94d;
+  --accent-text: #2b2400;
+  --border: #e4e0cc;
+  --code-bg: #f1efe0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16181d;
+    --surface: #1e2128;
+    --text: #e8eaf0;
+    --muted: #a3acbb;
+    --accent: #ffd84d;
+    --accent-bg: #ffd84d;
+    --accent-text: #241d00;
+    --border: #323744;
+    --code-bg: #262a33;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Ubuntu, Cantarell, sans-serif;
+}
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+header.hero { padding: 56px 0 32px; }
+h1 { font-size: clamp(2rem, 6vw, 3rem); line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.02em; }
+h2 { font-size: 1.5rem; margin: 0 0 16px; }
+.lead { font-size: 1.2rem; color: var(--muted); margin: 0 0 24px; max-width: 40em; }
+.buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn {
+  display: inline-block; padding: 10px 18px; border-radius: 999px; font-weight: 600;
+  text-decoration: none; border: 2px solid var(--accent-bg);
+}
+.btn.primary { background: var(--accent-bg); color: var(--accent-text); }
+.btn.secondary { color: var(--text); }
+.btn:hover { filter: brightness(0.95); }
+.btn:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+section { padding: 32px 0; }
+a { color: var(--accent); }
+figure { margin: 0 0 28px; }
+figure img {
+  width: 100%; height: auto; display: block;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+figcaption { color: var(--muted); font-size: 0.95rem; margin-top: 8px; }
+ul.features { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+ul.features li {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+}
+ul.features strong { display: block; }
+ul.features span { color: var(--muted); }
+pre {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; overflow-x: auto; font-size: 0.95rem;
+}
+code { font-family: "Ubuntu Mono", "DejaVu Sans Mono", ui-monospace, monospace; }
+footer { padding: 32px 0 56px; color: var(--muted); border-top: 1px solid var(--border); font-size: 0.95rem; }
+@media (min-width: 720px) {
+  ul.features { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>Ynote: sticky notes for Linux, made for engineers</h1>
+    <p class="lead">Keep commands, code snippets, debugging context, screenshots, and to-dos in small
+      floating notes beside your editor. Free and open source.</p>
+    <div class="buttons">
+      <a class="btn primary" href="https://github.com/vacu9708/ynote/releases/latest">Download the .deb</a>
+      <a class="btn secondary" href="https://github.com/vacu9708/ynote">View on GitHub</a>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <figure>
+        <img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/ynote-screenshot.png"
+             alt="Two Ynote notes: a pinned note debugging a 502 error with a command and a log screenshot, and a to-do list with a link">
+        <figcaption>A pinned debugging note and a to-do list, side by side on the desktop.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>Features</h2>
+      <ul class="features">
+        <li><strong>Always-on-top notes</strong><span>Floating windows that save automatically and can be pinned above other windows.</span></li>
+        <li><strong>Code blocks</strong><span>Copy one command at a time: double-click a line to select just that command.</span></li>
+        <li><strong>Checklists and formatting</strong><span>Checklists, bullet lists, bold text, dividers, links, emoji, and backtick formatting for paths and names.</span></li>
+        <li><strong>Images</strong><span>Paste a screenshot into a note with Ctrl+V.</span></li>
+        <li><strong>Searchable hidden notes</strong><span>Hide notes you don't need on screen. The All notes search still finds them, so they work as runbooks and cheat sheets.</span></li>
+        <li><strong>Colors, opacity, collapsing</strong><span>Seven note colors, adjustable background opacity, and collapsing a note to its title bar.</span></li>
+        <li><strong>Keyboard snapping</strong><span>Snap notes into half-screen columns with Ctrl+Super and the arrow keys.</span></li>
+        <li><strong>Local and private</strong><span>Notes are saved as plain files in <code>~/.config/ynote/</code>. Nothing is uploaded.</span></li>
+      </ul>
+    </section>
+
+    <section>
+      <figure>
+        <img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/ynote-customize.png"
+             alt="A green note at 35 percent opacity over a terminal, with the right-click popover showing color swatches and an opacity slider, and a collapsed note below it">
+        <figcaption>Color, opacity, and collapsing from the right-click popover.</figcaption>
+      </figure>
+      <figure>
+        <img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/ynote-hidden.png"
+             alt="Searching all notes lists matches in a short note and in hidden notes, beside the Hidden Notes window">
+        <figcaption>Search finds text in hidden notes too.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>Install</h2>
+      <p>Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python 3.10 or later,
+        including Wayland sessions. Download <code>ynote_&lt;version&gt;.deb</code> from the
+        <a href="https://github.com/vacu9708/ynote/releases/latest">latest release</a>, then install it from the
+        download folder. <code>apt</code> also installs what Ynote needs.</p>
+<pre><code>sudo apt install ./ynote_*.deb</code></pre>
+      <p>Open <strong>Ynote</strong> from the app grid, or run <code>ynote</code>.</p>
+    </section>
+  </main>
+
+  <footer>
+    Ynote is released under the MIT License.
+    <a href="https://github.com/vacu9708/ynote">Source code and issues on GitHub</a>.
+  </footer>
+</div>
+</body>
+</html>
