@@ -62,6 +62,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._title_drag = None
         self._snap_held = []
         self._snap_pending_move = None
+        self._normal_geometry = None
 
         self._build(data)
         self.set_title(self.title or UNTITLED_LABEL)
@@ -453,7 +454,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _snap_to(self, keys):
         win = self.get_window()
-        if win is None:
+        if win is None or self.is_maximized():
             return
         display = win.get_display()
         monitors = [display.get_monitor(i) for i in range(display.get_n_monitors())]
@@ -490,7 +491,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_title_click(self, widget, ev):
         if ev.type == Gdk.EventType.DOUBLE_BUTTON_PRESS and ev.button == 1:
             self._title_drag = None
-            self._start_title_edit()
+            self._toggle_maximize()
             return True
         if ev.button == 3:
             self._title_drag = None
@@ -505,6 +506,15 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._release_text_focus()
             return True
         return False
+
+    def _toggle_maximize(self):
+        if self.is_maximized():
+            self.unmaximize()
+            return
+        # Remember the normal rectangle: to_dict() saves it while maximized,
+        # so the next start does not open at full-screen size.
+        self._normal_geometry = self.get_position() + self.get_size()
+        self.maximize()
 
     def _on_title_motion(self, widget, ev):
         drag = getattr(self, '_title_drag', None)
@@ -2205,6 +2215,8 @@ class NoteWindow(Gtk.ApplicationWindow):
     def to_dict(self) -> dict:
         x, y = self.get_position()
         w, h = self.get_size()
+        if self.is_maximized() and self._normal_geometry:
+            x, y, w, h = self._normal_geometry
         buf  = self.tv.get_buffer()
         text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
         return dict(id=self.note_id, x=x, y=y, w=w, h=h,
