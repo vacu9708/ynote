@@ -78,6 +78,10 @@ buttons don't show:
 - `Ctrl+Super+` arrows snap a note into the left or right half of its monitor,
   move it up or down, or send it to a corner.
 - `✕` hides a note. Bring it back from `▤` or the tray icon's **Hidden Notes**.
+- The tray icon's menu lists your open notes, so you can jump to one that is
+  buried under other windows. **Bring All to Front** in it, or a middle click on
+  the icon, raises them all. If your desktop shows no tray icon, such as GNOME
+  without the AppIndicator extension, Ynote works the same without it.
 
 ## Where your notes are stored
 
