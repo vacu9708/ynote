@@ -329,8 +329,10 @@ class PostItApp(Gtk.Application):
         self.save_all()
 
     def hide_all(self):
-        for w in self.notes.values():
+        newly_hidden = [w for w in self.notes.values() if w.get_visible()]
+        for w in newly_hidden:
             w.hide()
+        self.put_first_in_hidden(newly_hidden)
         self._rebuild_indicator_menu()
         self.save_all()
 
@@ -363,6 +365,17 @@ class PostItApp(Gtk.Application):
         self._assign_sort_order(siblings)
         self.save_all()
         self._rebuild_indicator_menu()
+
+    def put_first_in_hidden(self, windows):
+        """Move just-hidden windows to the top of the hidden list.
+
+        The list runs from the most recently hidden note down, so a note
+        hidden now goes first and the rest keep their order below it.
+        """
+        first = {id(w) for w in windows}
+        rest = [(nid, w) for nid, w in self.hidden_notes() if id(w) not in first]
+        ids = {id(w): nid for nid, w in self.notes.items()}
+        self._assign_sort_order([(ids.get(id(w)), w) for w in windows] + rest)
 
     def _assign_sort_order(self, notes):
         for index, (_, note) in enumerate(notes):

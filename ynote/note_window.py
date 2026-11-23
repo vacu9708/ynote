@@ -2097,6 +2097,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _hide_note(self):
         self.hide()
+        self.app.put_first_in_hidden([self])
         self.app._rebuild_indicator_menu()
         self._queue_save()
 

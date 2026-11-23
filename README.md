@@ -115,7 +115,8 @@ keep the plain text.
 Hiding a note with `✕` takes it off the screen without deleting it. To bring it
 back, click `▤` on any note or choose **Hidden Notes** from the tray icon menu,
 then select the note and click **Restore**, or double-click it. **Restore All**
-brings back every hidden note, and `↑` / `↓` reorder the list.
+brings back every hidden note. The most recently hidden note is listed first,
+and `↑` / `↓` reorder the list.
 
 ## Where your notes are stored
 

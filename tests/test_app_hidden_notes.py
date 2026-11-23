@@ -54,6 +54,37 @@ def test_move_hidden_note_reorders_hidden_notes():
     assert app.menu_rebuilds == 1
 
 
+def test_hiding_a_note_puts_it_first_in_the_hidden_list():
+    app = make_app(
+        {
+            'a': StubNote('Alpha', sort_order=0),
+            'b': StubNote('Beta', sort_order=1),
+            'c': StubNote('Gamma', sort_order=0, visible=True),
+        }
+    )
+
+    app.notes['c']._visible = False
+    app.put_first_in_hidden([app.notes['c']])
+
+    assert [note_id for note_id, _ in app.hidden_notes()] == ['c', 'a', 'b']
+
+
+def test_hiding_several_notes_puts_them_first_in_their_order():
+    app = make_app(
+        {
+            'a': StubNote('Alpha', sort_order=0),
+            'b': StubNote('Beta', sort_order=0, visible=True),
+            'c': StubNote('Gamma', sort_order=0, visible=True),
+        }
+    )
+
+    for note_id in ('b', 'c'):
+        app.notes[note_id]._visible = False
+    app.put_first_in_hidden([app.notes['b'], app.notes['c']])
+
+    assert [note_id for note_id, _ in app.hidden_notes()] == ['b', 'c', 'a']
+
+
 def test_tray_click_creates_note_when_none_are_visible():
     app = make_app({'a': StubNote('Hidden')})
     app._notes_raised = False
