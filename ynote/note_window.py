@@ -147,17 +147,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         close_btn.connect('clicked', lambda _: self._hide_note())
         note_group.pack_start(close_btn, False, False, 0)
 
-        del_btn = Gtk.Button(label='🗑')
-        del_btn.set_tooltip_text('Delete Note')
-        del_btn.get_style_context().add_class('delete')
-        del_btn.connect('clicked', lambda _: self._confirm_delete())
-
         hidden_btn = Gtk.Button(label='▤')
         hidden_btn.set_tooltip_text('Hidden Notes')
         hidden_btn.connect('clicked',
                            lambda _: self.app.show_hidden_notes_manager(self))
         note_group.pack_start(hidden_btn, False, False, 0)
-        note_group.pack_start(del_btn, False, False, 0)
 
         # Visual/semantic split between note actions and text-editing actions.
         split = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
@@ -210,11 +204,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         row_spacer.set_hexpand(True)
         btn_row.pack_start(row_spacer, True, True, 0)
 
-        # Right-clicking any bottom-bar button opens the same menu as the title
-        # bar. Left-click behavior is unchanged because _on_bottom_bar_click()
+        # Right-clicking any bottom-bar button opens the same popover as the
+        # title bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, close_btn, hidden_btn,
-                    del_btn, self._bold_btn, backtick_btn, bullet_btn,
+                    self._bold_btn, backtick_btn, bullet_btn,
                     check_btn, code_btn, self._fontsize_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
@@ -495,7 +489,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             return True
         if ev.button == 3:
             self._title_drag = None
-            self._show_ctx_menu(ev)
+            self._show_ctx_menu(widget, ev)
             return True
         if ev.button == 1 and not self._editing:
             # Do not start a window move immediately on button-press.
@@ -538,7 +532,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _on_bottom_bar_click(self, widget, ev):
         if ev.button == 3:
-            self._show_ctx_menu(ev)
+            self._show_ctx_menu(widget, ev, above=True)
             return True
         if ev.button == 1 and widget is self._bottom_bar_box:
             self._release_text_focus()
@@ -2027,36 +2021,65 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     # ------------------------------------------------------------------ context menu
 
-    def _show_ctx_menu(self, ev):
-        menu = Gtk.Menu()
+    def _show_ctx_menu(self, widget, ev, above=False):
+        """Open the note's popover at the click position.
 
-        minimize_item = Gtk.MenuItem(label='Minimize')
-        minimize_item.connect('activate', lambda _: self.iconify())
-        menu.append(minimize_item)
+        Built on every open and destroyed when it closes, so it always shows
+        the note's current state. The bottom bar opens it upward.
+        """
+        pop = Gtk.Popover()
+        pop.set_relative_to(widget)
+        pop.set_constrain_to(Gtk.PopoverConstraint.NONE)
+        pop.set_position(Gtk.PositionType.TOP if above
+                         else Gtk.PositionType.BOTTOM)
+        rect = Gdk.Rectangle()
+        rect.x, rect.y, rect.width, rect.height = int(ev.x), int(ev.y), 1, 1
+        pop.set_pointing_to(rect)
+        pop.connect('closed', lambda p: GLib.idle_add(p.destroy))
 
-        edit_title = Gtk.MenuItem(label='Edit Title')
-        edit_title.connect('activate', lambda _: self._start_title_edit())
-        menu.append(edit_title)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        box.set_border_width(6)
+        pop.add(box)
+        self._build_ctx_menu(pop, box)
+        box.show_all()
+        pop.popup()
 
+    def _ctx_item(self, pop, box, label, callback, danger=False):
+        item = Gtk.ModelButton(text=label)
+        item.set_halign(Gtk.Align.FILL)
+        if danger:
+            item.get_style_context().add_class('danger')
+
+        def clicked(_):
+            # Close first, so a dialog or the title entry does not open under
+            # a popover that still holds the pointer and focus.
+            pop.popdown()
+            GLib.idle_add(lambda: callback() and False)
+        item.connect('clicked', clicked)
+        box.pack_start(item, False, False, 0)
+        return item
+
+    def _build_ctx_menu(self, pop, box):
+        def separator():
+            box.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL),
+                           False, False, 4)
+
+        self._ctx_item(pop, box, 'Edit Title', self._start_title_edit)
+        separator()
+        self._ctx_item(pop, box, 'Minimize', self.iconify)
         if self.app.autostart_available:
-            login_item = Gtk.CheckMenuItem(label='Start at Login')
-            login_item.set_active(self.app.autostart_enabled())
-            login_item.connect(
-                'toggled', lambda item: self.app.set_autostart(item.get_active()))
-            menu.append(login_item)
-
-        about_item = Gtk.MenuItem(label='About')
-        about_item.connect('activate', lambda _: self._show_about_dialog())
-        menu.append(about_item)
-
-        menu.append(Gtk.SeparatorMenuItem())
-
-        it = Gtk.MenuItem(label='Quit')
-        it.connect('activate', lambda _: self.app.quit_app())
-        menu.append(it)
-
-        menu.show_all()
-        menu.popup_at_pointer(ev)
+            login = Gtk.ModelButton(text='Start at Login')
+            login.set_property('role', Gtk.ButtonRole.CHECK)
+            login.set_property('active', self.app.autostart_enabled())
+            login.connect('clicked', lambda b: (
+                self.app.set_autostart(not b.get_property('active')),
+                pop.popdown()))
+            box.pack_start(login, False, False, 0)
+        self._ctx_item(pop, box, 'About', self._show_about_dialog)
+        separator()
+        self._ctx_item(pop, box, 'Delete Note', self._confirm_delete,
+                       danger=True)
+        self._ctx_item(pop, box, 'Quit', self.app.quit_app)
 
     def _show_about_dialog(self):
         dialog = Gtk.AboutDialog(transient_for=self, modal=True)

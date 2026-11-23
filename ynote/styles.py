@@ -40,8 +40,7 @@ box.hdr button.pin-top {
 }
 box.hdr button:hover, box.btmbar button:hover { background: rgba(0,0,0,0.35); }
 box.hdr button.pinned, box.btmbar button.pinned { background: rgba(0,0,0,0.55); color: #000; }
-box.btmbar button.delete { background: rgba(180,0,0,0.55); color: #fff; }
-box.btmbar button.delete:hover { background: rgba(180,0,0,0.85); }
+modelbutton.danger label { color: #C62828; }
 label.title {
     color: #444;
     font-weight: bold;
