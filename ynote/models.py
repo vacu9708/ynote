@@ -3,6 +3,9 @@ import uuid
 from .styles import DEFAULT_COLOR, PALETTE
 
 
+MIN_OPACITY = 0.0
+MAX_OPACITY = 1.0
+
 DEFAULT_NOTE = {
     'title': '',
     'text': '',
@@ -19,6 +22,7 @@ DEFAULT_NOTE = {
     'images': [],
     'font_size': 14,
     'color': DEFAULT_COLOR,
+    'opacity': MAX_OPACITY,
 }
 
 
@@ -43,6 +47,14 @@ def normalize_note_data(data, note_id_factory=None):
 
     if note.get('color') not in PALETTE:
         note['color'] = DEFAULT_COLOR
+
+    try:
+        opacity = float(note.get('opacity', MAX_OPACITY))
+    except (TypeError, ValueError):
+        opacity = MAX_OPACITY
+    if opacity != opacity:  # NaN
+        opacity = MAX_OPACITY
+    note['opacity'] = min(MAX_OPACITY, max(MIN_OPACITY, opacity))
 
     for key in ('x', 'y', 'w', 'h'):
         note[key] = int(note.get(key, DEFAULT_NOTE[key]))

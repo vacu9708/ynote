@@ -36,11 +36,22 @@ def code_background(color):
     return mix(PALETTE[color][0], CODE_MIX_TARGET, CODE_MIX_AMOUNT)
 
 
-def note_css(color):
-    """Per-window CSS that overrides the note, header, and bottom bar colors."""
+def rgba(color, alpha=1.0):
+    r, g, b = _rgb(color)
+    return f'rgba({r},{g},{b},{alpha:.2f})'
+
+
+def note_css(color, opacity=1.0):
+    """Per-window CSS for the note, header, and bottom bar backgrounds.
+
+    Only the note body takes the opacity. The two bars stay opaque so they
+    remain visible, and so do text, buttons, and images, which are not styled
+    here.
+    """
     body, bar = PALETTE[color]
-    return (f'window.note {{ background: {body}; }}\n'
-            f'box.hdr, box.btmbar {{ background: {bar}; }}\n')
+    return (f'window.note {{ background: {rgba(body, opacity)}; }}\n'
+            f'box.hdr {{ background: {bar}; }}\n'
+            f'box.btmbar {{ background: {bar}; }}\n')
 
 
 def swatch_css():
@@ -98,6 +109,11 @@ box.hdr button.pin-top {
 }
 box.hdr button:hover, box.btmbar button:hover { background: rgba(0,0,0,0.35); }
 box.hdr button.pinned, box.btmbar button.pinned { background: rgba(0,0,0,0.55); color: #000; }
+/* The popover lives inside the note's own window, so it must stay short
+   enough for a default 200x300 note. */
+popover modelbutton { min-height: 20px; padding: 1px 6px; }
+popover scale { min-height: 16px; }
+popover scale trough { min-height: 4px; }
 modelbutton.danger label { color: #C62828; }
 label.title {
     color: #444;

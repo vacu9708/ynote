@@ -16,7 +16,7 @@ from .config import (
 )
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .links import find_links
-from .models import normalize_note_data
+from .models import MAX_OPACITY, MIN_OPACITY, normalize_note_data
 from .search import find_matches
 from .snap import snap_rect
 from .styles import PALETTE, code_background, note_css
@@ -48,6 +48,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.sort_order = data['sort_order']
         self._font_size = data['font_size']
         self._color     = data['color']
+        self._opacity   = data['opacity']
         self._sid       = None
         self._editing   = False
         self._restoring   = False
@@ -81,6 +82,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _build(self, data):
         self.set_decorated(False)
+        self._setup_rgba_visual()
         self.set_resizable(True)
         self.set_skip_pager_hint(True)
         self.set_wmclass('ynote', 'Ynote')
@@ -419,6 +421,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.connect('key-release-event',  self._on_snap_key_release)
         # The window manager's close button hides the note instead of quitting.
         self.connect('delete-event', lambda *_: self._hide_note() or True)
+
+    def _setup_rgba_visual(self):
+        # Must run before the window is realized. Without a compositor the
+        # alpha would draw as black, so the opacity slider is disabled then.
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        self._rgba = visual is not None and screen.is_composited()
+        if self._rgba:
+            self.set_visual(visual)
 
     # ------------------------------------------------------------------ snapping
 
@@ -2030,23 +2041,35 @@ class NoteWindow(Gtk.ApplicationWindow):
         """Open the note's popover at the click position.
 
         Built on every open and destroyed when it closes, so it always shows
-        the note's current state. The bottom bar opens it upward.
+        the note's current state. A popover is drawn inside the note's own
+        window and cannot extend past it, so it opens upward from the bottom
+        bar only when the note is tall enough, and downward otherwise.
         """
         pop = Gtk.Popover()
-        pop.set_relative_to(widget)
         pop.set_constrain_to(Gtk.PopoverConstraint.NONE)
-        pop.set_position(Gtk.PositionType.TOP if above
-                         else Gtk.PositionType.BOTTOM)
-        rect = Gdk.Rectangle()
-        rect.x, rect.y, rect.width, rect.height = int(ev.x), int(ev.y), 1, 1
-        pop.set_pointing_to(rect)
         pop.connect('closed', lambda p: GLib.idle_add(p.destroy))
-
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        box.set_border_width(6)
+        box.set_border_width(4)
         pop.add(box)
         self._build_ctx_menu(pop, box)
         box.show_all()
+
+        x, y = int(ev.x), int(ev.y)
+        position = Gtk.PositionType.BOTTOM
+        if above:
+            _, win_y = widget.translate_coordinates(self, x, y)
+            if win_y >= pop.get_preferred_height()[1]:
+                position = Gtk.PositionType.TOP
+            else:
+                # Not enough room above: open from the title bar instead.
+                win_x, _ = widget.translate_coordinates(self, x, y)
+                widget = self._title_box
+                x, y = self.translate_coordinates(widget, win_x, 0)
+        pop.set_relative_to(widget)
+        pop.set_position(position)
+        rect = Gdk.Rectangle()
+        rect.x, rect.y, rect.width, rect.height = x, y, 1, 1
+        pop.set_pointing_to(rect)
         pop.popup()
 
     def _ctx_item(self, pop, box, label, callback, danger=False):
@@ -2067,11 +2090,13 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _build_ctx_menu(self, pop, box):
         def separator():
             box.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL),
-                           False, False, 4)
+                           False, False, 2)
 
         self._ctx_item(pop, box, 'Edit Title', self._start_title_edit)
         separator()
         self._build_color_row(box)
+        self._build_opacity_row(box)
+        separator()
         self._ctx_item(pop, box, 'Minimize', self.iconify)
         if self.app.autostart_available:
             login = Gtk.ModelButton(text='Start at Login')
@@ -2090,8 +2115,8 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _build_color_row(self, box):
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         row.set_halign(Gtk.Align.CENTER)
-        row.set_margin_top(6)
-        row.set_margin_bottom(6)
+        row.set_margin_top(3)
+        row.set_margin_bottom(3)
         swatches = {}
 
         def choose(name):
@@ -2117,6 +2142,37 @@ class NoteWindow(Gtk.ApplicationWindow):
             row.pack_start(swatch, False, False, 0)
         box.pack_start(row, False, False, 0)
 
+    def _build_opacity_row(self, box):
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        head.pack_start(Gtk.Label(label='Opacity', xalign=0), True, True, 0)
+        percent = Gtk.Label(label=f'{round(self._opacity * 100)}%')
+        head.pack_end(percent, False, False, 0)
+        scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL,
+            round(MIN_OPACITY * 100), round(MAX_OPACITY * 100), 5)
+        scale.set_draw_value(False)
+        scale.set_size_request(180, -1)
+        scale.set_value(round(self._opacity * 100))
+        scale.set_sensitive(self._rgba)
+        if not self._rgba:
+            scale.set_tooltip_text('Needs a compositing window manager')
+
+        def changed(sc):
+            value = round(sc.get_value() / 5) * 5
+            percent.set_text(f'{value}%')
+            self._set_opacity(value / 100)
+        scale.connect('value-changed', changed)
+        box.pack_start(head, False, False, 0)
+        box.pack_start(scale, False, False, 0)
+
+    def _set_opacity(self, opacity):
+        opacity = min(MAX_OPACITY, max(MIN_OPACITY, opacity))
+        if opacity == self._opacity:
+            return
+        self._opacity = opacity
+        self._apply_color()
+        self._queue_save()
+
     def _set_color(self, name):
         if name not in PALETTE or name == self._color:
             return
@@ -2133,7 +2189,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             for widget in (self, self._hdr, self._btmbar):
                 widget.get_style_context().add_provider(
                     self._color_prov, Gtk.STYLE_PROVIDER_PRIORITY_USER)
-        self._color_prov.load_from_data(note_css(self._color).encode())
+        self._color_prov.load_from_data(note_css(self._color, self._opacity).encode())
         # Code blocks follow the note color, so they stay readable on it.
         bg = code_background(self._color)
         self._code_tag.set_property('background', bg)
@@ -2248,7 +2304,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _build_font_popover(self):
         self._font_popover = Gtk.Popover(relative_to=self._fontsize_btn)
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        box.set_border_width(6)
+        box.set_border_width(4)
         self._font_popover.add(box)
 
         font_down = Gtk.Button(label='A−')
@@ -2308,7 +2364,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                     code_ranges=self._get_tag_ranges(self._code_tag),
                     backtick_ranges=self._get_tag_ranges(self._backtick_tag),
                     images=self._get_images_state(),
-                    font_size=self._font_size, color=self._color)
+                    font_size=self._font_size, color=self._color,
+                    opacity=self._opacity)
 
     def _get_tag_ranges(self, tag):
         # Jump from one toggle of the tag to the next instead of visiting every
