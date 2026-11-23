@@ -23,6 +23,7 @@ DEFAULT_NOTE = {
     'font_size': 14,
     'color': DEFAULT_COLOR,
     'opacity': MAX_OPACITY,
+    'collapsed': False,
 }
 
 
@@ -43,6 +44,7 @@ def normalize_note_data(data, note_id_factory=None):
     note['code_ranges'] = list(note.get('code_ranges') or [])
     note['backtick_ranges'] = list(note.get('backtick_ranges') or [])
     note['images'] = list(note.get('images') or [])
+    note['collapsed'] = bool(note.get('collapsed', False))
     note['font_size'] = int(note.get('font_size') or DEFAULT_NOTE['font_size'])
 
     if note.get('color') not in PALETTE:

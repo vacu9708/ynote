@@ -4,6 +4,7 @@ import sys
 import urllib.parse
 import uuid
 
+import cairo
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
@@ -23,6 +24,9 @@ from .styles import PALETTE, code_background, note_css
 
 LIST_MARKERS = (BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER)
 CHECK_MARKERS = (CHECKBOX_MARKER, CHECKED_MARKER)
+
+# Room a popover's arrow and border take around its content.
+POPOVER_PAD = 24
 
 # Pixels around a to-do box that still check it when clicked.
 CHECKBOX_HIT_MARGIN = 6
@@ -49,6 +53,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._font_size = data['font_size']
         self._color     = data['color']
         self._opacity   = data['opacity']
+        self._collapsed = data['collapsed']
+        self._expanded_height = data['h']
         self._sid       = None
         self._editing   = False
         self._restoring   = False
@@ -70,9 +76,17 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._build(data)
         self._apply_color()
         self.set_title(self.title or UNTITLED_LABEL)
-        self.set_default_size(data.get('w', 200), data.get('h', 300))
+        # A note that starts collapsed opens one pixel tall, so it never
+        # flashes at full height before the body is hidden.
+        self.set_default_size(data.get('w', 200),
+                              1 if self._collapsed else data.get('h', 300))
         self.move(data.get('x', 200), data.get('y', 200))
         self.show_all()
+        if self._collapsed:
+            self._set_body_visible(False)
+            self._lock_size(True, data.get('w', 200))
+            self.resize(data.get('w', 200), 1)
+            GLib.timeout_add(150, self._shrink_to_header)
         self.set_keep_above(self._on_top)
         self._refresh_pin()
         if data.get('hidden', False):
@@ -100,6 +114,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         hdr.get_style_context().add_class('hdr')
         self._hdr = hdr
         root.pack_start(hdr, False, False, 0)
+
+        self._collapse_btn = Gtk.Button()
+        self._collapse_btn.set_can_focus(False)
+        self._collapse_btn.get_style_context().add_class('collapse-btn')
+        self._collapse_btn.connect('clicked', lambda _: self._toggle_collapse())
+        hdr.pack_start(self._collapse_btn, False, False, 0)
+        self._refresh_collapse_state()
 
         # Top bar(header) — single-click drags, double-click edits title, right-click shows context menu.
         # The pin button is packed at the far right; the title area expands to fill the remaining space.
@@ -495,6 +516,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_window_state(self, _, event):
         if event.new_window_state & Gdk.WindowState.ICONIFIED:
             self.app._notes_raised = False
+        self._refresh_collapse_button(event.new_window_state)
 
     # ------------------------------------------------------------------ title editing
 
@@ -518,6 +540,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         return False
 
     def _toggle_maximize(self):
+        if self._collapsed:
+            return
         if self.is_maximized():
             self.unmaximize()
             return
@@ -1094,7 +1118,80 @@ class NoteWindow(Gtk.ApplicationWindow):
                 return True
         return False
 
+    # ------------------------------------------------------------------ collapse
+
+    def _set_body_visible(self, visible):
+        for widget in (self._sw, self._search_revealer, self._bottom_bar_box):
+            widget.set_visible(visible)
+
+    def _refresh_collapse_state(self):
+        self._collapse_btn.set_label('▸' if self._collapsed else '▾')
+        self._refresh_collapse_button()
+
+    # The window manager owns the size of a maximized or tiled window and
+    # ignores resizes, so such a note cannot be collapsed until it is restored.
+    _WM_FIXED = (Gdk.WindowState.MAXIMIZED | Gdk.WindowState.TILED
+                 | Gdk.WindowState.TOP_TILED | Gdk.WindowState.BOTTOM_TILED
+                 | Gdk.WindowState.LEFT_TILED | Gdk.WindowState.RIGHT_TILED)
+
+    def _refresh_collapse_button(self, state=None):
+        if state is None:
+            gdk_window = self.get_window()
+            state = gdk_window.get_state() if gdk_window else 0
+        blocked = bool(state & self._WM_FIXED) and not self._collapsed
+        self._collapse_btn.set_sensitive(not blocked)
+        if blocked:
+            tip = 'Restore the note to collapse it'
+        else:
+            tip = 'Expand' if self._collapsed else 'Collapse'
+        self._collapse_btn.set_tooltip_text(tip)
+
+    def _toggle_collapse(self):
+        if self._collapsed:
+            self._expand()
+        else:
+            self._collapse()
+        self._queue_save()
+
+    def _lock_size(self, locked, width=-1):
+        # A collapsed note cannot be resized. That keeps the window manager
+        # from tiling or maximizing it, which would stretch an empty note over
+        # the screen. The width is kept through the size request.
+        self.set_size_request(width if locked else -1, -1)
+        self.set_resizable(not locked)
+
+    def _collapse(self):
+        if self._collapsed:
+            return
+        width, height = self.get_size()
+        self._expanded_height = height
+        self._collapsed = True
+        self.set_focus(None)
+        self._set_body_visible(False)
+        self._refresh_collapse_state()
+        self._lock_size(True, width)
+        self.resize(width, 1)
+        # The first resize can be clamped to the size the hidden body still
+        # asked for, which leaves an invisible window that eats clicks. Ask
+        # again once GTK has relaid out the header alone.
+        GLib.timeout_add(150, self._shrink_to_header)
+
+    def _shrink_to_header(self):
+        if self._collapsed:
+            self.resize(self.get_size()[0], 1)
+        return False
+
+    def _expand(self):
+        if not self._collapsed:
+            return
+        self._collapsed = False
+        self._lock_size(False)
+        self._set_body_visible(True)
+        self._refresh_collapse_state()
+        self.resize(self.get_size()[0], self._expanded_height)
+
     def _toggle_search(self):
+        self._expand()
         if self._search_revealer.get_reveal_child():
             self._close_search()
         else:
@@ -1171,6 +1268,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def show_match(self, start, end):
         # Select the match and scroll to it once the window has its size.
+        self._expand()
         buf = self.tv.get_buffer()
         buf.select_range(buf.get_iter_at_offset(start), buf.get_iter_at_offset(end))
         self.tv.grab_focus()
@@ -2041,9 +2139,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         """Open the note's popover at the click position.
 
         Built on every open and destroyed when it closes, so it always shows
-        the note's current state. A popover is drawn inside the note's own
-        window and cannot extend past it, so it opens upward from the bottom
-        bar only when the note is tall enough, and downward otherwise.
+        the note's current state. A popover is drawn inside the window it is
+        attached to and cannot extend past it. When the note is too small for
+        it, which a collapsed note always is, it is attached to a transparent
+        window of its own instead.
         """
         pop = Gtk.Popover()
         pop.set_constrain_to(Gtk.PopoverConstraint.NONE)
@@ -2055,21 +2154,81 @@ class NoteWindow(Gtk.ApplicationWindow):
         box.show_all()
 
         x, y = int(ev.x), int(ev.y)
+        win_x, win_y = widget.translate_coordinates(self, x, y)
+        height = self._popover_size(pop)[1]
+        win_h = self.get_allocated_height()
         position = Gtk.PositionType.BOTTOM
-        if above:
-            _, win_y = widget.translate_coordinates(self, x, y)
-            if win_y >= pop.get_preferred_height()[1]:
-                position = Gtk.PositionType.TOP
-            else:
+        fits = False
+        if not self._collapsed:
+            if above and win_y >= height:
+                position, fits = Gtk.PositionType.TOP, True
+            elif above and height <= win_h:
                 # Not enough room above: open from the title bar instead.
-                win_x, _ = widget.translate_coordinates(self, x, y)
-                widget = self._title_box
+                widget, fits = self._title_box, True
                 x, y = self.translate_coordinates(widget, win_x, 0)
-        pop.set_relative_to(widget)
-        pop.set_position(position)
+            elif not above and win_y + height <= win_h:
+                fits = True
+        if fits:
+            pop.set_relative_to(widget)
+            pop.set_position(position)
+            self._point_popover(pop, x, y)
+            pop.popup()
+            return
+        self._show_ctx_menu_in_own_window(pop, win_x, win_y)
+
+    @staticmethod
+    def _popover_size(pop):
+        # The popover's own size request is 0 until it is attached, so size it
+        # from its content, plus the room its arrow and border take.
+        child = pop.get_child()
+        return (child.get_preferred_width()[1] + POPOVER_PAD,
+                child.get_preferred_height()[1] + POPOVER_PAD)
+
+    @staticmethod
+    def _point_popover(pop, x, y):
         rect = Gdk.Rectangle()
         rect.x, rect.y, rect.width, rect.height = x, y, 1, 1
         pop.set_pointing_to(rect)
+
+    def _show_ctx_menu_in_own_window(self, pop, win_x, win_y):
+        origin_x, origin_y = self.get_window().get_origin()[1:]
+        margin = 24
+        pop_w, pop_h = self._popover_size(pop)
+        width, height = pop_w + 2 * margin, pop_h + 2 * margin
+        host = Gtk.Window(type=Gtk.WindowType.POPUP)
+        screen = host.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual is not None and screen.is_composited():
+            host.set_visual(visual)
+            host.set_app_paintable(True)
+
+            def clear(_widget, cr):
+                cr.set_operator(cairo.Operator.CLEAR)
+                cr.paint()
+                cr.set_operator(cairo.Operator.OVER)
+                return False
+            host.connect('draw', clear)
+        host.set_default_size(width, height)
+        anchor = Gtk.Box()
+        anchor.set_size_request(1, 1)
+        fixed = Gtk.Fixed()
+        fixed.put(anchor, width // 2, margin)
+        host.add(fixed)
+        # Keep the whole popover on its monitor.
+        display = host.get_display()
+        monitor = display.get_monitor_at_point(origin_x + win_x,
+                                               origin_y + win_y)
+        area = monitor.get_workarea()
+        left = min(max(origin_x + win_x - width // 2, area.x),
+                   area.x + area.width - width)
+        top = min(max(origin_y + win_y - margin, area.y),
+                  area.y + area.height - height)
+        host.move(left, top)
+        host.show_all()
+        pop.set_relative_to(anchor)
+        pop.set_position(Gtk.PositionType.BOTTOM)
+        self._point_popover(pop, 0, 0)
+        pop.connect('closed', lambda _: GLib.idle_add(host.destroy))
         pop.popup()
 
     def _ctx_item(self, pop, box, label, callback, danger=False):
@@ -2354,6 +2513,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         w, h = self.get_size()
         if self.is_maximized() and self._normal_geometry:
             x, y, w, h = self._normal_geometry
+        if self._collapsed:
+            h = self._expanded_height
         buf  = self.tv.get_buffer()
         text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
         return dict(id=self.note_id, x=x, y=y, w=w, h=h,
@@ -2365,7 +2526,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                     backtick_ranges=self._get_tag_ranges(self._backtick_tag),
                     images=self._get_images_state(),
                     font_size=self._font_size, color=self._color,
-                    opacity=self._opacity)
+                    opacity=self._opacity, collapsed=self._collapsed)
 
     def _get_tag_ranges(self, tag):
         # Jump from one toggle of the tag to the next instead of visiting every
