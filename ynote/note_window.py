@@ -1715,6 +1715,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         last = tv.get_line_at_y(visible.y + visible.height)[0].get_line()
         left = tv.get_left_margin()
         pad = 8
+        if self._opacity < 1.0:
+            self._draw_text_backing(tv, cr, buf, visible)
         cr.set_source_rgba(self._code_rgba.red, self._code_rgba.green,
                            self._code_rgba.blue, 1.0)
         line = first
@@ -1745,6 +1747,34 @@ class NoteWindow(Gtk.ApplicationWindow):
         if self._code_selection:
             self._draw_code_selection(tv, cr, buf)
         return False
+
+    def _draw_text_backing(self, tv, cr, buf, visible):
+        # A see-through note would leave text unreadable over a dark desktop,
+        # so each row that holds text gets an opaque strip in the note color
+        # behind it. Only the visible rows are visited.
+        body = self._body_rgba
+        cr.set_source_rgba(body.red, body.green, body.blue, 1.0)
+        left = tv.get_left_margin()
+        pad = 4
+        it = tv.get_line_at_y(visible.y)[0]
+        bottom = visible.y + visible.height
+        while True:
+            start = tv.get_iter_location(it)
+            if start.y > bottom:
+                break
+            end = it.copy()
+            tv.forward_display_line_end(end)
+            # A divider's text is hidden and its line is drawn across the
+            # whole width, so it gets no strip.
+            if end.compare(it) > 0 and it.get_line() not in self._divider_lines:
+                right = tv.get_iter_location(end).x
+                wx, wy = tv.buffer_to_window_coords(
+                    Gtk.TextWindowType.WIDGET, left, start.y)
+                cr.rectangle(wx, wy, right + pad - left, start.height)
+                cr.fill()
+            offset = it.get_offset()
+            if not tv.forward_display_line(it) or it.get_offset() <= offset:
+                break
 
     def _draw_code_selection(self, tv, cr, buf):
         found, color = tv.get_style_context().lookup_color(
@@ -2448,6 +2478,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # Code blocks follow the note color, so they stay readable on it.
         self._code_rgba = Gdk.RGBA()
         self._code_rgba.parse(code_background(self._color))
+        self._body_rgba = Gdk.RGBA()
+        self._body_rgba.parse(PALETTE[self._color][0])
         self.tv.queue_draw()
 
     def _show_about_dialog(self):
