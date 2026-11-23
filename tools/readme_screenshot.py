@@ -114,7 +114,7 @@ def sample_notes():
     debug.line('curl -i $STAGING/api/orders', 'code_ranges')
     debug.image(TERMINAL_IMAGE)
     debug.line('Cause', 'bold_ranges')
-    debug.line('• The monthly report query takes ~75 s')
+    debug.line('• 🔥 The monthly report query takes ~75 s')
     debug.add('    • ').add('proxy_read_timeout', 'backtick_ranges')
     debug.line(' is 60 s')
     debug.line('---')
@@ -127,6 +127,7 @@ def sample_notes():
     today.line('    https://github.com/acme/shop/pull/482')
     today.line('☐ Update the on-call runbook')
     today.line('    ☐ add the 502 checklist')
+    today.line('☐ Ship the fix 🚀')
     today.line('---')
     today.line('1:1 at 3 pm', 'bold_ranges')
 
@@ -139,6 +140,7 @@ def sample_notes():
         out.append(builder.note(note_id, title, x=x, w=width, h=320,
                                 on_top=on_top))
         x += width + GAP
+    out[1]['color'] = 'blue'  # shows that notes can have their own color
 
     # The note searched in the second picture, placed below the first row so
     # it stays out of the first picture.
@@ -180,6 +182,19 @@ def capture(window):
     gdk_win = window.get_window()
     return Gdk.pixbuf_get_from_window(
         gdk_win, 0, 0, gdk_win.get_width(), gdk_win.get_height())
+
+
+def capture_from_screen(window):
+    """Crop a window out of the screen instead of reading its own surface.
+
+    Reading the Hidden Notes window's surface aborts inside cairo on some
+    GTK/cairo builds, while reading the screen works.
+    """
+    gdk_win = window.get_window()
+    origin_x, origin_y = gdk_win.get_origin()[1:]
+    return Gdk.pixbuf_get_from_window(
+        Gdk.get_default_root_window(), origin_x, origin_y,
+        gdk_win.get_width(), gdk_win.get_height())
 
 
 def compose(shots, output):
@@ -253,7 +268,7 @@ def main():
         return False
 
     def capture_hidden(shots, manager):
-        compose(shots + [capture(manager)], HIDDEN_OUTPUT)
+        compose(shots + [capture_from_screen(manager)], HIDDEN_OUTPUT)
         app.quit_app()
         return False
 
