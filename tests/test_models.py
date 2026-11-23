@@ -63,3 +63,23 @@ def test_normalize_note_data_casts_boolean_and_integer_fields():
     assert note['hidden'] is False
     assert note['sort_order'] == 2.5
     assert note['font_size'] == 18
+
+
+def test_color_defaults_to_yellow_and_unknown_names_fall_back():
+    assert normalize_note_data({'id': 'a'})['color'] == 'yellow'
+    assert normalize_note_data({'id': 'a', 'color': 'teal'})['color'] == 'yellow'
+    assert normalize_note_data({'id': 'a', 'color': 'blue'})['color'] == 'blue'
+
+
+def test_opacity_defaults_to_opaque_and_is_clamped():
+    assert normalize_note_data({'id': 'a'})['opacity'] == 1.0
+    assert normalize_note_data({'id': 'a', 'opacity': -1})['opacity'] == 0.0
+    assert normalize_note_data({'id': 'a', 'opacity': 5})['opacity'] == 1.0
+    assert normalize_note_data({'id': 'a', 'opacity': '0.6'})['opacity'] == 0.6
+    assert normalize_note_data({'id': 'a', 'opacity': 'x'})['opacity'] == 1.0
+    assert normalize_note_data({'id': 'a', 'opacity': None})['opacity'] == 1.0
+
+
+def test_collapsed_defaults_to_false():
+    assert normalize_note_data({'id': 'a'})['collapsed'] is False
+    assert normalize_note_data({'id': 'a', 'collapsed': 1})['collapsed'] is True
