@@ -240,3 +240,37 @@ def test_text_menu_has_no_backtick_item_even_with_a_selection():
     assert not any('Backtick' in (item.get_label() or '')
                    for item in menu.get_children()
                    if isinstance(item, Gtk.MenuItem))
+
+
+class FakeMonitor:
+    def get_workarea(self):
+        return types.SimpleNamespace(x=0, y=0, width=1000, height=800)
+
+
+class FakeDisplay:
+    def __init__(self):
+        self.monitor = FakeMonitor()
+
+    def get_n_monitors(self):
+        return 1
+
+    def get_monitor(self, index):
+        return self.monitor
+
+    def get_monitor_at_window(self, window):
+        return self.monitor
+
+
+def test_snapping_a_collapsed_note_sets_its_new_width_in_the_size_request():
+    win = make_collapsible(size=(300, 28))
+    win._collapsed = True
+    win._snap_pending_move = None
+    win.moves = []
+    win.move = lambda x, y: win.moves.append((x, y))
+    win.get_window = lambda: types.SimpleNamespace(
+        get_display=lambda: FakeDisplay())
+
+    win._snap_to(['left'])
+
+    assert win.locks == [(True, 500)]  # half of the 1000 px work area
+    assert win.resizes == [(500, 28)]
