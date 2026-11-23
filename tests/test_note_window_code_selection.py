@@ -3,6 +3,8 @@
 An unhandled exception there made Ubuntu's apport build a crash report on
 the UI thread, which froze the note for a moment on every click that cleared
 a selection."""
+import types
+
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
@@ -31,6 +33,13 @@ class FakeTextView:
     def queue_draw(self):
         pass
 
+    def get_left_margin(self):
+        return 6
+
+    def get_iter_location(self, it):
+        # A monospace column is 10 px wide.
+        return types.SimpleNamespace(x=6 + 10 * it.get_line_offset())
+
 
 def make_window():
     buf = Gtk.TextBuffer()
@@ -40,7 +49,11 @@ def make_window():
     win = NoteWindow.__new__(NoteWindow)
     win.tv = FakeTextView()
     win._code_tag = code
+    win._hl_tag = buf.create_tag('hl')
     win._code_selection = None
+    win._code_block_cache = {}
+    win._watch_code_blocks(buf)
+    win.tv.get_buffer = lambda: buf
     errors = []
 
     def on_mark_set(buf, it, mark):

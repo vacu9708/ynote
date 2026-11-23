@@ -1,6 +1,8 @@
+import heapq
 import os
 import shutil
 import sys
+import unicodedata
 import urllib.parse
 import uuid
 
@@ -41,6 +43,16 @@ TYPED_MARKERS = {
     '• [x]': CHECKED_MARKER, '• [X]': CHECKED_MARKER,
 }
 
+def cell_width(line):
+    """How many monospace cells `line` takes: a tab runs to the next stop of 8
+    and a full-width character or emoji takes two."""
+    line = line.expandtabs(8)
+    if line.isascii():
+        return len(line)
+    return sum(2 if unicodedata.east_asian_width(ch) in 'WF' else 1
+               for ch in line)
+
+
 class NoteWindow(Gtk.ApplicationWindow):
     def __init__(self, app, data: dict):
         super().__init__(application=app)
@@ -73,6 +85,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._snap_pending_move = None
         self._normal_geometry = None
         self._code_selection = None
+        # First line -> [first, last, right] of the code block holding it.
+        self._code_block_cache = {}
 
         self._build(data)
         self._apply_color()
@@ -296,6 +310,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             'link', foreground='#1A55B0', underline=Pango.Underline.SINGLE)
         self._cursor_offset = 0
         buf.connect('mark-set', self._on_mark_set)
+        self._watch_code_blocks(buf)
         self._hl_tag.set_priority(buf.get_tag_table().get_size() - 1)
         self._refresh_emoji_tags()
         for s, e in data.get('bold_ranges', []):
@@ -1702,11 +1717,62 @@ class NoteWindow(Gtk.ApplicationWindow):
         end.backward_char()
         return end.has_tag(self._code_tag)
 
+    # Measured when a block is first drawn, so a long block is not rescanned on
+    # every draw. Anything that can change a block or its width clears it.
+    WIDEST_CODE_LINES = 16
+
+    def _watch_code_blocks(self, buf):
+        def drop(*_):
+            self._code_block_cache.clear()
+
+        def drop_for_tag(_buf, tag, *_):
+            # Search highlighting is applied and cleared often and moves nothing.
+            if tag is not self._hl_tag:
+                self._code_block_cache.clear()
+
+        buf.connect('changed', drop)
+        buf.connect('apply-tag', drop_for_tag)
+        buf.connect('remove-tag', drop_for_tag)
+
+    def _code_block(self, tv, buf, line):
+        """[first, last, right] of the code block holding the code line `line`.
+
+        `right` is where the block's box ends, in buffer coordinates.
+        """
+        block = self._code_block_cache.get(line)
+        if block is None:
+            last_line = buf.get_line_count() - 1
+            first = line
+            while first > 0 and self._is_code_line(buf, first - 1):
+                first -= 1
+            last = line
+            while last < last_line and self._is_code_line(buf, last + 1):
+                last += 1
+            block = [first, last, self._code_block_right(tv, buf, first, last)]
+            for n in range(first, last + 1):
+                self._code_block_cache[n] = block
+        return block
+
+    def _code_block_right(self, tv, buf, first, last):
+        # Code is monospace, so the widest lines are the longest ones. Measuring
+        # only those few, instead of every line, keeps GTK from laying out a
+        # long block that is mostly off screen.
+        start = buf.get_iter_at_line(first)
+        lines = buf.get_slice(start, self._line_bounds(last)[1], True).split('\n')
+        widest = heapq.nlargest(self.WIDEST_CODE_LINES, range(len(lines)),
+                                key=lambda n: cell_width(lines[n]))
+        right = tv.get_left_margin()
+        for n in widest:
+            it = buf.get_iter_at_line(first + n)
+            if not it.ends_line():
+                it.forward_to_line_end()
+            right = max(right, tv.get_iter_location(it).x)
+        return right
+
     def _draw_code_blocks(self, tv, cr):
         # Each run of code lines gets one box as wide as its longest line,
         # instead of the full width of the note.
         buf = tv.get_buffer()
-        last_line = buf.get_line_count() - 1
         visible = tv.get_visible_rect()
         first = tv.get_line_at_y(visible.y)[0].get_line()
         last = tv.get_line_at_y(visible.y + visible.height)[0].get_line()
@@ -1721,19 +1787,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             if not self._is_code_line(buf, line):
                 line += 1
                 continue
-            block_start = line
-            while block_start > 0 and self._is_code_line(buf, block_start - 1):
-                block_start -= 1
-            block_end = line
-            while (block_end < last_line
-                   and self._is_code_line(buf, block_end + 1)):
-                block_end += 1
-            right = left
-            for n in range(block_start, block_end + 1):
-                it = buf.get_iter_at_line(n)
-                if not it.ends_line():
-                    it.forward_to_line_end()
-                right = max(right, tv.get_iter_location(it).x)
+            block_start, block_end, right = self._code_block(tv, buf, line)
             top, _ = tv.get_line_yrange(buf.get_iter_at_line(block_start))
             y, height = tv.get_line_yrange(buf.get_iter_at_line(block_end))
             wx, wy = tv.buffer_to_window_coords(
@@ -1824,8 +1878,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         if bounds:
             start, end = bounds
             first, last = start.get_line(), end.get_line()
-            if first != last and all(self._is_code_line(buf, n)
-                                     for n in range(first, last + 1)):
+            if (first != last and self._is_code_line(buf, first)
+                    and last <= self._code_block(self.tv, buf, first)[1]):
                 selection = (start.get_offset(), end.get_offset())
         if selection != self._code_selection:
             self._code_selection = selection
@@ -2611,6 +2665,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _apply_note_font(self):
         css = f'textview {{ font-size: {self._font_size}px; }}'.encode()
         self._font_prov.load_from_data(css)
+        self._code_block_cache.clear()
         if hasattr(self, '_emoji_tag'):
             self._emoji_tag.set_property('scale', self._emoji_scale())
 
