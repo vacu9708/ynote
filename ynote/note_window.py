@@ -2218,7 +2218,40 @@ class NoteWindow(Gtk.ApplicationWindow):
         else:
             ctx.remove_class('pinned')
 
+    @staticmethod
+    def _drop_extra_separators(menu):
+        # Removing an item can leave two separators in a row, or one at an end.
+        previous_was_separator = True
+        for item in menu.get_children():
+            is_separator = isinstance(item, Gtk.SeparatorMenuItem)
+            if is_separator and previous_was_separator:
+                menu.remove(item)
+            else:
+                previous_was_separator = is_separator
+        children = menu.get_children()
+        if children and isinstance(children[-1], Gtk.SeparatorMenuItem):
+            menu.remove(children[-1])
+
+    # GTK's own entries, as written in its source and as translated.
+    _SELECT_ALL_LABELS = {'Select _All', 'Select All',
+                          GLib.dgettext('gtk30', 'Select _All')}
+    _EMOJI_LABELS = {'Insert _Emoji', 'Insert Emoji',
+                     GLib.dgettext('gtk30', 'Insert _Emoji')}
+
     def _on_tv_popup(self, _, menu):
+        # Select All is not worth a place in the menu (Ctrl+A does it), and
+        # Insert Emoji moves up to join the other Insert items.
+        emoji_item = None
+        for item in menu.get_children():
+            if not isinstance(item, Gtk.MenuItem):
+                continue
+            if item.get_label() in self._SELECT_ALL_LABELS:
+                menu.remove(item)
+            elif item.get_label() in self._EMOJI_LABELS:
+                menu.remove(item)
+                emoji_item = item
+        self._drop_extra_separators(menu)
+
         redo_item = Gtk.MenuItem(label='Redo  (Ctrl+Y)')
         redo_item.set_sensitive(self._hist_pos < len(self._history) - 1)
         redo_item.connect('activate', lambda _: self._redo())
@@ -2236,19 +2269,18 @@ class NoteWindow(Gtk.ApplicationWindow):
         divider_item = Gtk.MenuItem(label='Insert Divider  (---)')
         divider_item.connect('activate', lambda _: self._insert_divider())
 
-        menu.prepend(Gtk.SeparatorMenuItem())
-        menu.prepend(divider_item)
-        menu.prepend(image_item)
-        if self.tv.get_buffer().get_has_selection():
-            backtick_item = Gtk.MenuItem(label='Backtick Format  (Ctrl+E)')
-            backtick_item.connect('activate',
-                                  lambda _: self._toggle_backtick_format())
-            menu.prepend(backtick_item)
+        # Each prepend goes above the last, so this reads bottom to top: the
+        # Insert items first, then Undo and Redo, then Search.
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(search_item)
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(redo_item)
         menu.prepend(undo_item)
+        menu.prepend(Gtk.SeparatorMenuItem())
+        if emoji_item is not None:
+            menu.prepend(emoji_item)
+        menu.prepend(divider_item)
+        menu.prepend(image_item)
 
         menu.show_all()
 
