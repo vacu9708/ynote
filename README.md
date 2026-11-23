@@ -2,7 +2,7 @@
 
 Engineer-friendly sticky notes for Linux desktops.
 
-![Two Ynote notes: a pinned note debugging a 502 error with a command, a log screenshot, and the cause, and a to-do list with a link](assets/ynote-screenshot.png)
+![Two Ynote notes: a pinned note debugging a 502 error with a command, a log screenshot, and the cause with a fire emoji, and a to-do list with a link and a rocket emoji](assets/ynote-screenshot.png)
 
 Ynote keeps the notes engineers want beside their editor (commands, code
 snippets, debugging context, screenshots, and to-dos) in small floating
@@ -10,6 +10,21 @@ windows on the desktop.
 
 Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
 3.10 or later, including Wayland sessions. It is developed on Ubuntu 26.04.
+
+## Features
+
+- **Floating notes** that save automatically, with always-on-top pinning
+- **Seven colors, adjustable opacity, and collapsing** a note to its title bar
+- **Hidden notes** you don't need on screen, which **All notes** search still
+  finds
+- **Code blocks** you can copy one command at a time
+- **Checklists, bullet lists, bold text, dividers, links, backtick formatting**
+  for paths and names, **emoji**, and **images**
+- **Snapping** notes into half-screen columns with the keyboard
+
+![A green note at 35% opacity over a terminal full of log lines, with its right-click popover open to show the color swatches, the opacity slider, and the font size buttons, and a collapsed note below it](assets/ynote-customize.png)
+
+![Left: a short note's search bar with All notes checked, where searching restart lists the match in that note and matching lines from the hidden notes k8s, nginx, and Deploy. Right: the Hidden Notes window listing six hidden notes with Restore and Restore All buttons](assets/ynote-hidden.png)
 
 ## Install
 
@@ -22,8 +37,8 @@ sudo apt install ./ynote_*.deb   # keep the ./
 ```
 
 Open **Ynote** from the app grid, or run `ynote`. From then on it also starts
-when you log in. To turn that off, uncheck **Start at Login** in the
-[note menu](#the-note-menu).
+when you log in. To turn that off, uncheck **Start at Login** in a note's
+right-click menu.
 
 <details>
 <summary>Upgrading from an <code>install.sh</code> install</summary>
@@ -45,103 +60,30 @@ rm ~/.local/share/applications/ynote.desktop ~/.config/autostart/ynote.desktop
 sudo apt remove ynote
 ```
 
-Your notes stay in `~/.config/ynote/`.
-
 </details>
 
-## Using Ynote
+## Good to know
 
-### Features
+Buttons show their shortcut when you hover over them. These are the things the
+buttons don't show:
 
-- [Floating notes](#the-note-window) that save automatically, with
-  always-on-top pinning, seven colors, adjustable opacity, and collapsing to
-  the title bar
-- [Hidden notes](#hidden-notes) you don't need on screen, which **All notes**
-  search still finds
-- [Code blocks](#formatting) you can copy one command at a time, plus
-  checklists, bullet lists, bold text, dividers, links, backtick formatting for
-  paths and names, and images
-- [Snapping](#other-shortcuts) notes into half-screen columns with the keyboard
-
-### The note window
-
-![A green note with its right-click popover open, beside a pink note and two notes collapsed to their title bars](assets/ynote-customize.png)
-
-| Where | Action |
-| --- | --- |
-| Title bar | Drag to move the note. Double-click to maximize it, and again to restore it. |
-| `▾` | Collapse the note to its title bar. It becomes `▸`, which expands the note again. |
-| `📌` | Keep the note above other windows. Click again to turn it off. |
-| `+` | Create a new note next to this one. |
-| `✕` | Hide the note. See [Hidden notes](#hidden-notes). |
-| `▤` | Open the list of hidden notes. |
-| Edges and corners | Drag to resize the note. |
-| Right-click the title bar or bottom bar | Open the [note menu](#the-note-menu). |
-| Right-click the text | Undo, redo, search, insert an image, or insert a divider. |
-
-A maximized or tiled note cannot be collapsed, and a collapsed note cannot be
-resized.
-
-Long lines wrap to fit the note and rewrap when you resize it. A word too long
-for one line is split, with a `-` shown at the break; the `-` is not added to
-your text. Lines in code blocks stay on one line and scroll sideways instead.
-
-### The note menu
-
-- **Edit Title** renames the note.
-- Pick one of seven colors, set the opacity, and change the font size with `A−`
-  and `A+`.
-- **Minimize**, **Start at Login** to turn login autostart on or off, and
-  **About**, which shows the version.
-- **Delete Note** deletes the note after you confirm. An empty note is deleted
-  right away.
-- **Quit** exits Ynote.
-
-Opacity makes only the note's background see-through, so text and the bars stay
-opaque. It needs a compositing desktop; without one the slider is disabled.
-
-![Two notes over a terminal full of log lines: a yellow note at 35% opacity and a blue note at 70%, with the log text showing through their backgrounds only](assets/ynote-opacity.png)
-
-### Formatting
-
-| Format | How |
-| --- | --- |
-| Bold | `Ctrl+B` or the `B` button |
-| Backtick format | Type text between backticks, like `` `this` ``, or select text and press `Ctrl+E` or the `` ` `` button. The backticks are removed and the text turns red, italic, and underlined. |
-| Bullet list | Type `- ` at the start of a line, or press `Ctrl+8` or the `•` button. `Tab` and `Shift+Tab` change the indent. `Backspace` on an empty bullet removes it. |
-| Checklist | Type `[ ] ` at the start of a line, or press `Ctrl+9` or the `☐` button. Click a box or press `Ctrl+Enter` to check it. Checked items turn gray. |
-| Link | `http` and `https` URLs become links. `Ctrl+click` one to open it. |
-| Code block | `Ctrl+Shift+C` or the `</>` button. In a code block, double-click a line to select that one command, or triple-click to select the whole block. |
-| Divider | Type `---` on its own line, or right-click and choose **Insert Divider**. `Backspace` or `Delete` removes it. |
-| Image | Paste an image with `Ctrl+V`, or right-click and choose **Insert Image**. Right-click an image to remove it. |
-
-Typed `- ` or `[ ] ` turned into a list item you didn't want? Press `Ctrl+Z` right away to
-keep the plain text.
-
-### Other shortcuts
-
-| Shortcut | Action |
-| --- | --- |
-| `Ctrl+F` | Search the note. Check **All notes** to list matches in every note, hidden ones too, and click one to open it. `Esc` closes the search bar. |
-| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
-| `Ctrl+Super+←` / `→` | Snap the note into the left or right half of its monitor. Press again at the edge to move it to the next monitor. |
-| `Ctrl+Super+↑` / `↓` | Move the note up or down by its own height |
-| `Ctrl+Super+` two arrows | Send the note to that corner |
-
-### Hidden notes
-
-A hidden note leaves the screen but is not deleted. To bring one back, open the
-list with `▤` or the tray icon menu's **Hidden Notes**, select the note, and
-click **Restore**, or double-click it. **Restore All** brings back every hidden
-note. The most recently hidden note is listed first, and `↑` / `↓` reorder the
-list.
-
-![Left: a short note's search bar with All notes checked, where searching restart lists the match in that note and matching lines from the hidden notes k8s, nginx, and Deploy. Right: the Hidden Notes window listing six hidden notes with Restore and Restore All buttons](assets/ynote-hidden.png)
+- **Right-click** the title bar or bottom bar for the note's color, opacity,
+  font size, rename, and delete. Double-click the title bar to maximize.
+- Typing `- ` or `[ ] ` at the start of a line makes a bullet or a checklist,
+  `---` alone on a line makes a divider, and `` `text` `` turns red italic.
+- Paste an image with `Ctrl+V`.
+- In a code block, double-click a line to select one command, or triple-click to
+  select the whole block. `Ctrl+click` opens a link.
+- `Ctrl+F` searches the note; check **All notes** to search every note.
+- `Ctrl+Super+` arrows snap a note into the left or right half of its monitor,
+  move it up or down, or send it to a corner.
+- `✕` hides a note. Bring it back from `▤` or the tray icon's **Hidden Notes**.
 
 ## Where your notes are stored
 
 Everything is saved locally in `~/.config/ynote/`: note text in `notes.json`
 and inserted images in `images/`. To back up your notes, copy that folder.
+Uninstalling Ynote keeps it.
 
 ## Contributing
 
