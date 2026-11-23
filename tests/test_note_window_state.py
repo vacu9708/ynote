@@ -199,3 +199,44 @@ def test_font_size_steps_by_one_and_stays_between_8_and_32():
         win._font_size = start
         win._change_font_size(delta)
         assert win._font_size == expected
+
+
+def popup_labels(items):
+    """Run the text view's right-click handler on a menu of these items."""
+    win = make_window()
+    win._history, win._hist_pos = [{}], 0
+    menu = Gtk.Menu()
+    for label in items:
+        menu.append(Gtk.SeparatorMenuItem() if label == '-'
+                    else Gtk.MenuItem(label=label))
+
+    win._on_tv_popup(None, menu)
+
+    return ['-' if isinstance(item, Gtk.SeparatorMenuItem) else item.get_label()
+            for item in menu.get_children()]
+
+
+def test_text_menu_puts_the_insert_items_first_and_drops_select_all():
+    labels = popup_labels(['_Cut', '_Copy', '_Paste', '_Delete', '-',
+                           'Select _All', '-', 'Insert _Emoji'])
+
+    assert labels == [
+        'Insert Image', 'Insert Divider  (---)', 'Insert _Emoji', '-',
+        'Undo  (Ctrl+Z)', 'Redo  (Ctrl+Y)', '-',
+        'Search  (Ctrl+F)', '-',
+        '_Cut', '_Copy', '_Paste', '_Delete']
+
+
+def test_text_menu_has_no_backtick_item_even_with_a_selection():
+    win = make_window()
+    win._history, win._hist_pos = [{}], 0
+    win.tv.get_buffer().select_range(
+        win.tv.get_buffer().get_start_iter(),
+        win.tv.get_buffer().get_end_iter())
+    menu = Gtk.Menu()
+
+    win._on_tv_popup(None, menu)
+
+    assert not any('Backtick' in (item.get_label() or '')
+                   for item in menu.get_children()
+                   if isinstance(item, Gtk.MenuItem))
