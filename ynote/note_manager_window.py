@@ -1,6 +1,6 @@
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk
+from gi.repository import Gdk, Gtk
 
 
 class HiddenNotesWindow(Gtk.Window):
@@ -11,7 +11,6 @@ class HiddenNotesWindow(Gtk.Window):
         super().__init__(application=app, title='Hidden Notes')
         self.app = app
         self._parent_note = None
-        self._tray_icon = None
         self._position_mode = None
         self._did_initial_position = False
         self.set_default_size(360, 300)
@@ -76,7 +75,6 @@ class HiddenNotesWindow(Gtk.Window):
 
     def set_parent_note(self, parent_note):
         self._parent_note = parent_note
-        self._tray_icon = None
         self._position_mode = 'note'
         self._did_initial_position = False
         if parent_note is not None:
@@ -84,9 +82,8 @@ class HiddenNotesWindow(Gtk.Window):
         else:
             self.set_transient_for(None)
 
-    def set_tray_icon(self, tray_icon):
+    def set_from_tray(self):
         self._parent_note = None
-        self._tray_icon = tray_icon
         self._position_mode = 'tray'
         self._did_initial_position = False
         self.set_transient_for(None)
@@ -118,12 +115,24 @@ class HiddenNotesWindow(Gtk.Window):
         if self._did_initial_position:
             return
 
-        if self._position_mode == 'tray' and self._move_below_tray_icon():
+        if self._position_mode == 'tray':
+            # An application indicator has no position to open under, so the
+            # window opens in the middle of the screen.
+            self._center_on_screen()
             self._did_initial_position = True
             return
 
         if self._position_mode == 'note' and self._center_on_parent_note():
             self._did_initial_position = True
+
+    def _center_on_screen(self):
+        display = Gdk.Display.get_default()
+        monitor = display.get_primary_monitor() or display.get_monitor(0)
+        area = monitor.get_workarea()
+        width, height = 360, 300
+        self.resize(width, height)
+        self.move(area.x + (area.width - width) // 2,
+                  area.y + (area.height - height) // 2)
 
     def _center_on_parent_note(self):
         parent = self._parent_note
@@ -134,29 +143,6 @@ class HiddenNotesWindow(Gtk.Window):
         pw, ph = parent.get_size()
         self.resize(360, 300)
         self.move(px + (pw - 360) // 2, py + (ph - 300) // 2)
-        return True
-
-    def _move_below_tray_icon(self):
-        tray_icon = self._tray_icon
-        if tray_icon is None:
-            return False
-
-        ok, screen, area, _orientation = tray_icon.get_geometry()
-        if not ok:
-            return False
-
-        width, height = 360, 300
-        self.resize(width, height)
-
-        x = area.x + (area.width - width) // 2
-        y = area.y + area.height
-
-        monitor = screen.get_monitor_at_point(area.x, area.y)
-        monitor_geo = screen.get_monitor_geometry(monitor)
-        x = max(monitor_geo.x, min(x, monitor_geo.x + monitor_geo.width - width))
-        y = max(monitor_geo.y, min(y, monitor_geo.y + monitor_geo.height - height))
-
-        self.move(x, y)
         return True
 
     def _selected_note_id(self):

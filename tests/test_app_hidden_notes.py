@@ -83,39 +83,3 @@ def test_hiding_several_notes_puts_them_first_in_their_order():
     app.put_first_in_hidden([app.notes['b'], app.notes['c']])
 
     assert [note_id for note_id, _ in app.hidden_notes()] == ['b', 'c', 'a']
-
-
-def test_tray_click_creates_note_when_none_are_visible():
-    app = make_app({'a': StubNote('Hidden')})
-    app._notes_raised = False
-    app.new_note_calls = 0
-    app.new_note = lambda: setattr(app, 'new_note_calls', app.new_note_calls + 1)
-
-    app._on_tray_click(None)
-
-    assert app.new_note_calls == 1
-    assert app._notes_raised is True
-
-
-def test_clipboard_owner_change_clears_rich_clipboard_state():
-    app = make_app({})
-    app._rich_clipboard = {'text': 'same text'}
-    app._rich_clipboard_owned = True
-    app._ignore_next_clipboard_owner_change = False
-
-    app._on_clipboard_owner_change()
-
-    assert app.rich_clipboard_state() is None
-
-
-def test_own_clipboard_change_keeps_rich_clipboard_state_once():
-    app = make_app({})
-    state = {'text': 'same text'}
-    app._rich_clipboard = state
-    app._rich_clipboard_owned = True
-    app._ignore_next_clipboard_owner_change = True
-
-    app._on_clipboard_owner_change()
-
-    assert app.rich_clipboard_state() == state
-    assert app._ignore_next_clipboard_owner_change is False

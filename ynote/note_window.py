@@ -528,8 +528,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         return False
 
     def _on_window_state(self, _, event):
-        if event.new_window_state & Gdk.WindowState.ICONIFIED:
-            self.app._notes_raised = False
         self._refresh_collapse_button(event.new_window_state)
 
     # ------------------------------------------------------------------ title editing
@@ -1275,6 +1273,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         m = getattr(row, 'match', None)
         if m is not None:
             self.app.reveal_match(m.note_id, m.start, m.end)
+
+    def first_text(self, chars=200):
+        """The start of the note's text, for naming an untitled note."""
+        buf = self.tv.get_buffer()
+        return buf.get_slice(buf.get_start_iter(),
+                             buf.get_iter_at_offset(chars), True)
 
     def buffer_text(self):
         buf = self.tv.get_buffer()

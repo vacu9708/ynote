@@ -8,10 +8,12 @@ code is organized, see [ARCHITECTURE.md](ARCHITECTURE.md).
 Ynote uses Python, GTK 3, and PyGObject. On Ubuntu/Debian:
 
 ```bash
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0
+sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1
 ```
 
 - `python3-gi-cairo` lets PyGObject draw with cairo, which divider lines need.
+- `gir1.2-ayatanaappindicator3-0.1` draws the tray icon. Without it Ynote runs
+  with no tray icon.
 
 To run the tests, also install:
 

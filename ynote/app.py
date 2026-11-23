@@ -8,7 +8,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
-from . import autostart
+from . import autostart, focus, tray
 from .config import (
     APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR,
     NEW_NOTE_LABEL, NOTES_FILE, SETTINGS_FILE, UNTITLED_LABEL, display_path,
@@ -31,9 +31,9 @@ class PostItApp(Gtk.Application):
             application_id=APP_ID,
             flags=Gio.ApplicationFlags.FLAGS_NONE)
         self.notes: dict[str, NoteWindow] = {}
-        self._status_icon  = None
+        self._indicator    = None
         self._tray_menu    = None
-        self._notes_raised = False
+        self._menu_rebuild_id = None
         self._hidden_notes_window = None
         self._current_note = None
         self._rich_clipboard = None
@@ -100,32 +100,20 @@ class PostItApp(Gtk.Application):
     # ------------------------------------------------------------------ tray icon
 
     def _setup_status_icon(self):
-        self._status_icon = Gtk.StatusIcon()
-        if os.path.exists(ICON_PATH):
-            self._status_icon.set_from_file(ICON_PATH)
-        else:
-            self._status_icon.set_from_icon_name('accessories-text-editor')
-        self._status_icon.set_tooltip_text('Ynote')
-        self._status_icon.set_visible(True)
-        self._status_icon.connect('activate', self._on_tray_click)
-        self._status_icon.connect('popup-menu', self._on_tray_menu)
+        module = tray.load_app_indicator()
+        if module is None:
+            print('Ynote: the application indicator library is missing, so '
+                  'there is no tray icon. Install gir1.2-ayatanaappindicator3-0.1.',
+                  file=sys.stderr)
+            return
+        self._indicator = tray.make_indicator(module, ICON_PATH)
         self._rebuild_indicator_menu()
 
-    def _on_tray_click(self, _):
-        if not any(w.get_visible() for w in self.notes.values()):
-            self.new_note()
-            self._notes_raised = True
-            return
-
-        if self._notes_raised:
-            lowerable = [w for w in self.notes.values()
-                         if w.get_visible() and not w._on_top]
-            if lowerable:
-                self._lower_all()
-                self._notes_raised = False
-        else:
+    def _show_notes(self):
+        if any(w.get_visible() for w in self.notes.values()):
             self.raise_all()
-            self._notes_raised = True
+        else:
+            self.new_note()
 
     def _focus_note(self, note):
         try:
@@ -140,66 +128,79 @@ class PostItApp(Gtk.Application):
     def _on_note_focus_in(self, note=None):
         if note is not None:
             self._current_note = note
-        self._notes_raised = True
 
     def _on_note_focus_out(self):
-        # After a short delay (so the tray click handler runs first), reset the
-        # flag if no note has focus — meaning notes went to background naturally.
-        GLib.timeout_add(200, self._check_notes_lost_focus)
+        # An untitled note shows its first line in the tray menu. Leaving a note
+        # is when that line may have changed, and the tray is opened from
+        # outside the notes, so the menu is brought up to date here.
+        if self._menu_rebuild_id is None:
+            self._menu_rebuild_id = GLib.timeout_add(
+                300, self._rebuild_after_focus_out)
 
-    def _check_notes_lost_focus(self):
-        if not any(w.is_active() for w in self.notes.values()):
-            self._notes_raised = False
+    def _rebuild_after_focus_out(self):
+        self._menu_rebuild_id = None
+        self._rebuild_indicator_menu()
         return False
 
-    def _on_tray_menu(self, icon, button, time):
-        if self._tray_menu:
-            self._tray_menu.popup(None, None,
-                                  Gtk.StatusIcon.position_menu,
-                                  icon, button, time)
-
-    def _lower_all(self):
-        for w in self.notes.values():
-            if w.get_visible() and not w._on_top:
-                gdk_win = w.get_window()
-                if gdk_win:
-                    gdk_win.lower()
-
     def _rebuild_indicator_menu(self):
-        menu = Gtk.Menu()
+        if self._indicator is None:
+            return
+        # The indicator keeps the one menu it was given and follows its items,
+        # which is quieter than handing it a new menu each time.
+        reuse = self._tray_menu is not None
+        menu = self._tray_menu if reuse else Gtk.Menu()
+        for child in menu.get_children():
+            menu.remove(child)
 
+        # Listed by the name the menu shows for each note.
         open_notes = sorted(
-            [(nid, w) for nid, w in self.notes.items() if w.get_visible()],
-            key=lambda item: (item[1].title.lower(), item[0]),
+            ((tray.note_label(w.title, w.first_text()), nid, w)
+             for nid, w in self.notes.items() if w.get_visible()),
+            key=lambda item: (item[0].lower(), item[1]),
         )
-        for nid, w in open_notes:
-            label = w.title or UNTITLED_LABEL
-            item = Gtk.MenuItem(label=label)
-            item.connect('activate', lambda _evt, note=w: (note.present(), note.grab_focus()))
-            menu.append(item)
+        hidden_count = len(self.notes) - len(open_notes)
 
+        # The notes come first under a header, so that a note is not mistaken
+        # for an action. One separator only: the desktop gives each a lot of room.
         if open_notes:
+            header = Gtk.MenuItem(label=tray.OPEN_NOTES_HEADER)
+            header.set_sensitive(False)
+            menu.append(header)
+            for label, nid, w in open_notes:
+                item = Gtk.MenuItem(label=label)
+                item.connect('activate', lambda _evt, note=w: (focus.present_now(note), note.grab_focus()))
+                menu.append(item)
             menu.append(Gtk.SeparatorMenuItem())
-
-        restore_item = Gtk.MenuItem(label='Hidden Notes')
-        restore_item.connect(
-            'activate',
-            lambda *_: self.show_hidden_notes_manager(from_tray=True))
-        menu.append(restore_item)
-        menu.append(Gtk.SeparatorMenuItem())
 
         new_note = Gtk.MenuItem(label=NEW_NOTE_LABEL)
         new_note.connect('activate', lambda _: self.new_note())
         menu.append(new_note)
 
-        menu.append(Gtk.SeparatorMenuItem())
+        # The indicator library ignores a middle click when its target item is
+        # hidden, so the item is there whenever there are notes to raise.
+        show_item = Gtk.MenuItem(label=tray.RAISE_ALL_LABEL)
+        show_item.connect('activate', lambda _: self._show_notes())
+        menu.append(show_item)
+
+        if hidden_count:
+            restore_item = Gtk.MenuItem(
+                label=tray.hidden_notes_label(hidden_count))
+            restore_item.connect(
+                'activate',
+                lambda *_: self.show_hidden_notes_manager(from_tray=True))
+            menu.append(restore_item)
 
         quit_item = Gtk.MenuItem(label='Quit')
         quit_item.connect('activate', lambda _: self.quit_app())
         menu.append(quit_item)
 
         menu.show_all()
+        show_item.set_visible(bool(open_notes))
         self._tray_menu = menu
+        if not reuse:
+            self._indicator.set_menu(menu)
+        # A middle click raises the notes without opening the menu.
+        self._indicator.set_secondary_activate_target(show_item)
         self._refresh_hidden_notes_manager()
 
     # ------------------------------------------------------------------ notes
@@ -270,6 +271,7 @@ class PostItApp(Gtk.Application):
                    ay + (ah - size[1]) // 2 + (n * 25) % 75)
         self.notes[w.note_id] = w
         w.tv.grab_focus()
+        focus.present_now(w)
         self.save_all()
         self._rebuild_indicator_menu()
 
@@ -281,9 +283,7 @@ class PostItApp(Gtk.Application):
 
     def show_note(self, note_id: str):
         if note_id in self.notes:
-            w = self.notes[note_id]
-            w.show()
-            w.present()
+            focus.present_now(self.notes[note_id])
         self._rebuild_indicator_menu()
         self.save_all()
 
@@ -389,11 +389,11 @@ class PostItApp(Gtk.Application):
             self._hidden_notes_window.connect(
                 'destroy', lambda *_: self._clear_hidden_notes_manager())
         if from_tray:
-            self._hidden_notes_window.set_tray_icon(self._status_icon)
+            self._hidden_notes_window.set_from_tray()
         else:
             self._hidden_notes_window.set_parent_note(parent_note)
         self._hidden_notes_window.refresh()
-        self._hidden_notes_window.present()
+        focus.present_now(self._hidden_notes_window)
 
     def _clear_hidden_notes_manager(self):
         self._hidden_notes_window = None

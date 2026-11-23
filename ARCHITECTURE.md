@@ -19,6 +19,7 @@ flowchart LR
         App["app.py<br/>PostItApp"]
         Window["note_window.py<br/>NoteWindow"]
         Manager["note_manager_window.py<br/>Hidden Notes window"]
+        Tray["tray.py<br/>tray indicator"]
     end
 
     subgraph Pure["Pure logic, unit-tested"]
@@ -34,6 +35,7 @@ flowchart LR
     Main -->|starts| App
     App -->|owns one per note| Window
     App -->|owns| Manager
+    App -->|uses| Tray
     App -->|uses| Storage
     App -->|uses| Images
     App -->|uses| Autostart
@@ -43,7 +45,7 @@ flowchart LR
     Window -->|uses| Links
 
     classDef node fill:#FFFFFF,stroke:#4A5568,color:#1A202C
-    class Main,App,Window,Manager,Storage,Images,Autostart,Models,Snap,Search,Links node
+    class Main,App,Window,Manager,Tray,Storage,Images,Autostart,Models,Snap,Search,Links node
     style GTK fill:#FFF4D6,stroke:#B7791F,color:#3D2C00
     style Pure fill:#E8F8EF,stroke:#2F855A,color:#143C2B
 ```
@@ -55,6 +57,7 @@ flowchart LR
 | `ynote/app.py` | Application lifecycle, tray icon, the set of notes, hidden-note order, the shared rich clipboard, and saving. |
 | `ynote/note_window.py` | One note: its window, text editing and formatting, undo/redo, search, images, snapping, and the right-click popover with color, opacity, and font size. |
 | `ynote/note_manager_window.py` | The Hidden Notes window: list, reorder, and restore hidden notes. |
+| `ynote/tray.py` | Loads the application indicator library and makes the tray indicator, which the desktop draws and positions. Also words the tray menu's labels. |
 | `ynote/models.py` | Fills defaults into saved note data, so older `notes.json` files still load. |
 | `ynote/storage.py` | Reads JSON files and writes them atomically. |
 | `ynote/images.py` | Image metadata, and finding and deleting image files no note uses. |
@@ -197,7 +200,9 @@ sequenceDiagram
 Ynote always runs on GTK's X11 backend, through XWayland on a Wayland session.
 Native Wayland does not let an app place its own windows or keep them on top,
 and Ynote depends on both for saved positions, snapping, and pinning. The tray
-icon (`Gtk.StatusIcon`) is an X11 mechanism too.
+icon is an application indicator, which the desktop draws and positions. It
+replaced `Gtk.StatusIcon`, an X11 mechanism whose menu GNOME Shell under Wayland
+opened in the middle of the screen.
 
 ## Testing
 
