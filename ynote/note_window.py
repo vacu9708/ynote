@@ -19,6 +19,7 @@ from .links import find_links
 from .models import normalize_note_data
 from .search import find_matches
 from .snap import snap_rect
+from .styles import PALETTE, code_background, note_css
 
 LIST_MARKERS = (BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER)
 CHECK_MARKERS = (CHECKBOX_MARKER, CHECKED_MARKER)
@@ -46,6 +47,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._on_top  = data['on_top']
         self.sort_order = data['sort_order']
         self._font_size = data['font_size']
+        self._color     = data['color']
         self._sid       = None
         self._editing   = False
         self._restoring   = False
@@ -65,6 +67,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._normal_geometry = None
 
         self._build(data)
+        self._apply_color()
         self.set_title(self.title or UNTITLED_LABEL)
         self.set_default_size(data.get('w', 200), data.get('h', 300))
         self.move(data.get('x', 200), data.get('y', 200))
@@ -93,6 +96,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # ---- Bars ----
         hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         hdr.get_style_context().add_class('hdr')
+        self._hdr = hdr
         root.pack_start(hdr, False, False, 0)
 
         # Top bar(header) — single-click drags, double-click edits title, right-click shows context menu.
@@ -130,6 +134,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         btn_row.get_style_context().add_class('btmbar')
+        self._btmbar = btn_row
         self._bottom_bar_box.add(btn_row)
 
         # Left group: note/window-level actions.
@@ -2066,6 +2071,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         self._ctx_item(pop, box, 'Edit Title', self._start_title_edit)
         separator()
+        self._build_color_row(box)
         self._ctx_item(pop, box, 'Minimize', self.iconify)
         if self.app.autostart_available:
             login = Gtk.ModelButton(text='Start at Login')
@@ -2080,6 +2086,58 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._ctx_item(pop, box, 'Delete Note', self._confirm_delete,
                        danger=True)
         self._ctx_item(pop, box, 'Quit', self.app.quit_app)
+
+    def _build_color_row(self, box):
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        row.set_halign(Gtk.Align.CENTER)
+        row.set_margin_top(6)
+        row.set_margin_bottom(6)
+        swatches = {}
+
+        def choose(name):
+            self._set_color(name)
+            for other, swatch in swatches.items():
+                ctx = swatch.get_style_context()
+                if other == name:
+                    ctx.add_class('selected')
+                else:
+                    ctx.remove_class('selected')
+
+        for name in PALETTE:
+            swatch = Gtk.Button()
+            swatch.set_can_focus(False)
+            swatch.set_tooltip_text(name.capitalize())
+            ctx = swatch.get_style_context()
+            ctx.add_class('swatch')
+            ctx.add_class(f'swatch-{name}')
+            if name == self._color:
+                ctx.add_class('selected')
+            swatch.connect('clicked', lambda _, n=name: choose(n))
+            swatches[name] = swatch
+            row.pack_start(swatch, False, False, 0)
+        box.pack_start(row, False, False, 0)
+
+    def _set_color(self, name):
+        if name not in PALETTE or name == self._color:
+            return
+        self._color = name
+        self._apply_color()
+        self._queue_save()
+
+    def _apply_color(self):
+        # One provider per window, at USER priority so it wins over BASE_CSS.
+        # A provider only styles the widget it is added to, so it goes on the
+        # window and on both bars.
+        if getattr(self, '_color_prov', None) is None:
+            self._color_prov = Gtk.CssProvider()
+            for widget in (self, self._hdr, self._btmbar):
+                widget.get_style_context().add_provider(
+                    self._color_prov, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+        self._color_prov.load_from_data(note_css(self._color).encode())
+        # Code blocks follow the note color, so they stay readable on it.
+        bg = code_background(self._color)
+        self._code_tag.set_property('background', bg)
+        self._code_tag.set_property('paragraph_background', bg)
 
     def _show_about_dialog(self):
         dialog = Gtk.AboutDialog(transient_for=self, modal=True)
@@ -2250,7 +2308,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                     code_ranges=self._get_tag_ranges(self._code_tag),
                     backtick_ranges=self._get_tag_ranges(self._backtick_tag),
                     images=self._get_images_state(),
-                    font_size=self._font_size)
+                    font_size=self._font_size, color=self._color)
 
     def _get_tag_ranges(self, tag):
         # Jump from one toggle of the tag to the next instead of visiting every

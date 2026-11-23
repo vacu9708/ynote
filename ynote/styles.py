@@ -1,13 +1,71 @@
-BASE_CSS = b"""
-window.note { background: #FFFF99; }
+"""Note colors and the app's GTK CSS. Pure strings, no GTK import."""
+
+# name -> (body, bar). The first entry is the default.
+PALETTE = {
+    'yellow': ('#FFFF99', '#E8D800'),
+    'orange': ('#FFD8A8', '#EFA03A'),
+    'pink': ('#FFC9DC', '#E9779F'),
+    'purple': ('#E1CCFF', '#A97BE0'),
+    'blue': ('#BFE0FF', '#5AA9E6'),
+    'green': ('#C8F0C0', '#6CC070'),
+    'gray': ('#E4E4E4', '#A8A8A8'),
+}
+DEFAULT_COLOR = 'yellow'
+
+CODE_MIX_TARGET = '#EEEEEE'
+CODE_MIX_AMOUNT = 0.7
+
+
+def _rgb(hex_color):
+    h = hex_color.lstrip('#')
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _hex(rgb):
+    return '#%02X%02X%02X' % tuple(max(0, min(255, round(c))) for c in rgb)
+
+
+def mix(color, target, amount):
+    """Move `color` `amount` (0-1) of the way toward `target`."""
+    return _hex(tuple(a + (b - a) * amount
+                      for a, b in zip(_rgb(color), _rgb(target))))
+
+
+def code_background(color):
+    """Code block background: the note body pulled toward light gray."""
+    return mix(PALETTE[color][0], CODE_MIX_TARGET, CODE_MIX_AMOUNT)
+
+
+def note_css(color):
+    """Per-window CSS that overrides the note, header, and bottom bar colors."""
+    body, bar = PALETTE[color]
+    return (f'window.note {{ background: {body}; }}\n'
+            f'box.hdr, box.btmbar {{ background: {bar}; }}\n')
+
+
+def swatch_css():
+    """Circular color swatches for the popover, generated from PALETTE."""
+    css = ('button.swatch {\n'
+           '    min-width: 18px; min-height: 18px; padding: 0;\n'
+           '    border-radius: 50%; border: 2px solid; box-shadow: none;\n'
+           '    background-image: none;\n}\n'
+           'button.swatch.selected {\n'
+           '    border-color: #333;\n'
+           '    box-shadow: inset 0 0 0 2px #FFFFFF;\n}\n')
+    for name, (body, _bar) in PALETTE.items():
+        css += (f'button.swatch-{name} {{ background-color: {body}; '
+                f'border-color: {mix(body, "#000000", 0.25)}; }}\n'
+                f'button.swatch-{name}.selected {{ border-color: #333; }}\n')
+    return css
+
+
+_BASE = """
 box.hdr {
     padding: 2px 4px 2px 2px;
-    background: #E8D800;
 }
 box.hdr > eventbox { min-height: 26px; }
 box.btmbar {
     padding: 3px 0;
-    background: #E8D800;
     min-height: 30px;
 }
 box.btmbar .tool-group {
@@ -83,3 +141,5 @@ box.search-bar list row {
     padding: 2px 4px;
 }
 """
+
+BASE_CSS = (_BASE + swatch_css()).encode()

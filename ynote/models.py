@@ -1,5 +1,7 @@
 import uuid
 
+from .styles import DEFAULT_COLOR, PALETTE
+
 
 DEFAULT_NOTE = {
     'title': '',
@@ -16,6 +18,7 @@ DEFAULT_NOTE = {
     'backtick_ranges': [],
     'images': [],
     'font_size': 14,
+    'color': DEFAULT_COLOR,
 }
 
 
@@ -37,6 +40,9 @@ def normalize_note_data(data, note_id_factory=None):
     note['backtick_ranges'] = list(note.get('backtick_ranges') or [])
     note['images'] = list(note.get('images') or [])
     note['font_size'] = int(note.get('font_size') or DEFAULT_NOTE['font_size'])
+
+    if note.get('color') not in PALETTE:
+        note['color'] = DEFAULT_COLOR
 
     for key in ('x', 'y', 'w', 'h'):
         note[key] = int(note.get(key, DEFAULT_NOTE[key]))
