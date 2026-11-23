@@ -497,6 +497,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         # the note on screen using its old, larger size, which can leave it a
         # few pixels off the slot. Move once the new size has been applied.
         self._snap_pending_move = (x, y, w, h)
+        if self._collapsed:
+            # A collapsed note keeps the width in its size request, so the
+            # new width has to go there or the resize is ignored.
+            self._lock_size(True, w)
         self.resize(w, h)
         GLib.timeout_add(300, self._apply_snap_move)
 
