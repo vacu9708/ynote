@@ -99,7 +99,7 @@ box.hdr button, box.btmbar button {
     border-radius: 10px;
     border: none;
     box-shadow: none;
-    background: rgba(0,0,0,0.18);
+    background: rgba(0,0,0,0.09);
     font-size: 12px;
     font-weight: bold;
     color: #333;
@@ -111,7 +111,7 @@ box.hdr button.pin-top {
     border-radius: 14px;
     font-size: 18px;
 }
-box.hdr button:hover, box.btmbar button:hover { background: rgba(0,0,0,0.35); }
+box.hdr button:hover, box.btmbar button:hover { background: rgba(0,0,0,0.25); }
 box.hdr button.pinned, box.btmbar button.pinned { background: rgba(0,0,0,0.55); color: #000; }
 /* The popover lives inside the note's own window, so it must stay short
    enough for a default 200x300 note. */

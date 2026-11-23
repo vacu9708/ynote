@@ -1,3 +1,5 @@
+import re
+
 from ynote.styles import (
     BASE_CSS, DEFAULT_COLOR, PALETTE, TITLE_COLOR, code_background, mix,
     note_css, swatch_css,
@@ -84,3 +86,17 @@ def test_base_css_uses_the_title_color_and_dims_an_untitled_note():
     assert f'color: {TITLE_COLOR};' in css
     assert 'label.title.untitled' in css
     assert '%(title)s' not in css
+
+
+def _alpha(rule_start, css):
+    start = css.index(rule_start)
+    return float(re.search(r'rgba\(0,0,0,([0-9.]+)\)', css[start:]).group(1))
+
+
+def test_bar_buttons_are_faint_until_hovered_and_darkest_when_pinned():
+    css = BASE_CSS.decode()
+    idle = _alpha('box.hdr button, box.btmbar button {', css)
+    hover = _alpha('box.hdr button:hover', css)
+    pinned = _alpha('box.hdr button.pinned', css)
+
+    assert idle < hover < pinned
