@@ -53,7 +53,7 @@ flowchart LR
 | `ynote.py`, `ynote/main.py` | Entry point. Handles `--version`, selects GTK's X11 backend, then runs `PostItApp`. |
 | `ynote/__init__.py` | Holds `__version__`, the only place the version is set. |
 | `ynote/app.py` | Application lifecycle, tray icon, the set of notes, hidden-note order, the shared rich clipboard, and saving. |
-| `ynote/note_window.py` | One note: its window, text editing and formatting, undo/redo, search, images, and snapping. |
+| `ynote/note_window.py` | One note: its window, text editing and formatting, undo/redo, search, images, snapping, and the right-click popover with color, opacity, and font size. |
 | `ynote/note_manager_window.py` | The Hidden Notes window: list, reorder, and restore hidden notes. |
 | `ynote/models.py` | Fills defaults into saved note data, so older `notes.json` files still load. |
 | `ynote/storage.py` | Reads JSON files and writes them atomically. |
@@ -62,7 +62,8 @@ flowchart LR
 | `ynote/search.py` | Finds a query in every note for the search bar's All notes mode. |
 | `ynote/links.py` | Finds `http` and `https` URLs in note text. |
 | `ynote/autostart.py` | The per-user login autostart entry. |
-| `ynote/config.py`, `ynote/styles.py` | Paths, constants, and GTK CSS. |
+| `ynote/config.py` | Paths and constants. |
+| `ynote/styles.py` | The note color palette and the GTK CSS built from it. It has no GTK import, so it is unit-tested. |
 
 ## Note data model
 
@@ -74,6 +75,7 @@ character ranges over plain text, not as markup:
   "id": "0b6e…", "title": "tmux", "text": "Sessions\ntmux new -s work",
   "x": 120, "y": 80, "w": 300, "h": 320,
   "on_top": false, "hidden": false, "sort_order": 0.0, "font_size": 14,
+  "color": "yellow", "opacity": 1.0, "collapsed": false,
   "bold_ranges": [[0, 8]], "code_ranges": [[9, 25]], "backtick_ranges": [],
   "images": []
 }
@@ -84,9 +86,12 @@ character ranges over plain text, not as markup:
 | `text` | The note text, including the special characters below. |
 | `bold_ranges`, `code_ranges`, `backtick_ranges` | `[start, end)` character offsets into `text`. GTK buffer offsets count characters, so they match Python string indices. |
 | `images` | `{file, original_name, offset}` per image. `offset` is where its placeholder character sits in `text`. |
-| `x`, `y`, `w`, `h` | Window position and size. |
+| `x`, `y`, `w`, `h` | Window position and size. A maximized note saves the rectangle it had before, and a collapsed note saves its expanded height as `h`. |
 | `hidden`, `sort_order` | Whether the note is hidden, and its place in the Hidden Notes list. |
 | `on_top`, `font_size` | Always-on-top and the note's font size. |
+| `color` | A name from the palette in `styles.py`. An unknown name loads as the default, `yellow`. |
+| `opacity` | Background opacity from `0.0` to `1.0`, clamped on load. Only the note body is see-through. The title bar, bottom bar, and text stay opaque. |
+| `collapsed` | Whether the note is shown as its title bar only. |
 
 Some structure lives in the text itself:
 
@@ -170,6 +175,22 @@ sequenceDiagram
   `~/.config/autostart/ynote.desktop` once per user, and only when the
   `ynote` command is installed. The Start at Login menu item adds or removes
   that file.
+
+- **Color and opacity.** Each note has one `Gtk.CssProvider` built by
+  `styles.note_css()`, attached to the window and both bars. Only the note
+  body gets an alpha, which needs an RGBA visual set before the window is
+  realized. Below 100%, `_draw_text_backing()` paints an opaque strip behind
+  each row of text so it stays readable.
+- **Code blocks.** `_draw_code_blocks()` draws one box per run of code lines,
+  as wide as the longest line. A multi-line selection inside a code block is
+  drawn there too, because GTK would paint it across the whole note.
+- **Right-click popover.** A `Gtk.Popover` is drawn inside the window it is
+  attached to, so one that does not fit the note, always the case for a
+  collapsed note, is attached to a transparent window of its own.
+- **Collapse.** A collapsed note hides everything below the title bar and
+  cannot be resized, which keeps the window manager from tiling or maximizing
+  an empty note. A maximized or tiled note cannot be collapsed, because the
+  window manager ignores its resizes.
 
 ## Why X11
 

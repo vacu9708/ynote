@@ -21,6 +21,7 @@ Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
 - Checklists, bullet lists, bold text, dividers, links, and backtick
   formatting for paths and names
 - Images pasted or inserted into notes
+- Seven note colors, adjustable opacity, and collapsing a note to its title bar
 - Snap notes into half-screen columns with the keyboard
 
 ![Left: a short note's search bar with All notes checked, where searching restart lists the match in that note and matching lines from the hidden notes k8s, nginx, and Deploy. Right: the Hidden Notes window listing six hidden notes with Restore and Restore All buttons](assets/ynote-hidden.png)
@@ -69,16 +70,19 @@ Your notes stay in `~/.config/ynote/`.
 
 | Where | Action |
 | --- | --- |
-| Title bar | Drag to move the note. Double-click to rename it. |
+| Title bar | Drag to move the note. Double-click to maximize it, and again to restore it. |
+| `▾` | Collapse the note to its title bar. It becomes `▸`; click it to expand the note again. A maximized or tiled note cannot be collapsed, and a collapsed note cannot be resized. |
 | `📌` | Keep the note above other windows. Click again to turn it off. |
 | `+` | Create a new note next to this one. |
 | `✕` | Hide the note. See [Hidden notes](#hidden-notes). |
 | `▤` | Open the list of hidden notes. |
-| `🗑` | Delete the note after you confirm. An empty note is deleted right away. |
 | `14px` | Change the note's font size with `A−` and `A+`. |
 | Edges and corners | Drag to resize the note. |
-| Right-click the title bar or bottom bar | Minimize, rename, turn **Start at Login** on or off, open About to see the version, or quit Ynote. |
+| Right-click the title bar or bottom bar | Rename the note, set its color and opacity, minimize, turn **Start at Login** on or off, open About to see the version, delete the note after you confirm (an empty note goes right away), or quit Ynote. |
 | Right-click the text | Undo, redo, search, insert an image, or insert a divider. |
+
+Opacity makes only the note's background see-through, so text and the bars stay
+opaque. It needs a compositing desktop; without one the slider is disabled.
 
 Long lines wrap to fit the note and rewrap when you resize it. A word too long
 for one line is split, with a `-` shown at the break; the `-` is not added to
