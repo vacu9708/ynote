@@ -154,6 +154,21 @@ def test_changing_which_lines_are_code_splits_the_block():
     assert win._code_block(win.tv, buf, 2)[:2] == [2, 2]
 
 
+def test_edits_are_noted_before_the_text_changes():
+    # Another handler may edit the text right after an insert, which leaves
+    # the iterator GTK passes on invalid, so the line is read before the change.
+    win, buf = make_window(['aa', 'bbb', 'c'], [0, 1, 2])
+    seen = []
+    forget = win._forget_code_blocks
+    win._forget_code_blocks = lambda *args: (
+        seen.append(buf.get_char_count()), forget(*args))
+
+    buf.insert(buf.get_iter_at_line_offset(1, 1), 'xy')
+    buf.delete(buf.get_iter_at_line(0), buf.get_iter_at_line_offset(0, 1))
+
+    assert seen == [8, 10]
+
+
 def test_cell_width_counts_tab_stops_and_full_width_characters():
     assert cell_width('abc') == 3
     assert cell_width('a\tb') == 9

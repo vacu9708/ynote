@@ -1725,18 +1725,19 @@ class NoteWindow(Gtk.ApplicationWindow):
     WIDEST_CODE_LINES = 16
 
     def _watch_code_blocks(self, buf):
-        # insert-text is handled after the text is in and delete-range before
-        # it is removed, so the line numbers read there are the ones needed.
-        buf.connect_after('insert-text', self._on_code_blocks_insert)
-        buf.connect_after('insert-child-anchor', self._on_code_blocks_anchor)
+        # All of these run before the buffer changes, so the iterators they get
+        # are still valid and the line numbers are the old ones. Reading the
+        # iterator after the change fails once another handler has edited the
+        # text, as the bullet and backtick formatting do.
+        buf.connect('insert-text', self._on_code_blocks_insert)
+        buf.connect('insert-child-anchor', self._on_code_blocks_anchor)
         buf.connect('delete-range', self._on_code_blocks_delete)
         buf.connect('apply-tag', self._on_code_blocks_tag)
         buf.connect('remove-tag', self._on_code_blocks_tag)
 
     def _on_code_blocks_insert(self, buf, where, text, _length):
-        lines = text.count('\n')
-        line = where.get_line() - lines
-        self._forget_code_blocks(line, line, lines)
+        line = where.get_line()
+        self._forget_code_blocks(line, line, text.count('\n'))
 
     def _on_code_blocks_anchor(self, buf, where, _anchor):
         self._forget_code_blocks(where.get_line(), where.get_line(), 0)
