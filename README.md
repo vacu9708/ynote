@@ -11,20 +11,6 @@ windows on the desktop.
 Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
 3.10 or later, including Wayland sessions. It is developed on Ubuntu 26.04.
 
-## Features
-
-- Floating notes that save automatically, with always-on-top pinning
-- Hide notes you don't need on screen, and find any of them again with
-  **All notes** search
-- Code blocks you can copy one command at a time
-- Checklists, bullet lists, bold text, dividers, links, and backtick
-  formatting for paths and names
-- Images pasted or inserted into notes
-- Seven note colors, adjustable opacity, and collapsing a note to its title bar
-- Snap notes into half-screen columns with the keyboard
-
-![Left: a short note's search bar with All notes checked, where searching restart lists the match in that note and matching lines from the hidden notes k8s, nginx, and Deploy. Right: the Hidden Notes window listing six hidden notes with Restore and Restore All buttons](assets/ynote-hidden.png)
-
 ## Install
 
 Download `ynote_<version>.deb` from the
@@ -36,8 +22,8 @@ sudo apt install ./ynote_*.deb   # keep the ./
 ```
 
 Open **Ynote** from the app grid, or run `ynote`. From then on it also starts
-when you log in. To turn that off, right-click a note's title bar and uncheck
-**Start at Login**.
+when you log in. To turn that off, uncheck **Start at Login** in the
+[note menu](#the-note-menu).
 
 <details>
 <summary>Upgrading from an <code>install.sh</code> install</summary>
@@ -65,6 +51,18 @@ Your notes stay in `~/.config/ynote/`.
 
 ## Using Ynote
 
+### Features
+
+- [Floating notes](#the-note-window) that save automatically, with
+  always-on-top pinning, seven colors, adjustable opacity, and collapsing to
+  the title bar
+- [Hidden notes](#hidden-notes) you don't need on screen, which **All notes**
+  search still finds
+- [Code blocks](#formatting) you can copy one command at a time, plus
+  checklists, bullet lists, bold text, dividers, links, backtick formatting for
+  paths and names, and images
+- [Snapping](#other-shortcuts) notes into half-screen columns with the keyboard
+
 ### The note window
 
 ![A green note with its right-click popover open, beside a pink note and two notes collapsed to their title bars](assets/ynote-customize.png)
@@ -72,21 +70,37 @@ Your notes stay in `~/.config/ynote/`.
 | Where | Action |
 | --- | --- |
 | Title bar | Drag to move the note. Double-click to maximize it, and again to restore it. |
-| `▾` | Collapse the note to its title bar. It becomes `▸`; click it to expand the note again. A maximized or tiled note cannot be collapsed, and a collapsed note cannot be resized. |
+| `▾` | Collapse the note to its title bar. It becomes `▸`, which expands the note again. |
 | `📌` | Keep the note above other windows. Click again to turn it off. |
 | `+` | Create a new note next to this one. |
 | `✕` | Hide the note. See [Hidden notes](#hidden-notes). |
 | `▤` | Open the list of hidden notes. |
 | Edges and corners | Drag to resize the note. |
-| Right-click the title bar or bottom bar | Rename the note, set its color, opacity, and font size, minimize, turn **Start at Login** on or off, open About to see the version, delete the note after you confirm (an empty note goes right away), or quit Ynote. |
+| Right-click the title bar or bottom bar | Open the [note menu](#the-note-menu). |
 | Right-click the text | Undo, redo, search, insert an image, or insert a divider. |
 
-Opacity makes only the note's background see-through, so text and the bars stay
-opaque. It needs a compositing desktop; without one the slider is disabled.
+A maximized or tiled note cannot be collapsed, and a collapsed note cannot be
+resized.
 
 Long lines wrap to fit the note and rewrap when you resize it. A word too long
 for one line is split, with a `-` shown at the break; the `-` is not added to
 your text. Lines in code blocks stay on one line and scroll sideways instead.
+
+### The note menu
+
+- **Edit Title** renames the note.
+- Pick one of seven colors, set the opacity, and change the font size with `A−`
+  and `A+`.
+- **Minimize**, **Start at Login** to turn login autostart on or off, and
+  **About**, which shows the version.
+- **Delete Note** deletes the note after you confirm. An empty note is deleted
+  right away.
+- **Quit** exits Ynote.
+
+Opacity makes only the note's background see-through, so text and the bars stay
+opaque. It needs a compositing desktop; without one the slider is disabled.
+
+![Two notes over a terminal full of log lines: a yellow note at 35% opacity and a blue note at 70%, with the log text showing through their backgrounds only](assets/ynote-opacity.png)
 
 ### Formatting
 
@@ -116,11 +130,13 @@ keep the plain text.
 
 ### Hidden notes
 
-Hiding a note with `✕` takes it off the screen without deleting it. To bring it
-back, click `▤` on any note or choose **Hidden Notes** from the tray icon menu,
-then select the note and click **Restore**, or double-click it. **Restore All**
-brings back every hidden note. The most recently hidden note is listed first,
-and `↑` / `↓` reorder the list.
+A hidden note leaves the screen but is not deleted. To bring one back, open the
+list with `▤` or the tray icon menu's **Hidden Notes**, select the note, and
+click **Restore**, or double-click it. **Restore All** brings back every hidden
+note. The most recently hidden note is listed first, and `↑` / `↓` reorder the
+list.
+
+![Left: a short note's search bar with All notes checked, where searching restart lists the match in that note and matching lines from the hidden notes k8s, nginx, and Deploy. Right: the Hidden Notes window listing six hidden notes with Restore and Restore All buttons](assets/ynote-hidden.png)
 
 ## Where your notes are stored
 

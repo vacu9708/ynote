@@ -177,10 +177,10 @@ sequenceDiagram
   that file.
 
 - **Color and opacity.** Each note has one `Gtk.CssProvider` built by
-  `styles.note_css()`, attached to the window and both bars. Only the note
-  body gets an alpha, which needs an RGBA visual set before the window is
-  realized. Below 100%, `_draw_text_backing()` paints an opaque strip behind
-  each row of text so it stays readable.
+  `styles.note_css()`, attached to the window and both bars. The alpha needs
+  an RGBA visual set before the window is realized. Below 100%,
+  `_draw_text_backing()` paints an opaque strip behind each row of text so it
+  stays readable.
 - **Code blocks.** `_draw_code_blocks()` draws one box per run of code lines,
   as wide as the longest line. A multi-line selection inside a code block is
   drawn there too, because GTK would paint it across the whole note.
