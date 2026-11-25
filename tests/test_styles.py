@@ -1,7 +1,8 @@
 import re
 
 from ynote.styles import (
-    BASE_CSS, DEFAULT_COLOR, PALETTE, TITLE_COLOR, code_background, mix,
+    BASE_CSS, DEFAULT_COLOR, PALETTE, TITLE_COLOR, code_background,
+    inline_code_background, mix,
     note_css, swatch_css,
 )
 
@@ -20,10 +21,18 @@ def test_mix_moves_a_color_toward_a_target():
     assert mix('#000000', '#646464', 0.5) == '#323232'
 
 
-def test_code_background_is_the_body_pulled_70_percent_toward_light_gray():
-    # 0xFF + (0xEE - 0xFF) * 0.7 = 0xF3, 0x99 + (0xEE - 0x99) * 0.7 = 0xD4
-    assert code_background('yellow') == '#F3F3D4'
+def test_code_background_is_the_body_pulled_75_percent_toward_light_gray():
+    # 0xFF + (0xF2 - 0xFF) * 0.75 = 0xF5, 0x99 + (0xF2 - 0x99) * 0.75 = 0xDC
+    assert code_background('yellow') == '#F5F5DC'
     assert code_background('blue') != code_background('yellow')
+
+
+def test_inline_code_is_darker_than_the_note_and_a_code_block_lighter():
+    for name, (body, _bar) in PALETTE.items():
+        def lightness(color):
+            return sum(int(color[i:i + 2], 16) for i in (1, 3, 5))
+        assert (lightness(inline_code_background(name)) < lightness(body)
+                < lightness(code_background(name))), name
 
 
 def test_note_css_gives_only_the_body_the_alpha_and_keeps_the_bars_opaque():

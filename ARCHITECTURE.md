@@ -162,12 +162,14 @@ sequenceDiagram
 2. `PostItApp.do_startup()` creates the config directories, sets up login
    autostart on an installed app's first run, loads the CSS, and creates the
    tray icon.
-3. `_load()` creates a `NoteWindow` for each saved note, or one empty note
-   when there are none, then deletes image files no saved note uses.
-   If `notes.json` exists but cannot be read, it is renamed to
-   `notes.json.broken-<time>` instead of being overwritten, the user is
-   warned, and image cleanup is skipped for that run so the kept notes'
-   images survive.
+3. `_load()` copies `notes.json` to `notes.json.bak`, creates a `NoteWindow`
+   for each saved note, or one empty note when there are none, then deletes
+   image files no saved note uses. If `notes.json` exists but cannot be
+   read, it is renamed to `notes.json.broken-<time>` instead of being
+   overwritten, the user is warned, and image cleanup is skipped for that run
+   so the kept notes' images survive. A note whose window fails to open is
+   kept as it was read and saved back unchanged, with image cleanup skipped
+   and a warning, so a bug in opening notes never deletes them.
 
 ## Other mechanisms
 
@@ -185,16 +187,62 @@ sequenceDiagram
   an RGBA visual set before the window is realized. Below 100%,
   `_draw_text_backing()` paints an opaque strip behind each row of text so it
   stays readable.
+- **Line spacing.** Every line has the same spacing, set on the text view,
+  whatever its format. Its total is `LINE_SPACING`, or a pixel more where the
+  fonts need it, and how it divides above and below is worked out from them so
+  that an inline code box sits in the middle of its line. Code boxes may reach into it. Checklist boxes are drawn
+  at `CHECKBOX_SCALE`, since the fallback font they come from is a little
+  taller than the note's.
+- **Even lines.** A line is as tall as the tallest font that draws it, and
+  the note's font lacks most scripts other than Latin, so a line of Hangul,
+  Japanese, Arabic, or Thai is drawn in whichever font this computer falls back
+  to, and its height differs from a line of Latin. In a note with such text,
+  `_even_lines()` lays out each line whole in the note's font, as it is in the
+  note, so Pango picks the same fonts, and reads its ascent and descent the
+  way GTK rounds them. `even_slots()` then gives every line the spacing that
+  puts its baseline the same distance from the top and bottom of the room it
+  takes: the most any line needs, and no less than a Latin line has. A font
+  with room of its own takes the place of the spacing, so lines are no
+  further apart than they have to be. Nothing in it names a font or a script.
+  Emoji, and the dingbats drawn like them, keep their own height; headings,
+  code, and dividers are spaced on their own. Notes without non-Latin text are
+  unchanged.
+- **Code boxes.** Code blocks and inline code share one box, as in CSS: the
+  font's line area plus padding, `CODE_PAD` on the sides and `CODE_PAD_Y`
+  above and below, so the padding is the same on all sides and does not depend
+  on which letters are inside. They have a light gray background for a block
+  and a darker one for inline code. A code block also keeps
+  `CODE_BLOCK_MARGIN` from the lines around it. `_refresh_code_spacing()`
+  scales code text so its lowercase letters are as tall as the body's, and
+  works out the spacing from the fonts.
 - **Code blocks.** `_draw_code_blocks()` draws one outlined box per run of code
   lines, as wide as the longest line. A multi-line selection inside a code
   block is drawn there too, because GTK would paint it across the whole note.
-- **Inline code.** A text tag cannot have an outline, so the tag only sets the
-  font and color, and `_draw_inline_code()` draws the outlined box behind each
-  display line of every `backtick_ranges` range. The ranges keep the name of
-  the backticks that typed them, which are removed once the text is styled.
-- **Headings.** `heading_ranges` cover whole lines and style them with a larger
-  bold serif face. Choosing Heading on an empty line styles the next text typed
-  there, tracked in `_heading_line`.
+  The room inside the box is line spacing on the code tag.
+- **Inline code.** A text tag cannot have an outline or padding, so the tag
+  only sets the font and color, and `_draw_inline_code()` draws the outlined
+  box around the letters of each display line of every `backtick_ranges`
+  range. The box is placed from the code character's own rectangle, whose
+  top is the top of the code font, raised with it, not the top of the row.
+  The ranges keep the name of the backticks that typed them, which are
+  removed once the text is styled.
+- **Room around code.** Like dividers, `_apply_code_margins()` derives tags
+  from the text after every change: spacing above the first and below the last
+  line of a code block, an indent before inline code that starts a line, and
+  letter spacing on a space beside inline code, so the padding does not cover
+  the words next to it. A character other than a space is left alone, since
+  letter spacing would also open a gap on its far side, and the box gives up
+  its padding on that side instead. It runs once the edit is done, because a
+  line typed into a code block gets its tag after the buffer reports the
+  change.
+- **Formats at the cursor.** Bold, inline code, and heading are each on or off
+  at the cursor, shown on the B, H, and `</>` buttons. `_sync_format_state()`
+  takes them from the text the cursor is attached to whenever it moves, also
+  when deleting text or undoing moves it, a button or shortcut toggles one, typed text gets the ones that are on, and
+  Enter turns them all off. `heading_ranges` cover whole lines, so on an empty
+  line Heading applies to the text typed there next. A heading is already
+  bold, so in one B is off and disabled, and making a line a heading removes
+  its bold.
 - **Right-click popover.** A `Gtk.Popover` is drawn inside the window it is
   attached to, so one that does not fit the note, always the case for a
   collapsed note, is attached to a transparent window of its own.

@@ -25,8 +25,9 @@ from .models import MAX_OPACITY, MIN_OPACITY, normalize_note_data
 from .search import find_matches
 from .snap import snap_rect
 from .styles import (
-    CODE_FONT, CODE_OUTLINE, CODE_RADIUS, CODE_TEXT_COLOR, HEADING_FONT,
-    HEADING_SCALE, PALETTE, code_background, note_css,
+    BODY_FONT, CHECKBOX_SCALE, CODE_BLOCK_MARGIN, CODE_FONT, CODE_OUTLINE,
+    CODE_PAD, CODE_PAD_Y, CODE_RADIUS, CODE_TEXT_COLOR, HEADING_FONT, HEADING_SCALE, INLINE_CODE_RISE,
+    LINE_SPACING, PALETTE, code_background, inline_code_background, note_css,
 )
 
 
@@ -47,6 +48,49 @@ def outlined_box(cr, fill, x, y, width, height):
     cr.set_line_width(1)
     cr.stroke()
 
+
+# Space between the note's edge and its text.
+TEXT_MARGIN = 6
+
+# Characters below this are Latin, which the note's font has, so they never
+# need another font. Everything from here on is looked up.
+FIRST_NON_LATIN = 0x250
+
+
+def even_slots(metrics, base, spacing):
+    """The spacing above and below each line that makes every line the same.
+
+    A line is as tall as the tallest font in it. The note's font may lack some
+    of its characters, which another, taller font then draws, and that line is
+    taller than the rest. `metrics` has the (ascent, descent) of the tallest
+    font in each line. `base` is the same for the note's own font, and
+    `spacing` the (above, below) a line of it has. Every line gets the spacing
+    that puts its baseline the same distance from the top and from the bottom
+    of the room it takes: the most any line needs, and no less than a line of
+    the note's font has. That way a font with more room of its own takes the
+    place of the spacing, and the lines are no further apart than that.
+    """
+    slot_ascent = max([base[0] + spacing[0]] + [a for a, _ in metrics])
+    slot_descent = max([base[1] + spacing[1]] + [d for _, d in metrics])
+    return [(max(0, math.floor(slot_ascent - a + 0.5)),
+             max(0, math.floor(slot_descent - d + 0.5)))
+            for a, d in metrics]
+
+
+def changed_end(old, new):
+    """Offset in new where the text that differs from old ends.
+
+    Undo puts the cursor where the edit was: at the start of text that came
+    out, or after text that went back in.
+    """
+    limit = min(len(old), len(new))
+    start = 0
+    while start < limit and old[start] == new[start]:
+        start += 1
+    end = 0
+    while end < limit - start and old[-1 - end] == new[-1 - end]:
+        end += 1
+    return len(new) - end
 
 LIST_MARKERS = (BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER)
 CHECK_MARKERS = (CHECKBOX_MARKER, CHECKED_MARKER)
@@ -103,6 +147,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                              'images': data.get('images', [])}]
         self._hist_pos  = 0
         self._bold_active = False
+        self._code_active = False
+        self._heading_active = False
         self._pending_format_inserts = []
         self._image_widgets = []
         self._title_drag = None
@@ -244,11 +290,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._heading_btn.connect('clicked', lambda _: self._toggle_heading())
         text_group.pack_start(self._heading_btn, False, False, 0)
 
-        inline_code_btn = Gtk.Button(label='</>')
-        inline_code_btn.set_tooltip_text('Inline code  (Ctrl+E)')
-        inline_code_btn.set_can_focus(False)
-        inline_code_btn.connect('clicked', lambda _: self._toggle_inline_code())
-        text_group.pack_start(inline_code_btn, False, False, 0)
+        self._inline_code_btn = Gtk.Button(label='</>')
+        self._inline_code_btn.set_tooltip_text('Inline code  (Ctrl+E)')
+        self._inline_code_btn.set_can_focus(False)
+        self._inline_code_btn.connect(
+            'clicked', lambda _: self._toggle_inline_code())
+        text_group.pack_start(self._inline_code_btn, False, False, 0)
 
         bullet_btn = Gtk.Button(label='•')
         bullet_btn.set_tooltip_text('Bullet list  (Ctrl+8)')
@@ -265,6 +312,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         # The inline code icon inside a box, as Slack draws a code block.
         code_btn = Gtk.Button()
         code_icon = Gtk.Label(label='</>')
+        # Hug the text, so the box stays inside the button's rounded ends.
+        code_icon.set_halign(Gtk.Align.CENTER)
+        code_icon.set_valign(Gtk.Align.CENTER)
         code_icon.get_style_context().add_class('boxed')
         code_btn.add(code_icon)
         code_btn.set_tooltip_text('Code block  (Ctrl+Shift+C)')
@@ -280,7 +330,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # title bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, close_btn, hidden_btn,
-                    self._bold_btn, self._heading_btn, inline_code_btn,
+                    self._bold_btn, self._heading_btn, self._inline_code_btn,
                     bullet_btn, check_btn, code_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
@@ -295,8 +345,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         # Soft-wrap prose to the note width so narrow notes stay readable.
         # Code lines opt out through the code tag's wrap mode.
         self.tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self.tv.set_left_margin(6)
-        self.tv.set_right_margin(6)
+        self.tv.set_left_margin(TEXT_MARGIN)
+        self.tv.set_right_margin(TEXT_MARGIN)
+        # The same room between every two lines, also the rows of a wrapped
+        # line. A code block's lines set their own, inside its box.
+        # Divided above and below by _refresh_code_spacing().
         self.tv.set_top_margin(4)
         self.tv.set_bottom_margin(4)
         sw.add(self.tv)
@@ -310,6 +363,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf.connect('insert-text', self._on_buf_insert_text)
         buf.connect_after('insert-text', self._after_buf_insert_text)
         buf.connect('changed', self._on_buf_changed)
+        # Deleting text moves the cursor without a mark-set, as Backspace does
+        # when it joins a line to the one above, so the formats are taken from
+        # the cursor again afterwards.
+        buf.connect_after('delete-range',
+                          lambda *_: self._sync_format_state())
         self._hl_tag   = buf.create_tag('search-hl',
                                         background='#FFCC00', foreground='#000')
         self._bold_tag = buf.create_tag('bold', weight=Pango.Weight.BOLD)
@@ -320,18 +378,35 @@ class NoteWindow(Gtk.ApplicationWindow):
                                         # so a wrap is never mistaken for a
                                         # line break. Long ones scroll.
                                         wrap_mode=Gtk.WrapMode.NONE,
-                                        left_margin=8,
-                                        right_margin=8,
-                                        pixels_above_lines=2,
-                                        pixels_below_lines=2)
+                                        # The box starts at the note's text
+                                        # margin, so its text sits CODE_PAD in.
+                                        left_margin=TEXT_MARGIN + CODE_PAD,
+                                        right_margin=CODE_PAD)
         # The box behind inline code is drawn by _draw_inline_code(), since a
         # text tag cannot have an outline.
         self._backtick_tag = buf.create_tag(
-            'backtick', family=CODE_FONT, foreground=CODE_TEXT_COLOR)
+            'backtick', family=CODE_FONT, foreground=CODE_TEXT_COLOR,
+            rise=INLINE_CODE_RISE * Pango.SCALE)
+        # Derived from the text like dividers, so none of these are saved.
+        # The first and last line of a code block keep the room around the
+        # block. Inline code that starts a line is indented, and a space beside
+        # inline code is widened, so the padding of its box does not cover the
+        # words next to it.
+        self._code_top_tag = buf.create_tag('code-top')
+        self._code_bottom_tag = buf.create_tag('code-bottom')
+        self._inline_indent_tag = buf.create_tag(
+            'inline-indent', indent=CODE_PAD)
+        # Derived too: the spacing of a line, in a note whose lines differ in
+        # height. One tag for each pair of spacings. See _even_lines().
+        self._slot_tags = {}
+        self._inline_space_tag = buf.create_tag(
+            'inline-space', letter_spacing=CODE_PAD * Pango.SCALE)
+        self._refresh_code_spacing()
         self._heading_tag = buf.create_tag(
             'heading', family=HEADING_FONT, weight=Pango.Weight.BOLD,
             scale=HEADING_SCALE)
         self._emoji_tag = buf.create_tag('emoji', scale=self._emoji_scale())
+        self._checkbox_tag = buf.create_tag('checkbox', scale=CHECKBOX_SCALE)
         # A line that is exactly DIVIDER_TEXT is drawn as a horizontal rule:
         # the dashes are hidden and _draw_dividers() paints the line.
         self._divider_tag = buf.create_tag(
@@ -345,7 +420,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._done_tag = buf.create_tag(
             'done', foreground='#77775A')
         self._link_tag = buf.create_tag(
-            'link', foreground='#1A55B0', underline=Pango.Underline.SINGLE)
+            # Below the tails of the letters: the code font's own underline
+            # runs through them.
+            'link', foreground='#1A55B0', underline=Pango.Underline.LOW)
         self._cursor_offset = 0
         buf.connect('mark-set', self._on_mark_set)
         self._watch_code_blocks(buf)
@@ -453,8 +530,9 @@ class NoteWindow(Gtk.ApplicationWindow):
                       0, lambda *_: self._toggle_code_block() or True)
         accel.connect(Gdk.KEY_z, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._undo() or True)
-        accel.connect(Gdk.KEY_y, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._redo() or True)
+        accel.connect(Gdk.KEY_z,
+                      Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK,
+                      0, lambda *_: self._redo() or True)
 
         # Edge strips on all four sides. The outer 14px of each strip resizes
         # the matching corner, the rest resizes the edge.
@@ -1370,31 +1448,34 @@ class NoteWindow(Gtk.ApplicationWindow):
         if self._restoring:
             return
         self._pending_format_inserts.append(
-            (self._bold_active,
-             self._iter_has_tag_context(location, self._code_tag),
-             self._iter_has_tag_context(location, self._heading_tag)))
+            (self._bold_active, self._code_active, self._heading_active,
+             self._iter_has_tag_context(location, self._code_tag)))
 
     def _after_buf_insert_text(self, buf, location, text, length):
         if self._restoring:
             return
-        apply_bold, apply_code, in_heading = (
+        bold, inline_code, heading, apply_code = (
             self._pending_format_inserts.pop(0)
-            if self._pending_format_inserts else (False, False, False))
+            if self._pending_format_inserts else (False, False, False, False))
         if not text:
             return
 
         end = location.copy()
         start = end.copy()
         start.backward_chars(len(text))
-        if apply_bold:
-            self._apply_tag_to_non_newline_chars(buf, self._bold_tag, start, end)
-        # Typing inside or at the end of a heading stays in it, and so does the
-        # first text typed on an empty line after choosing Heading. A paste of
-        # several lines is not one heading.
-        if '\n' not in text and (
-                in_heading or self._heading_line == start.get_line()):
-            buf.apply_tag(self._heading_tag, start, end)
-        self._set_heading_line(None)
+        # Enter starts the new line with every format off, as in Slack. Other
+        # text takes the formats that are on. A paste of several lines is not
+        # one heading.
+        new_line = text.startswith('\n')
+        if not new_line:
+            if bold and not heading:
+                self._apply_tag_to_non_newline_chars(
+                    buf, self._bold_tag, start, end)
+            if inline_code:
+                self._apply_tag_to_non_newline_chars(
+                    buf, self._backtick_tag, start, end)
+            if heading and '\n' not in text:
+                buf.apply_tag(self._heading_tag, start, end)
         if apply_code and text != '\n':
             for line in range(start.get_line(), end.get_line() + 1):
                 self._tag_code_line(line)
@@ -1402,6 +1483,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         if '`' in text:
             self._format_backtick_wrapped_text()
         self._refresh_emoji_tags()
+        if new_line:
+            self._bold_active = self._code_active = False
+            self._heading_active = False
+            self._refresh_format_buttons()
 
     def _apply_tag_to_non_newline_chars(self, buf, tag, start, end):
         it = start.copy()
@@ -1464,6 +1549,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._restoring = True
         self._remove_all_image_widgets()
         buf = self.tv.get_buffer()
+        old_text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        old_cursor = buf.get_iter_at_mark(buf.get_insert()).get_offset()
+        scroll = self._sw.get_vadjustment().get_value()
         buf.set_text(state['text'])
         buf.remove_tag(self._bold_tag, buf.get_start_iter(), buf.get_end_iter())
         buf.remove_tag(
@@ -1491,7 +1579,25 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._refresh_emoji_tags()
         self._refresh_line_styles()
         self._restoring = False
+        # Setting the text moved the cursor to the end and the view with it.
+        # Put the cursor where the edit was, and the view back where it was,
+        # moving it only if the cursor is off screen.
+        new_text = state['text']
+        offset = (old_cursor if old_text == new_text
+                  else changed_end(old_text, new_text))
+        buf.place_cursor(buf.get_iter_at_offset(min(offset, len(new_text))))
+        GLib.idle_add(self._restore_scroll, scroll,
+                      priority=GLib.PRIORITY_LOW)
+        self._sync_format_state()
         self._queue_save()
+
+    def _restore_scroll(self, scroll):
+        # After the view has laid out the new text, which changes its height.
+        adj = self._sw.get_vadjustment()
+        adj.set_value(min(scroll, max(0, adj.get_upper() - adj.get_page_size())))
+        buf = self.tv.get_buffer()
+        self.tv.scroll_to_mark(buf.get_insert(), 0.05, False, 0, 0)
+        return False
 
     def _undo(self):
         # Flush any pending snapshot first
@@ -1784,7 +1890,166 @@ class NoteWindow(Gtk.ApplicationWindow):
         for link_start, link_end, _ in find_links(text):
             buf.apply_tag(self._link_tag, buf.get_iter_at_offset(link_start),
                           buf.get_iter_at_offset(link_end))
+        self._queue_code_margins()
         self.tv.queue_draw()
+
+    _margins_sid = None
+
+    def _queue_code_margins(self):
+        # A line typed into a code block, or text styled as code, gets its tag
+        # after the buffer reports the change, so the room is worked out once
+        # the edit is done, still before the next frame.
+        if self._margins_sid is None:
+            self._margins_sid = GLib.idle_add(
+                self._apply_code_margins, priority=GLib.PRIORITY_HIGH_IDLE)
+
+    def _apply_code_margins(self):
+        self._margins_sid = None
+        buf = self.tv.get_buffer()
+        start, end = buf.get_start_iter(), buf.get_end_iter()
+        for tag in (self._code_top_tag, self._code_bottom_tag,
+                    self._inline_indent_tag, self._inline_space_tag,
+                    *self._slot_tags.values()):
+            buf.remove_tag(tag, start, end)
+        self._even_lines(buf)
+
+        # The first and last line of each run of code lines.
+        line, last_line = 0, buf.get_line_count()
+        while line < last_line:
+            if not self._is_code_line(buf, line):
+                line += 1
+                continue
+            end = line
+            while end + 1 < last_line and self._is_code_line(buf, end + 1):
+                end += 1
+            buf.apply_tag(self._code_top_tag, *self._line_bounds(line))
+            buf.apply_tag(self._code_bottom_tag, *self._line_bounds(end))
+            line = end + 1
+
+        # A character other than a space beside inline code is left alone,
+        # since widening it would also open a gap on its far side. The box
+        # gives up its padding on that side instead; see _draw_inline_code().
+        tag = self._backtick_tag
+        it = buf.get_start_iter()
+        if not it.has_tag(tag) and not it.forward_to_tag_toggle(tag):
+            return False
+        while True:
+            range_start = it.copy()
+            range_end = it.copy()
+            if not range_end.forward_to_tag_toggle(tag):
+                break
+            line = range_start.get_line()
+            if (range_start.starts_line()
+                    and not self._is_code_line(buf, line)):
+                buf.apply_tag(self._inline_indent_tag,
+                              *self._line_bounds(line))
+            before = range_start.copy()
+            if (not range_start.starts_line() and before.backward_char()
+                    and before.get_char() in ' \t'):
+                buf.apply_tag(self._inline_space_tag, before, range_start)
+            if range_end.get_char() in ' \t':
+                after = range_end.copy()
+                after.forward_char()
+                buf.apply_tag(self._inline_space_tag, range_end, after)
+            it = range_end
+            if not it.forward_to_tag_toggle(tag):
+                break
+        return False
+
+    def _even_lines(self, buf):
+        """Make every line of the note the same height. See even_slots().
+
+        Only text beyond Latin can be drawn in another font, so a note without
+        any is left alone. Every other line is measured, since a line without
+        any of it can still be spaced to match."""
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        if text.isascii() or not any(
+                ord(c) >= FIRST_NON_LATIN for c in set(text)):
+            return
+        numbers, metrics, offsets = [], [], []
+        offset = 0
+        for number, line_text in enumerate(text.split('\n')):
+            # Code, dividers and headings are spaced on their own.
+            if (line_text and number not in self._divider_lines
+                    and not self._is_code_line(buf, number)
+                    and not buf.get_iter_at_offset(offset).has_tag(
+                        self._heading_tag)):
+                numbers.append(number)
+                metrics.append(self._line_metrics(line_text))
+                offsets.append((offset, offset + len(line_text)))
+            offset += len(line_text) + 1
+        slots = even_slots(metrics, self._body_metrics, self._line_spacing)
+        for (first, last), slot in zip(offsets, slots):
+            if slot != self._line_spacing:
+                buf.apply_tag(self._slot_tag(slot),
+                              buf.get_iter_at_offset(first),
+                              buf.get_iter_at_offset(last))
+
+    def _slot_tag(self, slot):
+        tag = self._slot_tags.get(slot)
+        if tag is None:
+            above, below = slot
+            # The rows of a wrapped line are as far apart as the lines are.
+            tag = self.tv.get_buffer().create_tag(
+                f'slot-{above}-{below}', pixels_above_lines=above,
+                pixels_below_lines=below, pixels_inside_wrap=above + below)
+            self._slot_tags[slot] = tag
+        return tag
+
+    def _line_metrics(self, line_text):
+        """(ascent, descent) of the tallest font that draws line_text, in the
+        whole pixels GTK makes a line of.
+
+        Pango picks the font for each character, and for runs of them, so the
+        line is laid out whole, in the note's font, as it is in the note: this
+        is whichever fonts this computer falls back to, not ones chosen here,
+        and a character measured alone could fall back to another one. Emoji
+        are left out, since they are drawn large on purpose and keep their own
+        line height, and so are the checklist boxes, which are drawn smaller
+        and measured as they are drawn."""
+        cached = self._line_cache.get(line_text)
+        if cached is not None:
+            return cached
+        boxes = {c for c in line_text if '\u2610' <= c <= '\u2612'}
+        plain = ''.join(c for c in line_text if c not in boxes
+                        and not self._is_emoji_char(c))
+        # A line is as tall as the fonts that draw it and no more: one with
+        # only Hangul in it has no Latin text, so the note's font does not
+        # count. Nothing at all to measure is a line of the note's font.
+        found = [self._line_extent(self._body_font, plain)] if plain else []
+        if boxes:
+            font = self._body_font.copy()
+            font.set_size(round(font.get_size() * CHECKBOX_SCALE))
+            found += [self._line_extent(font, box) for box in boxes]
+        if found:
+            ascent = max(a for a, _ in found)
+            descent = max(d for _, d in found)
+        else:
+            ascent, descent = self._body_metrics
+        if len(self._line_cache) > 2000:
+            self._line_cache.clear()
+        self._line_cache[line_text] = (ascent, descent)
+        return ascent, descent
+
+    def _line_extent(self, font, text):
+        """Ascent and descent of text in font, rounded as GTK rounds the
+        height of a line: the baseline and the whole height to pixels."""
+        layout = self.tv.create_pango_layout(text)
+        layout.set_font_description(font)
+        logical = layout.get_extents()[1]
+        ascent = round(layout.get_baseline() / Pango.SCALE)
+        return ascent, round(logical.height / Pango.SCALE) - ascent
+
+    def _font_metrics(self, font, text='x'):
+        """Ascent and descent of the font in pixels, not rounded, so that the
+        boxes and the line spacing round the same value. Text the font lacks is
+        drawn in whichever font Pango falls back to."""
+        layout = self.tv.create_pango_layout(text)
+        layout.set_font_description(font)
+        logical = layout.get_extents()[1]
+        baseline = layout.get_baseline()
+        return ((baseline - logical.y) / Pango.SCALE,
+                (logical.y + logical.height - baseline) / Pango.SCALE)
 
     def _is_code_line(self, buf, line):
         # Cheaper than _line_is_fully_tagged(): code is always applied to a
@@ -1833,6 +2098,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # none of them moves anything.
         if tag in (self._code_tag, self._bold_tag, self._backtick_tag):
             self._forget_code_blocks(start.get_line(), end.get_line(), 0)
+        if tag in (self._code_tag, self._backtick_tag):
+            self._queue_code_margins()
 
     def _forget_code_blocks(self, first, last, delta):
         """An edit replaced lines `first` to `last` and moved the lines below by
@@ -1898,7 +2165,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         first = tv.get_line_at_y(visible.y)[0].get_line()
         last = tv.get_line_at_y(visible.y + visible.height)[0].get_line()
         left = tv.get_left_margin()
-        pad = 8
+        pad = CODE_PAD
         if self._opacity < 1.0:
             self._draw_text_backing(tv, cr, buf, visible)
         line = first
@@ -1911,17 +2178,43 @@ class NoteWindow(Gtk.ApplicationWindow):
             y, height = tv.get_line_yrange(buf.get_iter_at_line(block_end))
             wx, wy = tv.buffer_to_window_coords(
                 Gtk.TextWindowType.WIDGET, left, top)
-            outlined_box(cr, self._code_rgba, wx, wy,
-                         right + pad - left, y + height - top)
+            outlined_box(cr, self._code_rgba, wx, wy + CODE_BLOCK_MARGIN,
+                         right + pad - left,
+                         y + height - top - 2 * CODE_BLOCK_MARGIN)
             line = block_end + 1
         self._draw_inline_code(tv, cr, buf, first, last)
         return False
+
+    def _pad_beside(self, tv, row, tail, pad, before):
+        """Padding of an inline code box on one side of the row row..tail.
+
+        Full padding where the row starts or ends, or next to a space, which
+        _apply_code_margins() widens. Next to any other character the box
+        stops a pixel short of it."""
+        if before:
+            other = row.copy()
+            if tv.starts_display_line(row) or not other.backward_char():
+                return pad
+        else:
+            other = tail.copy()
+            if not other.forward_char() or other.ends_line():
+                return pad
+            if tv.starts_display_line(other):
+                return pad
+        if other.get_char() in ' \t':
+            return pad
+        here = tv.get_iter_location(row if before else tail)
+        there = tv.get_iter_location(other)
+        room = (here.x - there.x - there.width if before
+                else there.x - here.x - here.width)
+        return max(0, min(pad, room - 1))
 
     def _draw_inline_code(self, tv, cr, buf, first, last):
         # One box per display line of each inline code range, so a range that
         # wraps gets a box on every row it covers.
         tag = self._backtick_tag
-        pad = 2
+        pad = CODE_PAD
+        pad_y = CODE_PAD_Y + 1
         it = buf.get_iter_at_line(first)
         end = buf.get_iter_at_line(last)
         if not end.ends_line():
@@ -1948,10 +2241,18 @@ class NoteWindow(Gtk.ApplicationWindow):
                     tail.backward_char()
                 if tail.compare(row) >= 0:
                     a, b = tv.get_iter_location(row), tv.get_iter_location(tail)
+                    # A character's rectangle is the line area of its own
+                    # font, raised with it. A character from another font in
+                    # the row, such as an emoji, widens the box to fit.
+                    top = min(a.y, b.y)
+                    bottom = max(a.y + a.height, b.y + b.height)
+                    left = self._pad_beside(tv, row, tail, pad, before=True)
+                    right = self._pad_beside(tv, row, tail, pad, before=False)
                     wx, wy = tv.buffer_to_window_coords(
-                        Gtk.TextWindowType.WIDGET, a.x, a.y)
-                    outlined_box(cr, self._code_rgba, wx - pad, wy + 1,
-                                 b.x + b.width - a.x + 2 * pad, a.height - 2)
+                        Gtk.TextWindowType.WIDGET, a.x, top - pad_y)
+                    outlined_box(cr, self._inline_rgba, wx - left, wy,
+                                 b.x + b.width - a.x + left + right,
+                                 bottom - top + 2 * pad_y)
                 row = row_end
             it = range_end
             if not it.forward_to_tag_toggle(tag):
@@ -2009,12 +2310,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         # outer edge instead. The jump runs once GTK has finished the current
         # cursor movement, since moving the cursor in the middle of it confuses
         # the text view.
+        if mark is buf.get_selection_bound():
+            self._sync_format_state()
         if mark is not buf.get_insert():
             return
+        self._sync_format_state()
         offset = it.get_offset()
         previous, self._cursor_offset = self._cursor_offset, offset
-        if self._heading_line not in (None, it.get_line()):
-            self._set_heading_line(None)
         if not buf.get_has_selection() and it.get_line() in self._divider_lines:
             GLib.idle_add(self._skip_divider, offset, offset >= previous,
                           priority=GLib.PRIORITY_HIGH_IDLE)
@@ -2180,11 +2482,15 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _selected_or_cursor_lines(self):
         buf = self.tv.get_buffer()
-        if not buf.get_has_selection():
+        # get_selection_bounds() is empty while the cursor is moving, even
+        # when get_has_selection() has not caught up on some PyGObject
+        # versions, so it is the one that decides.
+        bounds = buf.get_selection_bounds()
+        if not bounds:
             line = buf.get_iter_at_mark(buf.get_insert()).get_line()
             return line, line
 
-        start, end = buf.get_selection_bounds()
+        start, end = bounds
         first_line = start.get_line()
         last_line = end.get_line()
         if end.starts_line() and end.compare(start) > 0:
@@ -2273,15 +2579,11 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _toggle_tag(self, tag):
         buf = self.tv.get_buffer()
-        if not buf.get_has_selection():
+        bounds = buf.get_selection_bounds()
+        if not bounds:
             return False
-        start, end = buf.get_selection_bounds()
-        it, all_tagged = start.copy(), True
-        while it.compare(end) < 0:
-            if not it.has_tag(tag):
-                all_tagged = False
-                break
-            it.forward_char()
+        start, end = bounds
+        all_tagged = self._range_has_tag(tag, start, end)
         if self._snap_sid:
             GLib.source_remove(self._snap_sid)
             self._snap_sid = None
@@ -2292,58 +2594,109 @@ class NoteWindow(Gtk.ApplicationWindow):
             buf.apply_tag(tag, start, end)
         self._take_snapshot()
         self._queue_save()
+        self._sync_format_state()
         return True
 
-    # The empty line whose next typed text is a heading. See _toggle_heading().
-    _heading_line = None
+    def _range_has_tag(self, tag, start, end):
+        """Whether every character but newlines from start to end has tag."""
+        it, found = start.copy(), False
+        while it.compare(end) < 0:
+            if it.get_char() != '\n':
+                if not it.has_tag(tag):
+                    return False
+                found = True
+            it.forward_char()
+        return found
+
+    # ------------------------------------------------------------------ format state
+    # Bold, inline code, and heading are each on or off at the cursor, and the
+    # buttons show which. Moving the cursor takes them from the text it is
+    # attached to, the buttons and shortcuts toggle them, typing uses them, and
+    # Enter turns them off.
+
+    _bold_active = _code_active = _heading_active = False
+
+    def _sync_format_state(self):
+        """Take bold, inline code, and heading from the text at the cursor.
+
+        A character format is on when the character before the cursor has it,
+        or at the start of a line the character after it, or with a selection
+        when all of it has it. A heading is on when every line with text that
+        the cursor or selection is on is a heading.
+        """
+        if self._pending_format_inserts:
+            # Mid-insert: the new text has not been styled yet.
+            return
+        buf = self.tv.get_buffer()
+        self._code_active = self._format_at_cursor(buf, self._backtick_tag)
+        lines = self._heading_lines()
+        self._heading_active = bool(lines) and all(
+            self._line_is_fully_tagged(self._heading_tag, ln) for ln in lines)
+        # A heading is already bold, so bold is neither on nor available there.
+        self._bold_active = (not self._heading_active
+                             and self._format_at_cursor(buf, self._bold_tag))
+        self._refresh_format_buttons()
+
+    def _format_at_cursor(self, buf, tag):
+        # The bounds are empty when the selection has just collapsed, as it
+        # does when undo replaces the text.
+        bounds = buf.get_selection_bounds()
+        if bounds:
+            return self._range_has_tag(tag, *bounds)
+        it = buf.get_iter_at_mark(buf.get_insert())
+        if it.starts_line():
+            return not it.ends_line() and it.has_tag(tag)
+        before = it.copy()
+        before.backward_char()
+        return before.has_tag(tag)
+
+    def _heading_lines(self):
+        """The lines with text that the cursor or selection is on, leaving
+        out code and dividers, which never become headings."""
+        buf = self.tv.get_buffer()
+        first_line, last_line = self._selected_or_cursor_lines()
+        return [ln for ln in range(first_line, last_line + 1)
+                if not self._is_code_line(buf, ln)
+                and ln not in self._divider_lines
+                and not self._line_bounds(ln)[0].ends_line()]
 
     def _toggle_bold(self):
+        if self._heading_active:
+            return
         if not self._toggle_tag(self._bold_tag):
             self._bold_active = not self._bold_active
             self._refresh_format_buttons()
 
     def _toggle_inline_code(self):
-        self._toggle_tag(self._backtick_tag)
+        if not self._toggle_tag(self._backtick_tag):
+            self._code_active = not self._code_active
+            self._refresh_format_buttons()
 
     def _toggle_heading(self):
         # A heading is a whole line, so it applies to every line the selection
-        # touches, or to the cursor's line, like a list item.
+        # touches, or to the cursor's line, like a list item. On an empty line
+        # it is the text typed there next.
         buf = self.tv.get_buffer()
-        first_line, last_line = self._selected_or_cursor_lines()
-        lines = [ln for ln in range(first_line, last_line + 1)
-                 if not self._is_code_line(buf, ln)
-                 and ln not in self._divider_lines]
-        texts = [ln for ln in lines
-                 if self._line_bounds(ln)[0].compare(self._line_bounds(ln)[1])]
-        if not texts:
-            # Nothing to style yet: the next text typed on this line is the
-            # heading, and pressing Heading again cancels that.
-            if len(lines) == 1:
-                self._set_heading_line(
-                    None if self._heading_line == lines[0] else lines[0])
+        lines = self._heading_lines()
+        if not lines:
+            self._heading_active = not self._heading_active
+            self._refresh_format_buttons()
             return
         remove = all(self._line_is_fully_tagged(self._heading_tag, ln)
-                     for ln in texts)
+                     for ln in lines)
         self._flush_snapshot()
-        for ln in texts:
+        for ln in lines:
             start, end = self._line_bounds(ln)
             if remove:
                 buf.remove_tag(self._heading_tag, start, end)
             else:
+                # Bold would not show in a heading, and would come back
+                # unexpectedly if the heading were removed.
+                buf.remove_tag(self._bold_tag, start, end)
                 buf.apply_tag(self._heading_tag, start, end)
         self._flush_snapshot()
         self._queue_save()
-
-    def _set_heading_line(self, line):
-        """Remember the empty line whose next typed text is a heading."""
-        if line == self._heading_line:
-            return
-        self._heading_line = line
-        ctx = self._heading_btn.get_style_context()
-        if line is None:
-            ctx.remove_class('pinned')
-        else:
-            ctx.add_class('pinned')
+        self._sync_format_state()
 
     def _format_backtick_wrapped_text(self):
         buf = self.tv.get_buffer()
@@ -2382,6 +2735,9 @@ class NoteWindow(Gtk.ApplicationWindow):
             styled_end = buf.get_iter_at_offset(close_offset - 1)
             buf.apply_tag(self._backtick_tag, styled_start, styled_end)
 
+        # Typing the closing backtick leaves the code, as in Slack.
+        self._code_active = False
+        self._refresh_format_buttons()
         self._take_snapshot()
         self._queue_save()
 
@@ -2431,11 +2787,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._queue_save()
 
     def _refresh_format_buttons(self):
-        ctx = self._bold_btn.get_style_context()
-        if self._bold_active:
-            ctx.add_class('pinned')
-        else:
-            ctx.remove_class('pinned')
+        for button, active in ((self._bold_btn, self._bold_active),
+                               (self._heading_btn, self._heading_active),
+                               (self._inline_code_btn, self._code_active)):
+            ctx = button.get_style_context()
+            if active:
+                ctx.add_class('pinned')
+            else:
+                ctx.remove_class('pinned')
+        self._bold_btn.set_sensitive(not self._heading_active)
 
     @staticmethod
     def _drop_extra_separators(menu):
@@ -2471,7 +2831,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                 emoji_item = item
         self._drop_extra_separators(menu)
 
-        redo_item = Gtk.MenuItem(label='Redo  (Ctrl+Y)')
+        redo_item = Gtk.MenuItem(label='Redo  (Ctrl+Shift+Z)')
         redo_item.set_sensitive(self._hist_pos < len(self._history) - 1)
         redo_item.connect('activate', lambda _: self._redo())
 
@@ -2748,6 +3108,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # Code blocks follow the note color, so they stay readable on it.
         self._code_rgba = Gdk.RGBA()
         self._code_rgba.parse(code_background(self._color))
+        self._inline_rgba = Gdk.RGBA()
+        self._inline_rgba.parse(inline_code_background(self._color))
         self._body_rgba = Gdk.RGBA()
         self._body_rgba.parse(PALETTE[self._color][0])
         self.tv.queue_draw()
@@ -2822,16 +3184,104 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._code_blocks.clear()
         if hasattr(self, '_emoji_tag'):
             self._emoji_tag.set_property('scale', self._emoji_scale())
+        if hasattr(self, '_code_tag'):
+            self._refresh_code_spacing()
+
+    def _refresh_code_spacing(self):
+        """Size the boxes around code and the room around them from the font.
+
+        See CODE_PAD and CODE_PAD_Y. Every font has its own room
+        above its tallest letters and below its lowest, so that room is
+        measured. One more pixel is the outline itself.
+        """
+        tv = self.tv
+        # The note's font as its CSS sets it, where GTK turns CSS pixels into
+        # points at 96 dpi. It is not read back from the style context: on
+        # PyGObject 3.42 (Ubuntu 22.04) that returns freed memory, which broke
+        # every note.
+        body = Pango.FontDescription()
+        body.set_family(BODY_FONT)
+        body.set_size(round(self._font_size * 0.75 * Pango.SCALE))
+
+        measure = self._font_metrics
+
+        def x_height(family):
+            # Measured large, so rounding to pixels does not skew the ratio.
+            font = Pango.FontDescription()
+            font.set_family(family)
+            font.set_absolute_size(100 * Pango.SCALE)
+            layout = tv.create_pango_layout('x')
+            layout.set_font_description(font)
+            return layout.get_extents()[0].height
+
+        # Code text is scaled so its lowercase letters match the body's.
+        scale = x_height(body.get_family()) / x_height(CODE_FONT)
+        scale = min(1.2, max(0.8, scale))
+        self._code_tag.set_property('scale', scale)
+        self._backtick_tag.set_property('scale', scale)
+        code = body.copy()
+        code.set_family(CODE_FONT)
+        size = body.get_size() * scale
+        if body.get_size_is_absolute():
+            code.set_absolute_size(size)
+        else:
+            code.set_size(round(size))
+
+        # The outline takes a pixel of the padding, so the room is one more.
+        pad = CODE_PAD_Y + 1
+
+        # A code block: its first and last line have the padding, and the room
+        # around the block. The lines between keep the spacing of any line.
+        self._code_top_tag.set_property('pixels-above-lines',
+                                        CODE_BLOCK_MARGIN + pad)
+        self._code_bottom_tag.set_property('pixels-below-lines',
+                                           CODE_BLOCK_MARGIN + pad)
+
+        # Inline code: the box is the code font's line area, raised with the
+        # text, plus the padding. It may reach into the spacing between lines.
+        # A code character's own rectangle is that area.
+        ascent, descent = measure(code)
+        rise = INLINE_CODE_RISE
+        box_up = ascent + rise + pad
+        box_down = descent - rise + pad
+
+        # Where the line spacing goes. A line is as tall as its taller font
+        # above and below the baseline. The box is in the middle of the line
+        # when the room above it equals the room below it:
+        #   spacing above + line ascent - box_up
+        #       == spacing below + line descent - box_down
+        body_ascent, body_descent = measure(body)
+        line_ascent = max(body_ascent, ascent + rise)
+        line_descent = max(body_descent, descent - rise)
+        lean = round((box_up - box_down) - (line_ascent - line_descent))
+        # Whole pixels only: when the spacing cannot be divided to match, it
+        # is a pixel more, since the box being off center shows more than a
+        # line being a pixel taller.
+        total = LINE_SPACING + (LINE_SPACING + lean) % 2
+        above = min(total, max(0, (total + lean) // 2))
+        tv.set_pixels_above_lines(above)
+        tv.set_pixels_below_lines(total - above)
+        tv.set_pixels_inside_wrap(total)
+
+        # What _even_lines() works from. The fonts are measured again when the
+        # size changes, so what was measured is forgotten.
+        self._body_font = body
+        self._body_metrics = self._line_extent(body, 'x')
+        self._line_spacing = (above, total - above)
+        self._line_cache = {}
 
     def _emoji_scale(self):
         return (self._font_size + 3) / self._font_size
 
     def _is_emoji_char(self, char):
         codepoint = ord(char)
+        # The ballot boxes are checklist markers, which stay at text size so
+        # a checklist is spaced like the lines around it.
         return (
             char in ('\u200d', '\ufe0e', '\ufe0f')
             or 0x1F000 <= codepoint <= 0x1FAFF
-            or 0x2600 <= codepoint <= 0x27BF
+            or (0x2600 <= codepoint <= 0x27BF
+                and not 0x2610 <= codepoint <= 0x2612)
         )
 
     def _refresh_emoji_tags(self):
@@ -2839,6 +3289,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         start = buf.get_start_iter()
         end = buf.get_end_iter()
         buf.remove_tag(self._emoji_tag, start, end)
+        buf.remove_tag(self._checkbox_tag, start, end)
 
         it = start.copy()
         range_start = None
@@ -2846,6 +3297,8 @@ class NoteWindow(Gtk.ApplicationWindow):
             char = it.get_char()
             next_it = it.copy()
             next_it.forward_char()
+            if '\u2610' <= char <= '\u2612':
+                buf.apply_tag(self._checkbox_tag, it, next_it)
             if self._is_emoji_char(char):
                 if range_start is None:
                     range_start = it.copy()

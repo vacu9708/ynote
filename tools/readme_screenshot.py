@@ -137,7 +137,7 @@ def sample_notes():
              ('today', 'Today', today, 340, False)]
     out, x = [], 0
     for note_id, title, builder, width, on_top in notes:
-        out.append(builder.note(note_id, title, x=x, w=width, h=320,
+        out.append(builder.note(note_id, title, x=x, w=width, h=360,
                                 on_top=on_top))
         x += width + GAP
     out[1]['color'] = 'blue'  # shows that notes can have their own color
@@ -148,7 +148,7 @@ def sample_notes():
     scratch.line('api pods stuck after the config change')
     scratch.line('restart them, then check the logs')
     note = scratch.note('scratch', 'Scratch', x=0, w=430, h=300)
-    note['y'] = 360
+    note['y'] = 400
     out.append(note)
 
     # Hidden runbooks that the search picture finds.

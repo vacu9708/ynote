@@ -71,6 +71,9 @@ buttons don't show:
   font size, rename, and delete. Double-click the title bar to maximize.
 - Typing `- ` or `[ ] ` at the start of a line makes a bullet or a checklist,
   `---` alone on a line makes a divider, and `` `text` `` becomes inline code.
+- **B**, **H**, and `</>` light up while the text at the cursor is bold, a
+  heading, or inline code, and what you type next gets it. Enter turns them
+  off.
 - Paste an image with `Ctrl+V`.
 - In a code block, double-click a line to select one command, or triple-click to
   select the whole block. `Ctrl+click` opens a link.
@@ -86,7 +89,8 @@ buttons don't show:
 ## Where your notes are stored
 
 Everything is saved locally in `~/.config/ynote/`: note text in `notes.json`
-and inserted images in `images/`. To back up your notes, copy that folder.
+and inserted images in `images/`. Each time Ynote starts, it keeps a copy of
+`notes.json` as `notes.json.bak`. To back up your notes, copy that folder.
 Uninstalling Ynote keeps it.
 
 ## Contributing

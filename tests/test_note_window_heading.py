@@ -28,6 +28,10 @@ class FakeStyleContext:
 class FakeButton:
     def __init__(self):
         self.context = FakeStyleContext()
+        self.sensitive = True
+
+    def set_sensitive(self, sensitive):
+        self.sensitive = sensitive
 
     def get_style_context(self):
         return self.context
@@ -39,14 +43,28 @@ def make_window(text, cursor=0):
     win = NoteWindow.__new__(NoteWindow)
     win.tv = FakeTextView(buf)
     win._code_tag = buf.create_tag('code')
+    win._bold_tag = buf.create_tag('bold')
+    win._backtick_tag = buf.create_tag('backtick')
     win._heading_tag = buf.create_tag('heading')
+    win._bold_btn = FakeButton()
     win._heading_btn = FakeButton()
+    win._inline_code_btn = FakeButton()
     win._divider_lines = []
+    win._pending_format_inserts = []
+    win._restoring = False
     win._snap_sid = None
     win._take_snapshot = lambda: None
     win._queue_save = lambda: None
+    win._refresh_emoji_tags = lambda: None
     buf.place_cursor(buf.get_iter_at_offset(cursor))
     return win, buf
+
+
+def type_text(win, buf, text):
+    """Insert at the cursor through the same handlers typing goes through."""
+    buf.connect('insert-text', win._on_buf_insert_text)
+    buf.connect_after('insert-text', win._after_buf_insert_text)
+    buf.insert_at_cursor(text)
 
 
 def headed(win, buf):
@@ -109,7 +127,7 @@ def test_heading_on_an_empty_line_waits_for_the_first_typed_text():
     win._toggle_heading()
 
     assert headed(win, buf) == []
-    assert win._heading_line == 1
+    assert win._heading_active
     assert 'pinned' in win._heading_btn.context.classes
 
 
@@ -119,21 +137,15 @@ def test_heading_on_an_empty_line_again_cancels_the_wait():
 
     win._toggle_heading()
 
-    assert win._heading_line is None
+    assert not win._heading_active
     assert 'pinned' not in win._heading_btn.context.classes
 
 
 def test_the_first_text_typed_after_choosing_heading_becomes_the_heading():
     win, buf = make_window('one\n\ntwo', cursor=4)
     win._toggle_heading()
-    win._pending_format_inserts = []
-    win._bold_active = False
-    win._refresh_emoji_tags = lambda: None
-    win._restoring = False
 
-    buf.connect('insert-text', win._on_buf_insert_text)
-    buf.connect_after('insert-text', win._after_buf_insert_text)
-    buf.insert(buf.get_iter_at_offset(4), 'Plan')
+    type_text(win, buf, 'Plan')
 
     assert headed(win, buf) == [[4, 8]]
-    assert win._heading_line is None
+    assert win._heading_active
