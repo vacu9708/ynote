@@ -33,10 +33,13 @@ INLINE_CODE_AMOUNT = 0.3
 # it is as far from the line above as from the line below. This is the total,
 # or a pixel more where that is what it takes to divide it evenly.
 LINE_SPACING = 3
-# The ballot boxes of a checklist come from a fallback font that is a little
-# taller than the note's, which made a checklist's lines farther apart than
-# other lines. This size keeps them the same.
-CHECKBOX_SCALE = 0.9
+# Bullets and to-do boxes are drawn, not set in type, so their size follows
+# the note's font size and does not depend on a font, and a larger one does
+# not make its line taller. All in em, then the room between a shape and the
+# text after it.
+BULLET_SIZE = 0.42
+CHECKBOX_SIZE = 0.86
+MARKER_GAP = 0.30
 
 # Inline code and code blocks share a monospace font, a filled box, and a thin
 # outline, so each reads as a unit on every note color.

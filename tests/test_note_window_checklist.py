@@ -22,6 +22,7 @@ def make_window(text, cursor=None):
     win = NoteWindow.__new__(NoteWindow)
     win.tv = FakeTextView(buf)
     win._code_tag = buf.create_tag('code')
+    win._heading_tag = buf.create_tag('heading')
     win._snap_sid = None
     win._history = [{'text': text, 'bold': [], 'code': [], 'backtick': [],
                      'images': []}]

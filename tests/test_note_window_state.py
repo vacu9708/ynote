@@ -348,3 +348,16 @@ def test_even_slots_never_go_negative_for_a_line_taller_than_the_rest_need():
     base = (14.0, 3.0)
     assert all(a >= 0 and b >= 0 for a, b in
                even_slots([(30.0, 9.0), base], base, (2, 2)))
+
+
+def test_slot_ascent_is_where_every_baseline_lies_below_the_top_of_its_line():
+    from ynote.note_window import even_slots, slot_ascent
+
+    base = (14, 3)
+    # A note of one font: the spacing above, and the font's own ascent.
+    assert slot_ascent([base, base], base, (3, 2)) == 17
+    # A taller font takes the place of the spacing.
+    metrics = [base, (17, 5)]
+    assert slot_ascent(metrics, base, (3, 2)) == 17
+    for (ascent, _), (above, _) in zip(metrics, even_slots(metrics, base, (3, 2))):
+        assert ascent + above == 17

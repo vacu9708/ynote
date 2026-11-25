@@ -190,10 +190,23 @@ sequenceDiagram
 - **Line spacing.** Every line has the same spacing, set on the text view,
   whatever its format. Its total is `LINE_SPACING`, or a pixel more where the
   fonts need it, and how it divides above and below is worked out from them so
-  that an inline code box sits in the middle of its line. Code boxes may reach into it. Checklist boxes are drawn
-  at `CHECKBOX_SCALE`, since the fallback font they come from is a little
-  taller than the note's.
-- **Even lines.** A line is as tall as the tallest font that draws it, and
+  that an inline code box sits in the middle of its line. Code boxes may
+  reach into it.
+- **List markers.** A bullet or a to-do box is not text to the user, though it
+  is characters in the note (`• `, `☐ `, `☑ `), so notes saved before and the
+  clipboard keep working. Everything that treats text as text steps around it:
+  `_marker_end()` says where a marker ends, the cursor and the ends of a
+  selection are moved out of one once GTK has moved them, a format is applied
+  with `_tag_text()` to the text after the marker and never to a line break,
+  since a format on a break reaches into the next line and moves its indent,
+  a list item is never made
+  a heading or a line of code, and Backspace at the start of an item removes
+  the whole marker. A bullet in a line of code is code, with no marker. The
+  characters are drawn transparent by a derived tag, scaled to fit in the line
+  and spaced to take the room the drawing needs, and `_draw_list_markers()`
+  draws a filled circle or a box, sized by `BULLET_SIZE` and `CHECKBOX_SIZE` in
+  em, over them. Because the drawing does not come from a font, a larger one
+  does not make its line taller.- **Even lines.** A line is as tall as the tallest font that draws it, and
   the note's font lacks most scripts other than Latin, so a line of Hangul,
   Japanese, Arabic, or Thai is drawn in whichever font this computer falls back
   to, and its height differs from a line of Latin. In a note with such text,

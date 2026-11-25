@@ -25,7 +25,8 @@ from .models import MAX_OPACITY, MIN_OPACITY, normalize_note_data
 from .search import find_matches
 from .snap import snap_rect
 from .styles import (
-    BODY_FONT, CHECKBOX_SCALE, CODE_BLOCK_MARGIN, CODE_FONT, CODE_OUTLINE,
+    BODY_FONT, BULLET_SIZE, CHECKBOX_SIZE, CODE_BLOCK_MARGIN, CODE_FONT,
+    CODE_OUTLINE, MARKER_GAP,
     CODE_PAD, CODE_PAD_Y, CODE_RADIUS, CODE_TEXT_COLOR, HEADING_FONT, HEADING_SCALE, INLINE_CODE_RISE,
     LINE_SPACING, PALETTE, code_background, inline_code_background, note_css,
 )
@@ -70,11 +71,16 @@ def even_slots(metrics, base, spacing):
     the note's font has. That way a font with more room of its own takes the
     place of the spacing, and the lines are no further apart than that.
     """
-    slot_ascent = max([base[0] + spacing[0]] + [a for a, _ in metrics])
-    slot_descent = max([base[1] + spacing[1]] + [d for _, d in metrics])
-    return [(max(0, math.floor(slot_ascent - a + 0.5)),
-             max(0, math.floor(slot_descent - d + 0.5)))
+    top = slot_ascent(metrics, base, spacing)
+    bottom = max([base[1] + spacing[1]] + [d for _, d in metrics])
+    return [(max(0, math.floor(top - a + 0.5)),
+             max(0, math.floor(bottom - d + 0.5)))
             for a, d in metrics]
+
+
+def slot_ascent(metrics, base, spacing):
+    """How far the baseline is below the top of the room every line takes."""
+    return max([base[0] + spacing[0]] + [a for a, _ in metrics])
 
 
 def changed_end(old, new):
@@ -401,12 +407,26 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._slot_tags = {}
         self._inline_space_tag = buf.create_tag(
             'inline-space', letter_spacing=CODE_PAD * Pango.SCALE)
+        # The characters of a list marker are there for the text, and are not
+        # seen: bullets and boxes are drawn over them, by _draw_list_markers().
+        # Derived from the text like dividers. Sized by _refresh_code_spacing()
+        # to take the room the drawing needs and to fit in the line.
+        transparent = Gdk.RGBA(0, 0, 0, 0)
+        self._marker_tags = {
+            marker[0]: buf.create_tag(f'marker-{ord(marker[0]):x}',
+                                      foreground_rgba=transparent)
+            for marker in LIST_MARKERS}
+        # The space after a marker, where the text of the item is inline code
+        # and its box needs room before it, as a space beside inline code
+        # gets. It has the spacing of the marker as well.
+        self._marker_code_tags = {
+            marker[0]: buf.create_tag(f'marker-code-{ord(marker[0]):x}')
+            for marker in LIST_MARKERS}
         self._refresh_code_spacing()
         self._heading_tag = buf.create_tag(
             'heading', family=HEADING_FONT, weight=Pango.Weight.BOLD,
             scale=HEADING_SCALE)
         self._emoji_tag = buf.create_tag('emoji', scale=self._emoji_scale())
-        self._checkbox_tag = buf.create_tag('checkbox', scale=CHECKBOX_SCALE)
         # A line that is exactly DIVIDER_TEXT is drawn as a horizontal rule:
         # the dashes are hidden and _draw_dividers() paints the line.
         self._divider_tag = buf.create_tag(
@@ -445,10 +465,12 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(data.get('images', []))
+        self._strip_marker_formats()
         self._refresh_line_styles()
         # Before the default handler, so the code boxes sit under the text.
         self.tv.connect('draw', self._draw_code_blocks)
         self.tv.connect_after('draw', self._draw_dividers)
+        self.tv.connect_after('draw', self._draw_list_markers)
         self.tv.connect('populate-popup', self._on_tv_popup)
         self.tv.connect('key-press-event', self._on_tv_key_press)
         self.tv.connect('button-press-event', self._on_tv_button_press)
@@ -1223,6 +1245,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             images.append(image_meta)
         self._restore_images(images)
 
+        self._strip_marker_formats()
         self._refresh_line_styles()
         end_offset = insert_offset + len(text)
         buf.place_cursor(buf.get_iter_at_offset(end_offset))
@@ -1475,7 +1498,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                 self._apply_tag_to_non_newline_chars(
                     buf, self._backtick_tag, start, end)
             if heading and '\n' not in text:
-                buf.apply_tag(self._heading_tag, start, end)
+                self._tag_text(self._heading_tag, start, end)
         if apply_code and text != '\n':
             for line in range(start.get_line(), end.get_line() + 1):
                 self._tag_code_line(line)
@@ -1488,22 +1511,139 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._heading_active = False
             self._refresh_format_buttons()
 
-    def _apply_tag_to_non_newline_chars(self, buf, tag, start, end):
-        it = start.copy()
-        range_start = None
-        while it.compare(end) < 0:
-            char = it.get_char()
-            next_it = it.copy()
-            next_it.forward_char()
-            if char == '\n':
-                if range_start is not None:
-                    buf.apply_tag(tag, range_start, it)
-                    range_start = None
-            elif range_start is None:
-                range_start = it.copy()
-            it = next_it
-        if range_start is not None:
-            buf.apply_tag(tag, range_start, end)
+    def _apply_tag_to_non_newline_chars(self, buf, tag, start, end,
+                                        skip_markers=True):
+        """Tag the text from start to end except newlines and list markers."""
+        if skip_markers:
+            spans = [(buf.get_iter_at_offset(s), buf.get_iter_at_offset(e))
+                     for s, e in self._text_segments(start.get_offset(),
+                                                     end.get_offset())]
+        else:
+            spans = [(start, end)]
+        for span_start, span_end in spans:
+            it = span_start.copy()
+            range_start = None
+            while it.compare(span_end) < 0:
+                char = it.get_char()
+                next_it = it.copy()
+                next_it.forward_char()
+                if char == '\n':
+                    if range_start is not None:
+                        buf.apply_tag(tag, range_start, it)
+                        range_start = None
+                elif range_start is None:
+                    range_start = it.copy()
+                it = next_it
+            if range_start is not None:
+                buf.apply_tag(tag, range_start, span_end)
+
+    # ------------------------------------------------------------------ list markers
+    # A bullet or a to-do box is not text to the user, only the mark of a line.
+    # It is characters in the note, so everything that would treat it as text
+    # steps around it: the cursor and a selection never end inside one, a
+    # format never covers one, and Backspace removes the whole mark.
+
+    def _marker_end(self, line):
+        """Offset where the list marker of `line` ends, or None.
+
+        A line of a code block has none: a bullet in code is code."""
+        buf = self.tv.get_buffer()
+        if line < 0 or line >= buf.get_line_count():
+            return None
+        parts = self._line_list_parts(line)
+        if parts is None or self._is_code_line(buf, line):
+            return None
+        return (buf.get_iter_at_line(line).get_offset()
+                + len(parts[0]) + len(parts[1]))
+
+    def _text_segments(self, start, end):
+        """The (start, end) offsets of the text between two offsets, with the
+        list marker of each line, the indent before it, and the line break
+        after it left out. A line break is not text: a format on one reaches
+        into the next line, such as to the indent of an item, and moves it."""
+        buf = self.tv.get_buffer()
+        first = buf.get_iter_at_offset(start).get_line()
+        last = buf.get_iter_at_offset(end).get_line()
+        count = buf.get_line_count()
+        segments = []
+        for line in range(first, last + 1):
+            line_start = buf.get_iter_at_line(line).get_offset()
+            line_end = (buf.get_iter_at_line(line + 1).get_offset() - 1
+                        if line + 1 < count else buf.get_char_count())
+            low = max(start, self._marker_end(line) or line_start)
+            high = min(end, line_end)
+            if low < high:
+                segments.append((low, high))
+        return segments
+
+    def _tag_text(self, tag, start, end, remove=False):
+        """Apply tag to the text from start to end, or take it off, leaving the
+        list markers alone."""
+        buf = self.tv.get_buffer()
+        for low, high in self._text_segments(start.get_offset(),
+                                             end.get_offset()):
+            first, last = (buf.get_iter_at_offset(low),
+                           buf.get_iter_at_offset(high))
+            if remove:
+                buf.remove_tag(tag, first, last)
+            else:
+                buf.apply_tag(tag, first, last)
+
+    def _strip_marker_formats(self):
+        """Take the formats off the parts of a note that are not text: the
+        list markers, and the line breaks. A note can have them from before a
+        marker could not be formatted, or from a format over several lines."""
+        buf = self.tv.get_buffer()
+        count = buf.get_line_count()
+        for line in range(count):
+            marker_end = self._marker_end(line)
+            if marker_end is not None:
+                first = buf.get_iter_at_line(line)
+                last = buf.get_iter_at_offset(marker_end)
+                for tag in (self._bold_tag, self._heading_tag,
+                            self._backtick_tag, self._code_tag):
+                    buf.remove_tag(tag, first, last)
+            if line + 1 < count:
+                # The line break, which a line of code does not have either:
+                # its box is drawn from the lines, not from the break.
+                last = buf.get_iter_at_line(line + 1)
+                first = last.copy()
+                first.backward_char()
+                for tag in (self._bold_tag, self._heading_tag,
+                            self._backtick_tag):
+                    buf.remove_tag(tag, first, last)
+
+    def _keep_out_of_marker(self, buf, it, mark, previous):
+        marker_end = self._marker_end(it.get_line())
+        if marker_end is not None and it.get_offset() < marker_end:
+            # Once GTK has finished moving it, as for a divider.
+            GLib.idle_add(self._leave_marker, mark.get_name(), previous,
+                          priority=GLib.PRIORITY_HIGH_IDLE)
+
+    def _leave_marker(self, name, previous):
+        """Move the cursor, or the other end of a selection, out of a marker:
+        to its end, or, when the cursor was at the start of the item and went
+        left, to the end of the line before."""
+        buf = self.tv.get_buffer()
+        mark = buf.get_mark(name)
+        if mark is None:
+            return False
+        it = buf.get_iter_at_mark(mark)
+        marker_end = self._marker_end(it.get_line())
+        if marker_end is None or it.get_offset() >= marker_end:
+            return False
+        line = it.get_line()
+        if previous == marker_end and line > 0 and name == 'insert':
+            target = self._line_bounds(line - 1)[1]
+        else:
+            target = buf.get_iter_at_offset(marker_end)
+        other = buf.get_selection_bound() if name == 'insert' else buf.get_insert()
+        if buf.get_iter_at_mark(other).equal(it):
+            # No selection: both ends move, so one does not appear.
+            buf.place_cursor(target)
+        else:
+            buf.move_mark(mark, target)
+        return False
 
     def _on_buf_changed(self, buf):
         if self._restoring:
@@ -1576,6 +1716,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(state.get('images', []))
+        self._strip_marker_formats()
         self._refresh_emoji_tags()
         self._refresh_line_styles()
         self._restoring = False
@@ -1769,7 +1910,9 @@ class NoteWindow(Gtk.ApplicationWindow):
             indent_len = self._line_indent_len(before)
             marker = TYPED_MARKERS.get(before[indent_len:])
             if (marker is not None
-                    and not self._iter_has_tag_context(cursor, self._code_tag)):
+                    and not self._iter_has_tag_context(cursor, self._code_tag)
+                    and not self._iter_has_tag_context(
+                        cursor, self._heading_tag)):
                 self._start_list_from_typed(
                     cursor_line, indent_len, len(before) - indent_len, marker)
                 return True
@@ -1801,6 +1944,20 @@ class NoteWindow(Gtk.ApplicationWindow):
                 and self._line_is_empty_list_item(cursor_line)):
             self._remove_empty_bullet_line(cursor_line)
             return True
+
+        # Backspace at the start of an item takes off its marker, not a piece
+        # of it, and Delete at the end of the line before an item joins it on
+        # without leaving the marker in the middle of the line.
+        if (state == 0 and event.keyval == Gdk.KEY_BackSpace
+                and cursor.get_offset() == self._marker_end(cursor_line)):
+            self._flush_snapshot()
+            self._set_line_marker(cursor_line, None)
+            self._flush_snapshot()
+            self._queue_save()
+            return True
+        if (state == 0 and event.keyval == Gdk.KEY_Delete and cursor.ends_line()
+                and self._marker_end(cursor_line + 1) is not None):
+            self._set_line_marker(cursor_line + 1, None)
 
         if event.keyval not in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             return False
@@ -1909,8 +2066,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         start, end = buf.get_start_iter(), buf.get_end_iter()
         for tag in (self._code_top_tag, self._code_bottom_tag,
                     self._inline_indent_tag, self._inline_space_tag,
-                    *self._slot_tags.values()):
+                    *self._marker_tags.values(),
+                    *self._marker_code_tags.values(), *self._slot_tags.values()):
             buf.remove_tag(tag, start, end)
+        self._tag_list_markers(buf)
         self._even_lines(buf)
 
         # The first and last line of each run of code lines.
@@ -1956,6 +2115,75 @@ class NoteWindow(Gtk.ApplicationWindow):
                 break
         return False
 
+    def _tag_list_markers(self, buf):
+        for line in range(buf.get_line_count()):
+            end = self._marker_end(line)
+            if end is not None:
+                first = buf.get_iter_at_line(line)
+                parts = self._line_list_parts(line)
+                first.forward_chars(len(parts[0]))
+                buf.apply_tag(self._marker_tags[parts[1][0]], first,
+                              buf.get_iter_at_offset(end))
+                after = buf.get_iter_at_offset(end)
+                if after.has_tag(self._backtick_tag):
+                    space = buf.get_iter_at_offset(end - 1)
+                    buf.apply_tag(self._marker_code_tags[parts[1][0]], space,
+                                  after)
+
+    def _draw_list_markers(self, tv, cr):
+        """Draw the bullet or to-do box of each visible list item.
+
+        The characters are not seen, only taking the room. Over the text, so a
+        selection does not hide them."""
+        buf = tv.get_buffer()
+        visible = tv.get_visible_rect()
+        first = tv.get_line_at_y(visible.y)[0].get_line()
+        last = tv.get_line_at_y(visible.y + visible.height)[0].get_line()
+        size = self._font_size
+        text = tv.get_style_context().get_color(Gtk.StateFlags.NORMAL)
+        for line in range(first, last + 1):
+            if self._marker_end(line) is None:
+                continue
+            parts = self._line_list_parts(line)
+            start = buf.get_iter_at_line(line)
+            start.forward_chars(len(parts[0]))
+            top = tv.get_line_yrange(buf.get_iter_at_line(line))[0]
+            x, y = tv.buffer_to_window_coords(
+                Gtk.TextWindowType.WIDGET, tv.get_iter_location(start).x,
+                top + self._baseline_offset)
+            done = parts[1] == CHECKED_MARKER
+            if done:
+                cr.set_source_rgb(0x77 / 255, 0x77 / 255, 0x5A / 255)
+            else:
+                cr.set_source_rgba(text.red, text.green, text.blue, text.alpha)
+            if parts[1] == BULLET_MARKER:
+                diameter = BULLET_SIZE * size
+                cr.arc(x + 1 + diameter / 2, y - self._x_height / 2,
+                       diameter / 2, 0, 2 * math.pi)
+                cr.fill()
+            else:
+                side = CHECKBOX_SIZE * size
+                # The bottom edge is just under the baseline, so the box
+                # stands on the line like a capital letter.
+                box_x, box_y = x + 1.5, y + 1.5 - side
+                cr.set_line_width(1.3)
+                cr.new_sub_path()
+                cr.arc(box_x + side - 2.5, box_y + 2, 2, -math.pi / 2, 0)
+                cr.arc(box_x + side - 2.5, box_y + side - 2, 2, 0, math.pi / 2)
+                cr.arc(box_x + 2, box_y + side - 2, 2, math.pi / 2, math.pi)
+                cr.arc(box_x + 2, box_y + 2, 2, math.pi, 3 * math.pi / 2)
+                cr.close_path()
+                cr.stroke()
+                if done:
+                    cr.set_line_width(1.7)
+                    cr.set_line_cap(cairo.LINE_CAP_ROUND)
+                    cr.set_line_join(cairo.LINE_JOIN_ROUND)
+                    cr.move_to(box_x + 0.24 * side, box_y + 0.54 * side)
+                    cr.line_to(box_x + 0.43 * side, box_y + 0.74 * side)
+                    cr.line_to(box_x + 0.78 * side, box_y + 0.26 * side)
+                    cr.stroke()
+        return False
+
     def _even_lines(self, buf):
         """Make every line of the note the same height. See even_slots().
 
@@ -1963,8 +2191,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         any is left alone. Every other line is measured, since a line without
         any of it can still be spaced to match."""
         text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        # Where the baseline is below the top of a line: the same in all.
+        self._baseline_offset = self._body_metrics[0] + self._line_spacing[0]
+        markers = {marker[0] for marker in LIST_MARKERS}
         if text.isascii() or not any(
-                ord(c) >= FIRST_NON_LATIN for c in set(text)):
+                ord(c) >= FIRST_NON_LATIN for c in set(text) - markers):
             return
         numbers, metrics, offsets = [], [], []
         offset = 0
@@ -1979,6 +2210,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                 offsets.append((offset, offset + len(line_text)))
             offset += len(line_text) + 1
         slots = even_slots(metrics, self._body_metrics, self._line_spacing)
+        self._baseline_offset = slot_ascent(
+            metrics, self._body_metrics, self._line_spacing)
         for (first, last), slot in zip(offsets, slots):
             if slot != self._line_spacing:
                 buf.apply_tag(self._slot_tag(slot),
@@ -2005,27 +2238,26 @@ class NoteWindow(Gtk.ApplicationWindow):
         is whichever fonts this computer falls back to, not ones chosen here,
         and a character measured alone could fall back to another one. Emoji
         are left out, since they are drawn large on purpose and keep their own
-        line height, and so are the checklist boxes, which are drawn smaller
-        and measured as they are drawn."""
+        line height, and so is a list marker, which is drawn over characters
+        sized to fit in the line."""
         cached = self._line_cache.get(line_text)
         if cached is not None:
             return cached
-        boxes = {c for c in line_text if '\u2610' <= c <= '\u2612'}
-        plain = ''.join(c for c in line_text if c not in boxes
-                        and not self._is_emoji_char(c))
+        parts = self._list_parts(line_text)
+        plain = ''.join(c for c in (parts[0] + parts[2] if parts else line_text)
+                        if not self._is_emoji_char(c))
         # A line is as tall as the fonts that draw it and no more: one with
         # only Hangul in it has no Latin text, so the note's font does not
         # count. Nothing at all to measure is a line of the note's font.
-        found = [self._line_extent(self._body_font, plain)] if plain else []
-        if boxes:
-            font = self._body_font.copy()
-            font.set_size(round(font.get_size() * CHECKBOX_SCALE))
-            found += [self._line_extent(font, box) for box in boxes]
-        if found:
-            ascent = max(a for a, _ in found)
-            descent = max(d for _, d in found)
+        if plain:
+            ascent, descent = self._line_extent(self._body_font, plain)
         else:
             ascent, descent = self._body_metrics
+        if parts:
+            # The marker is in the line too, in a font made to fit, and so is
+            # the indent before it, which is in the note's font.
+            marker = self._marker_metrics[parts[1][0]]
+            ascent, descent = max(ascent, marker[0]), max(descent, marker[1])
         if len(self._line_cache) > 2000:
             self._line_cache.clear()
         self._line_cache[line_text] = (ascent, descent)
@@ -2311,9 +2543,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         # cursor movement, since moving the cursor in the middle of it confuses
         # the text view.
         if mark is buf.get_selection_bound():
+            self._keep_out_of_marker(buf, it, mark, None)
             self._sync_format_state()
         if mark is not buf.get_insert():
             return
+        self._keep_out_of_marker(buf, it, mark, self._cursor_offset)
         self._sync_format_state()
         offset = it.get_offset()
         previous, self._cursor_offset = self._cursor_offset, offset
@@ -2524,7 +2758,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         line_text = buf.get_text(start, end, False)
 
         if line_text.replace(CODE_ANCHOR, ''):
-            self._apply_tag_to_non_newline_chars(buf, self._code_tag, start, end)
+            self._apply_tag_to_non_newline_chars(
+                buf, self._code_tag, start, end, skip_markers=False)
             return
 
         if line_text == CODE_ANCHOR:
@@ -2588,24 +2823,27 @@ class NoteWindow(Gtk.ApplicationWindow):
             GLib.source_remove(self._snap_sid)
             self._snap_sid = None
             self._take_snapshot()
-        if all_tagged:
-            buf.remove_tag(tag, start, end)
-        else:
-            buf.apply_tag(tag, start, end)
+        self._tag_text(tag, start, end, remove=all_tagged)
         self._take_snapshot()
         self._queue_save()
         self._sync_format_state()
         return True
 
     def _range_has_tag(self, tag, start, end):
-        """Whether every character but newlines from start to end has tag."""
-        it, found = start.copy(), False
-        while it.compare(end) < 0:
-            if it.get_char() != '\n':
-                if not it.has_tag(tag):
-                    return False
-                found = True
-            it.forward_char()
+        """Whether every character but newlines and list markers from start
+        to end has tag."""
+        buf = self.tv.get_buffer()
+        found = False
+        for low, high in self._text_segments(start.get_offset(),
+                                             end.get_offset()):
+            it = buf.get_iter_at_offset(low)
+            stop = buf.get_iter_at_offset(high)
+            while it.compare(stop) < 0:
+                if it.get_char() != '\n':
+                    if not it.has_tag(tag):
+                        return False
+                    found = True
+                it.forward_char()
         return found
 
     # ------------------------------------------------------------------ format state
@@ -2652,12 +2890,13 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _heading_lines(self):
         """The lines with text that the cursor or selection is on, leaving
-        out code and dividers, which never become headings."""
+        out code, dividers, and list items, which never become headings."""
         buf = self.tv.get_buffer()
         first_line, last_line = self._selected_or_cursor_lines()
         return [ln for ln in range(first_line, last_line + 1)
                 if not self._is_code_line(buf, ln)
                 and ln not in self._divider_lines
+                and self._marker_end(ln) is None
                 and not self._line_bounds(ln)[0].ends_line()]
 
     def _toggle_bold(self):
@@ -2733,7 +2972,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
             styled_start = buf.get_iter_at_offset(open_offset)
             styled_end = buf.get_iter_at_offset(close_offset - 1)
-            buf.apply_tag(self._backtick_tag, styled_start, styled_end)
+            self._tag_text(self._backtick_tag, styled_start, styled_end)
 
         # Typing the closing backtick leaves the code, as in Slack.
         self._code_active = False
@@ -2750,8 +2989,16 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _toggle_list(self, kind):
         # When every line is already this kind of item, the markers go.
         # Otherwise every line becomes one, replacing any other list marker.
+        buf = self.tv.get_buffer()
         first_line, last_line = self._selected_or_cursor_lines()
-        lines = range(first_line, last_line + 1)
+        # A line of code or a heading is not a list item.
+        lines = [ln for ln in range(first_line, last_line + 1)
+                 if not self._is_code_line(buf, ln)
+                 and not (not self._line_bounds(ln)[0].ends_line()
+                          and buf.get_iter_at_line(ln).has_tag(
+                              self._heading_tag))]
+        if not lines:
+            return
         all_kind = all(self._line_list_marker(ln) in kind for ln in lines)
 
         self._flush_snapshot()
@@ -2766,9 +3013,14 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _toggle_code_block(self):
         buf = self.tv.get_buffer()
         first_line, last_line = self._selected_or_cursor_lines()
+        # A list item is not a line of code.
+        lines = [ln for ln in range(first_line, last_line + 1)
+                 if self._marker_end(ln) is None]
+        if not lines:
+            return
+        first_line, last_line = lines[0], lines[-1]
         all_code = all(
-            self._line_is_fully_tagged(self._code_tag, ln)
-            for ln in range(first_line, last_line + 1))
+            self._line_is_fully_tagged(self._code_tag, ln) for ln in lines)
 
         if self._snap_sid:
             GLib.source_remove(self._snap_sid)
@@ -2776,11 +3028,11 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._take_snapshot()
 
         if all_code:
-            for ln in range(last_line, first_line - 1, -1):
+            for ln in reversed(lines):
                 self._remove_code_from_line(ln)
         else:
             keep_cursor = not buf.get_has_selection()
-            for ln in range(last_line, first_line - 1, -1):
+            for ln in reversed(lines):
                 self._tag_code_line(ln, keep_cursor=keep_cursor)
 
         self._take_snapshot()
@@ -3269,6 +3521,64 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._body_metrics = self._line_extent(body, 'x')
         self._line_spacing = (above, total - above)
         self._line_cache = {}
+        self._baseline_offset = self._body_metrics[0] + above
+
+        # The height of a lowercase letter, which a bullet is centered on.
+        layout = tv.create_pango_layout('x')
+        layout.set_font_description(body)
+        self._x_height = layout.get_extents()[0].height / Pango.SCALE
+
+        # A list marker is drawn, so its characters are made to fit in the
+        # line, so that they do not make it taller, and to take as much room
+        # as they did, or as much as the drawing needs, so that the text after
+        # them is where it was.
+        size = self._font_size
+        self._marker_metrics = {}
+        for marker in LIST_MARKERS:
+            ascent, descent = self._line_extent(body, marker[0])
+            scale = max(0.4, min(
+                1.0, self._body_metrics[0] / max(ascent, 1),
+                self._body_metrics[1] / max(descent, 1)))
+            fitted = body.copy()
+            fitted.set_size(round(body.get_size() * scale))
+            # What it adds to a line, whatever else is in it.
+            self._marker_metrics[marker[0]] = self._line_extent(
+                fitted, marker[0])
+            drawn = (BULLET_SIZE if marker == BULLET_MARKER
+                     else CHECKBOX_SIZE) * size
+            width = max(self._text_width(body, marker),
+                        drawn + 1 + MARKER_GAP * size)
+            # Pango does not add all the spacing it is asked for, so it is
+            # measured as it will be applied, and made up until the marker is
+            # as wide as it should be.
+            spread = 0
+            for _ in range(4):
+                spread = max(0, spread + (
+                    width - self._text_width(body, marker, scale, spread))
+                    / len(marker))
+            tag = self._marker_tags[marker[0]]
+            tag.set_property('scale', scale)
+            tag.set_property('letter-spacing', round(spread * Pango.SCALE))
+            self._marker_code_tags[marker[0]].set_property(
+                'letter-spacing', round((spread + CODE_PAD) * Pango.SCALE))
+
+    def _text_width(self, font, text, scale=1.0, spacing=0):
+        """Width of text in font, as a tag with that scale and letter spacing
+        in pixels would make it, when more text follows it.
+
+        Pango leaves the spacing off the end of a line, so the width is where
+        a character after the text starts."""
+        layout = self.tv.create_pango_layout(text + 'x')
+        layout.set_font_description(font)
+        attributes = Pango.AttrList()
+        for attribute in (Pango.attr_scale_new(scale),
+                          Pango.attr_letter_spacing_new(
+                              round(spacing * Pango.SCALE))):
+            attribute.start_index = 0
+            attribute.end_index = len(text.encode())
+            attributes.insert(attribute)
+        layout.set_attributes(attributes)
+        return layout.index_to_pos(len(text.encode())).x / Pango.SCALE
 
     def _emoji_scale(self):
         return (self._font_size + 3) / self._font_size
@@ -3289,7 +3599,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         start = buf.get_start_iter()
         end = buf.get_end_iter()
         buf.remove_tag(self._emoji_tag, start, end)
-        buf.remove_tag(self._checkbox_tag, start, end)
 
         it = start.copy()
         range_start = None
@@ -3297,8 +3606,6 @@ class NoteWindow(Gtk.ApplicationWindow):
             char = it.get_char()
             next_it = it.copy()
             next_it.forward_char()
-            if '\u2610' <= char <= '\u2612':
-                buf.apply_tag(self._checkbox_tag, it, next_it)
             if self._is_emoji_char(char):
                 if range_start is None:
                     range_start = it.copy()
