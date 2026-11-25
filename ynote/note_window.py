@@ -1623,7 +1623,9 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _leave_marker(self, name, previous):
         """Move the cursor, or the other end of a selection, out of a marker:
         to its end, or, when the cursor was at the start of the item and went
-        left, to the end of the line before."""
+        left, to the end of the line before. Selecting left from the start of
+        an item does not reach it: that would select the line break and the
+        marker, and no text."""
         buf = self.tv.get_buffer()
         mark = buf.get_mark(name)
         if mark is None:
@@ -1633,11 +1635,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         if marker_end is None or it.get_offset() >= marker_end:
             return False
         line = it.get_line()
-        if previous == marker_end and line > 0 and name == 'insert':
+        other = buf.get_selection_bound() if name == 'insert' else buf.get_insert()
+        anchor = buf.get_iter_at_mark(other).get_offset()
+        if (previous == marker_end and line > 0 and name == 'insert'
+                and anchor != marker_end):
             target = self._line_bounds(line - 1)[1]
         else:
+            # Not into the line before when that would select nothing but the
+            # line break and the marker, which no text is in.
             target = buf.get_iter_at_offset(marker_end)
-        other = buf.get_selection_bound() if name == 'insert' else buf.get_insert()
         if buf.get_iter_at_mark(other).equal(it):
             # No selection: both ends move, so one does not appear.
             buf.place_cursor(target)

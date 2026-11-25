@@ -208,3 +208,36 @@ def test_a_selection_end_inside_a_marker_moves_to_the_end_of_it():
 
     start, end = buf.get_selection_bounds()
     assert (start.get_offset(), end.get_offset()) == (8, 11)
+
+
+def test_selecting_left_from_the_start_of_an_item_does_not_reach_the_line_before():
+    win, buf = make_window('one\n• two', cursor=6)
+    # What GTK does for Shift+Left: the cursor end goes into the marker, the
+    # other end stays.
+    buf.move_mark(buf.get_insert(), buf.get_iter_at_offset(5))
+
+    win._leave_marker('insert', 6)
+
+    assert buf.get_selection_bounds() == ()
+    assert buf.get_iter_at_mark(buf.get_insert()).get_offset() == 6
+
+
+def test_moving_left_from_the_start_of_an_item_goes_to_the_line_before():
+    win, buf = make_window('one\n• two', cursor=6)
+    buf.place_cursor(buf.get_iter_at_offset(5))
+
+    win._leave_marker('insert', 6)
+
+    assert buf.get_iter_at_mark(buf.get_insert()).get_offset() == 3
+    assert buf.get_selection_bounds() == ()
+
+
+def test_selecting_left_over_text_from_an_item_continues_into_the_line_before():
+    win, buf = make_window('one\n• two', cursor=8)
+    buf.move_mark(buf.get_selection_bound(), buf.get_iter_at_offset(8))
+    buf.move_mark(buf.get_insert(), buf.get_iter_at_offset(5))
+
+    win._leave_marker('insert', 6)
+
+    low, high = (i.get_offset() for i in buf.get_selection_bounds())
+    assert (low, high) == (3, 8)
