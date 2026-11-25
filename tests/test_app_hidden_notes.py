@@ -83,3 +83,43 @@ def test_hiding_several_notes_puts_them_first_in_their_order():
     app.put_first_in_hidden([app.notes['b'], app.notes['c']])
 
     assert [note_id for note_id, _ in app.hidden_notes()] == ['b', 'c', 'a']
+
+
+def test_a_note_that_fails_to_open_is_saved_back_unchanged(monkeypatch):
+    import ynote.app as app_module
+
+    saved = [{'id': 'ok', 'text': 'fine'}, {'id': 'bad', 'text': 'keep me'}]
+
+    class Window:
+        def __init__(self, app, data):
+            if data['id'] == 'bad':
+                raise TypeError('cannot open')
+            self.note_id = data['id']
+
+        def to_dict(self):
+            return {'id': self.note_id, 'text': 'fine'}
+
+    written = []
+    backed_up = []
+    monkeypatch.setattr(app_module, 'load_notes', lambda path: saved)
+    monkeypatch.setattr(app_module, 'back_up', backed_up.append)
+    monkeypatch.setattr(app_module, 'save_notes',
+                        lambda data, path: written.append(data))
+    monkeypatch.setattr(app_module, 'NoteWindow', Window)
+    monkeypatch.setattr(app_module.GLib, 'idle_add', lambda *a: None)
+    app = PostItApp.__new__(PostItApp)
+    app.notes = {}
+    app._unopened_notes = []
+    app._keep_all_images = False
+    app._work_areas = lambda: ([], None)
+    app._rebuild_indicator_menu = lambda: None
+    app._cleanup_orphaned_images = lambda *a, **k: None
+
+    app._load()
+    app.save_all()
+
+    assert backed_up == [app_module.NOTES_FILE]
+    assert list(app.notes) == ['ok']
+    assert app._keep_all_images
+    assert written == [[{'id': 'ok', 'text': 'fine'},
+                        {'id': 'bad', 'text': 'keep me'}]]

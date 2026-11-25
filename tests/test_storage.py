@@ -55,3 +55,18 @@ def test_save_notes_writes_json_and_replaces_temp_file(tmp_path):
     assert json.loads(notes_file.read_text()) == data
     assert not notes_file.with_name(notes_file.name + '.tmp').exists()
 
+
+
+def test_back_up_copies_the_file_next_to_it_and_replaces_an_old_copy(tmp_path):
+    from ynote.storage import back_up
+
+    notes = tmp_path / 'notes.json'
+    notes.write_text('[{"id": "new"}]')
+    (tmp_path / 'notes.json.bak').write_text('[{"id": "old"}]')
+
+    kept = back_up(notes)
+
+    assert kept == str(tmp_path / 'notes.json.bak')
+    assert (tmp_path / 'notes.json.bak').read_text() == '[{"id": "new"}]'
+    assert notes.read_text() == '[{"id": "new"}]'
+    assert not (tmp_path / 'notes.json.bak.tmp').exists()

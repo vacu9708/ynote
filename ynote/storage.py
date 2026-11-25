@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import shutil
 
 from .config import NOTES_FILE
 
@@ -45,6 +46,19 @@ def load_notes(path=NOTES_FILE):
     if not isinstance(data, list) or not all(isinstance(n, dict) for n in data):
         raise UnreadableNotesError('expected a list of notes')
     return data
+
+
+def back_up(path):
+    """Copy path to <path>.bak, replacing an older copy, and return it.
+
+    The copy is written to a temporary file first, so a failed copy never
+    leaves a damaged .bak behind.
+    """
+    path = os.fspath(path)
+    kept = path + '.bak'
+    shutil.copyfile(path, kept + '.tmp')
+    os.replace(kept + '.tmp', kept)
+    return kept
 
 
 def set_aside(path, now=None):

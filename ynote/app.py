@@ -2,6 +2,7 @@ import os
 import shutil
 import signal
 import sys
+import traceback
 import uuid
 
 import gi
@@ -22,7 +23,9 @@ from .note_manager_window import HiddenNotesWindow
 from .note_window import NoteWindow
 from .search import Note
 from .snap import keep_reachable, place_beside
-from .storage import UnreadableNotesError, load_notes, save_notes, set_aside
+from .storage import (
+    UnreadableNotesError, back_up, load_notes, save_notes, set_aside,
+)
 from .styles import BASE_CSS
 
 class PostItApp(Gtk.Application):
@@ -42,6 +45,9 @@ class PostItApp(Gtk.Application):
         # Set when notes.json could not be read. Its images must survive until
         # the user restores the file, so cleanup is skipped for this run.
         self._keep_all_images = False
+        # Notes read from notes.json that could not be opened. They are saved
+        # back as they were read, so a bug in opening one never loses it.
+        self._unopened_notes = []
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -208,6 +214,10 @@ class PostItApp(Gtk.Application):
     def _load(self):
         try:
             saved = load_notes(NOTES_FILE)
+            if saved:
+                # The notes as they were before this run opened them, to fall
+                # back on if opening or saving them goes wrong.
+                back_up(NOTES_FILE)
         except UnreadableNotesError as e:
             # Never let the empty note below overwrite a file we could not
             # read: keep it aside and tell the user where it went.
@@ -225,8 +235,17 @@ class PostItApp(Gtk.Application):
             if areas and all(k in d for k in ('x', 'y', 'w', 'h')):
                 d['x'], d['y'] = keep_reachable(
                     (d['x'], d['y'], d['w'], d['h']), areas, primary)
-            w = NoteWindow(self, d)
+            try:
+                w = NoteWindow(self, d)
+            except Exception:
+                traceback.print_exc()
+                self._unopened_notes.append(d)
+                self._keep_all_images = True
+                continue
             self.notes[w.note_id] = w
+        if self._unopened_notes:
+            GLib.idle_add(self._warn_unopened_notes,
+                          len(self._unopened_notes))
         self._rebuild_indicator_menu()
         # Startup has no undo/redo history from the previous process, so only
         # images referenced by notes.json should survive.
@@ -446,6 +465,18 @@ class PostItApp(Gtk.Application):
             self.open_uri(GLib.filename_to_uri(CONF_DIR, None))
         return False
 
+    def _warn_unopened_notes(self, count):
+        dialog = Gtk.MessageDialog(
+            transient_for=next(iter(self.notes.values()), None), modal=True,
+            message_type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.OK,
+            text=f'Ynote could not open {count} of your notes')
+        dialog.format_secondary_text(
+            'They are kept unchanged in notes.json and will open again once '
+            'the problem is fixed. Run ynote in a terminal to see the error.')
+        dialog.run()
+        dialog.destroy()
+        return False
+
     def open_uri(self, uri):
         """Open a link or folder in the user's default app."""
         context = Gdk.Display.get_default().get_app_launch_context()
@@ -463,7 +494,7 @@ class PostItApp(Gtk.Application):
         if data is None:
             data = [w.to_dict() for w in self.notes.values()]
 
-        # Runtime undo/redo history. This prevents Ctrl+Y from losing an image
+        # Runtime undo/redo history. This prevents redo from losing an image
         # after the image was removed from the visible note and autosave ran.
         history_files = set()
         if include_history:
@@ -485,7 +516,8 @@ class PostItApp(Gtk.Application):
         cleanup_orphaned_images(IMAGES_DIR, referenced)
 
     def save_all(self, include_history=True):
-        data = [w.to_dict() for w in self.notes.values()]
+        data = ([w.to_dict() for w in self.notes.values()]
+                + self._unopened_notes)
         try:
             save_notes(data, NOTES_FILE)
             self._cleanup_orphaned_images(data, include_history=include_history)
