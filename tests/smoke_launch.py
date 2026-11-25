@@ -31,18 +31,21 @@ ERROR_RE = re.compile(
 def sample_note():
     bold = 'Bold text'
     code = 'sudo apt-get install --no-install-recommends python3-gi-cairo'
+    inline = 'between(code)letters'
     lines = [
         bold,
         'A long prose line that has to wrap to fit the narrow note width.',
         '• a bullet',
         '    ☐ a to-do with a 한글 word',
         '☑ a done to-do',
+        inline,
         '---',
         code,
         'last line',
     ]
     text = '\n'.join(lines)
     code_start = text.index(code)
+    inline_start = text.index('code', text.index(inline))
     return {
         'id': 'smoke',
         'title': 'smoke',
@@ -50,6 +53,7 @@ def sample_note():
         'x': 0, 'y': 0, 'w': 260, 'h': 300,
         'bold_ranges': [[0, len(bold)]],
         'code_ranges': [[code_start, code_start + len(code)]],
+        'backtick_ranges': [[inline_start, inline_start + 4]],
     }
 
 

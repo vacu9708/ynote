@@ -11,7 +11,7 @@ from gi.repository import Gtk, Gdk, GLib, Gio
 
 from . import autostart, focus, tray
 from .config import (
-    APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CONF_DIR, ICON_PATH, IMAGES_DIR,
+    APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CODE_PAD_CHAR, CONF_DIR, ICON_PATH, IMAGES_DIR,
     NEW_NOTE_LABEL, NOTES_FILE, SETTINGS_FILE, UNTITLED_LABEL, display_path,
 )
 from .images import (
@@ -427,7 +427,8 @@ class PostItApp(Gtk.Application):
         self._ignore_next_clipboard_owner_change = True 
 
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(state.get('text', '').replace(CODE_ANCHOR, ''), -1)
+        text = state.get('text', '').replace(CODE_ANCHOR, '')
+        clipboard.set_text(text.replace(CODE_PAD_CHAR, ''), -1)
         GLib.idle_add(self._finish_rich_clipboard_claim)
 
     def _finish_rich_clipboard_claim(self):

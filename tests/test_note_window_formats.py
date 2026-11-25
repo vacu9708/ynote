@@ -5,6 +5,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 
 from tests.test_note_window_heading import make_window, type_text
+from tests.test_note_window_code_pads import pd
 
 
 def tag_range(buf, tag, start, end):
@@ -107,6 +108,60 @@ def test_turning_inline_code_off_after_it_types_plain_text():
 
     assert ranges(win, win._backtick_tag) == [[4, 6]]
     assert not win._code_active and not pinned(win._inline_code_btn)
+
+
+def test_inline_code_turned_off_in_its_middle_splits_it_and_types_plain_text():
+    win, buf = make_window(pd('run ·foobar· now'), cursor=8)
+    tag_range(buf, win._backtick_tag, 4, 12)
+    win._sync_format_state()
+    assert win._code_active
+
+    win._toggle_inline_code()
+    # Nothing is in the text until something is typed.
+    assert buf.get_text(buf.get_start_iter(), buf.get_end_iter(), True) \
+        == pd('run ·foobar· now')
+    type_text(win, buf, 'X')
+    win._normalize_code_pads()
+
+    # The letter has a space on each side, the end of one range and the start
+    # of the next.
+    assert buf.get_text(buf.get_start_iter(), buf.get_end_iter(), True) \
+        == pd('run ·foo·X·bar· now')
+    assert ranges(win, win._backtick_tag) == [[4, 9], [10, 15]]
+    assert not win._code_active
+
+
+def test_bold_turned_off_in_its_middle_types_plain_text():
+    win, buf = make_window('some words', cursor=7)
+    tag_range(buf, win._bold_tag, 0, 10)
+    win._sync_format_state()
+
+    win._toggle_bold()
+    type_text(win, buf, 'X')
+
+    assert ranges(win, win._bold_tag) == [[0, 7], [8, 11]]
+
+
+def test_typing_in_the_middle_of_inline_code_keeps_it_by_default():
+    win, buf = make_window('run foobar now', cursor=7)
+    tag_range(buf, win._backtick_tag, 4, 10)
+    win._sync_format_state()
+
+    type_text(win, buf, 'X')
+
+    assert ranges(win, win._backtick_tag) == [[4, 11]]
+
+
+def test_a_line_break_typed_in_inline_code_does_not_take_it():
+    win, buf = make_window('run foobar now', cursor=7)
+    tag_range(buf, win._backtick_tag, 4, 10)
+    tag_range(buf, win._bold_tag, 4, 10)
+    win._sync_format_state()
+
+    type_text(win, buf, '\n')
+
+    for tag in (win._backtick_tag, win._bold_tag):
+        assert ranges(win, tag) == [[4, 7], [8, 11]]
 
 
 def test_enter_turns_every_format_off():

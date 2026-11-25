@@ -15,7 +15,8 @@ from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
 
 from . import __version__
 from .config import (
-    BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, CODE_ANCHOR, CONF_DIR,
+    BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, CODE_ANCHOR,
+    CODE_PAD_CHAR, CONF_DIR,
     DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR, NEW_NOTE_LABEL,
     PROJECT_DIR, UNTITLED_LABEL, display_path,
 )
@@ -27,7 +28,8 @@ from .snap import snap_rect
 from .styles import (
     BODY_FONT, BULLET_SIZE, CHECKBOX_SIZE, CODE_BLOCK_MARGIN, CODE_FONT,
     CODE_OUTLINE, MARKER_GAP,
-    CODE_PAD, CODE_PAD_Y, CODE_RADIUS, CODE_TEXT_COLOR, HEADING_FONT, HEADING_SCALE, INLINE_CODE_RISE,
+    CODE_GAP, CODE_PAD, CODE_PAD_Y, CODE_RADIUS, CODE_TEXT_COLOR, HEADING_FONT,
+    HEADING_SCALE, INLINE_CODE_RISE,
     LINE_SPACING, PALETTE, code_background, inline_code_background, note_css,
 )
 
@@ -395,22 +397,21 @@ class NoteWindow(Gtk.ApplicationWindow):
             rise=INLINE_CODE_RISE * Pango.SCALE)
         # Derived from the text like dividers, so none of these are saved.
         # The first and last line of a code block keep the room around the
-        # block. Inline code that starts a line is indented, and a space beside
-        # inline code is widened, so the padding of its box does not cover the
-        # words next to it.
+        # block.
         # The anchor of an empty code line is no text, and is hidden so that
         # GTK leaves it out of what it copies and drags, as it does the
         # selection that middle click pastes. It has no width to lose.
         self._anchor_tag = buf.create_tag('code-anchor', invisible=True)
         self._code_top_tag = buf.create_tag('code-top')
         self._code_bottom_tag = buf.create_tag('code-bottom')
-        self._inline_indent_tag = buf.create_tag(
-            'inline-indent', indent=CODE_PAD)
+        # The padding of inline code is a space at each end of it, in the
+        # body's font at its size. A smaller space would be as wide as wanted,
+        # but the cursor beside it would be as small. See _pad_kind().
+        self._pad_tag = buf.create_tag('inline-pad', family=BODY_FONT,
+                                       scale=1.0)
         # Derived too: the spacing of a line, in a note whose lines differ in
         # height. One tag for each pair of spacings. See _even_lines().
         self._slot_tags = {}
-        self._inline_space_tag = buf.create_tag(
-            'inline-space', letter_spacing=CODE_PAD * Pango.SCALE)
         # The characters of a list marker are there for the text, and are not
         # seen: bullets and boxes are drawn over them, by _draw_list_markers().
         # Derived from the text like dividers. Sized by _refresh_code_spacing()
@@ -419,12 +420,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._marker_tags = {
             marker[0]: buf.create_tag(f'marker-{ord(marker[0]):x}',
                                       foreground_rgba=transparent)
-            for marker in LIST_MARKERS}
-        # The space after a marker, where the text of the item is inline code
-        # and its box needs room before it, as a space beside inline code
-        # gets. It has the spacing of the marker as well.
-        self._marker_code_tags = {
-            marker[0]: buf.create_tag(f'marker-code-{ord(marker[0]):x}')
             for marker in LIST_MARKERS}
         self._refresh_code_spacing()
         self._heading_tag = buf.create_tag(
@@ -470,6 +465,9 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(e))
         self._restore_images(data.get('images', []))
         self._strip_marker_formats()
+        if self._normalize_code_pads():
+            # Notes from before inline code had spaces for padding.
+            self._history[0] = self._current_state()
         self._refresh_line_styles()
         # Before the default handler, so the code boxes sit under the text.
         self.tv.connect('draw', self._draw_code_blocks)
@@ -1250,6 +1248,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._restore_images(images)
 
         self._strip_marker_formats()
+        self._normalize_code_pads()
         self._refresh_line_styles()
         end_offset = insert_offset + len(text)
         buf.place_cursor(buf.get_iter_at_offset(end_offset))
@@ -1472,14 +1471,14 @@ class NoteWindow(Gtk.ApplicationWindow):
         return prev.backward_char() and prev.has_tag(tag)
 
     def _on_buf_insert_text(self, buf, location, text, length):
-        if self._restoring:
+        if self._restoring or self._normalizing:
             return
         self._pending_format_inserts.append(
             (self._bold_active, self._code_active, self._heading_active,
              self._iter_has_tag_context(location, self._code_tag)))
 
     def _after_buf_insert_text(self, buf, location, text, length):
-        if self._restoring:
+        if self._restoring or self._normalizing:
             return
         bold, inline_code, heading, apply_code = (
             self._pending_format_inserts.pop(0)
@@ -1494,6 +1493,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         # text takes the formats that are on. A paste of several lines is not
         # one heading.
         new_line = text.startswith('\n')
+        # Text typed inside bold or inline code takes that format from the
+        # text around it. With the format turned off, it does not.
+        if not bold:
+            buf.remove_tag(self._bold_tag, start, end)
+        if not inline_code:
+            buf.remove_tag(self._backtick_tag, start, end)
+        self._clear_line_breaks(start, text)
         if not new_line:
             if bold and not heading:
                 self._apply_tag_to_non_newline_chars(
@@ -1514,6 +1520,21 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._bold_active = self._code_active = False
             self._heading_active = False
             self._refresh_format_buttons()
+
+    def _clear_line_breaks(self, start, text):
+        """Take the formats off the line breaks of `text`, inserted at `start`.
+        A line break takes them from the text around it, as any text does, but
+        it is not text; see _text_segments()."""
+        buf = self.tv.get_buffer()
+        first = start.get_offset()
+        for index, char in enumerate(text):
+            if char != '\n':
+                continue
+            low = buf.get_iter_at_offset(first + index)
+            high = low.copy()
+            high.forward_char()
+            for tag in (self._bold_tag, self._heading_tag, self._backtick_tag):
+                buf.remove_tag(tag, low, high)
 
     def _apply_tag_to_non_newline_chars(self, buf, tag, start, end,
                                         skip_markers=True):
@@ -1658,6 +1679,8 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_buf_changed(self, buf):
         if self._restoring:
             return
+        if not self._normalizing:
+            self._queue_pad_normalization()
         self._refresh_line_styles()
         self._queue_save()
         if self._snap_sid:
@@ -1727,6 +1750,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(e))
         self._restore_images(state.get('images', []))
         self._strip_marker_formats()
+        self._normalize_code_pads()
         self._refresh_emoji_tags()
         self._refresh_line_styles()
         self._restoring = False
@@ -1950,6 +1974,10 @@ class NoteWindow(Gtk.ApplicationWindow):
                 self._remove_divider_line(divider_line)
                 return True
 
+        if (state == 0 and event.keyval in (Gdk.KEY_BackSpace, Gdk.KEY_Delete)
+                and self._delete_around_pad(buf, event.keyval)):
+            return True
+
         if (state == 0 and event.keyval == Gdk.KEY_BackSpace
                 and self._line_is_empty_list_item(cursor_line)):
             self._remove_empty_bullet_line(cursor_line)
@@ -2075,9 +2103,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf = self.tv.get_buffer()
         start, end = buf.get_start_iter(), buf.get_end_iter()
         for tag in (self._code_top_tag, self._code_bottom_tag,
-                    self._inline_indent_tag, self._inline_space_tag,
-                    *self._marker_tags.values(),
-                    *self._marker_code_tags.values(), *self._slot_tags.values()):
+                    self._pad_tag, *self._marker_tags.values(),
+                    *self._slot_tags.values()):
             buf.remove_tag(tag, start, end)
         self._tag_list_markers(buf)
         self._even_lines(buf)
@@ -2096,34 +2123,14 @@ class NoteWindow(Gtk.ApplicationWindow):
             buf.apply_tag(self._code_bottom_tag, *self._line_bounds(end))
             line = end + 1
 
-        # A character other than a space beside inline code is left alone,
-        # since widening it would also open a gap on its far side. The box
-        # gives up its padding on that side instead; see _draw_inline_code().
-        tag = self._backtick_tag
-        it = buf.get_start_iter()
-        if not it.has_tag(tag) and not it.forward_to_tag_toggle(tag):
-            return False
-        while True:
-            range_start = it.copy()
-            range_end = it.copy()
-            if not range_end.forward_to_tag_toggle(tag):
-                break
-            line = range_start.get_line()
-            if (range_start.starts_line()
-                    and not self._is_code_line(buf, line)):
-                buf.apply_tag(self._inline_indent_tag,
-                              *self._line_bounds(line))
-            before = range_start.copy()
-            if (not range_start.starts_line() and before.backward_char()
-                    and before.get_char() in ' \t'):
-                buf.apply_tag(self._inline_space_tag, before, range_start)
-            if range_end.get_char() in ' \t':
-                after = range_end.copy()
-                after.forward_char()
-                buf.apply_tag(self._inline_space_tag, range_end, after)
-            it = range_end
-            if not it.forward_to_tag_toggle(tag):
-                break
+        # The space at each end of an inline code range is its padding.
+        for first, last in self._get_tag_ranges(self._backtick_tag):
+            for offset in (first, last - 1):
+                if self._pad_kind(buf, offset):
+                    here = buf.get_iter_at_offset(offset)
+                    after = here.copy()
+                    after.forward_char()
+                    buf.apply_tag(self._pad_tag, here, after)
         return False
 
     def _hide_code_anchors(self, buf):
@@ -2145,11 +2152,6 @@ class NoteWindow(Gtk.ApplicationWindow):
                 first.forward_chars(len(parts[0]))
                 buf.apply_tag(self._marker_tags[parts[1][0]], first,
                               buf.get_iter_at_offset(end))
-                after = buf.get_iter_at_offset(end)
-                if after.has_tag(self._backtick_tag):
-                    space = buf.get_iter_at_offset(end - 1)
-                    buf.apply_tag(self._marker_code_tags[parts[1][0]], space,
-                                  after)
 
     def _draw_list_markers(self, tv, cr):
         """Draw the bullet or to-do box of each visible list item.
@@ -2438,35 +2440,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._draw_inline_code(tv, cr, buf, first, last)
         return False
 
-    def _pad_beside(self, tv, row, tail, pad, before):
-        """Padding of an inline code box on one side of the row row..tail.
-
-        Full padding where the row starts or ends, or next to a space, which
-        _apply_code_margins() widens. Next to any other character the box
-        stops a pixel short of it."""
-        if before:
-            other = row.copy()
-            if tv.starts_display_line(row) or not other.backward_char():
-                return pad
-        else:
-            other = tail.copy()
-            if not other.forward_char() or other.ends_line():
-                return pad
-            if tv.starts_display_line(other):
-                return pad
-        if other.get_char() in ' \t':
-            return pad
-        here = tv.get_iter_location(row if before else tail)
-        there = tv.get_iter_location(other)
-        room = (here.x - there.x - there.width if before
-                else there.x - here.x - here.width)
-        return max(0, min(pad, room - 1))
-
     def _draw_inline_code(self, tv, cr, buf, first, last):
         # One box per display line of each inline code range, so a range that
-        # wraps gets a box on every row it covers.
+        # wraps gets a box on every row it covers. The padding is the space at
+        # each end of the range, so the box is where its characters are.
         tag = self._backtick_tag
-        pad = CODE_PAD
         pad_y = CODE_PAD_Y + 1
         it = buf.get_iter_at_line(first)
         end = buf.get_iter_at_line(last)
@@ -2478,38 +2456,55 @@ class NoteWindow(Gtk.ApplicationWindow):
             range_end = it.copy()
             if not range_end.forward_to_tag_toggle(tag):
                 break
-            row = it.copy()
-            while row.compare(range_end) < 0:
-                # The start of the next display line. Its "line end" is the
-                # last cursor position of a wrapped line, which is before its
-                # last character, so it cannot bound the box.
-                row_end = row.copy()
-                if (not tv.forward_display_line(row_end)
-                        or row_end.compare(row) <= 0
-                        or row_end.compare(range_end) > 0):
-                    row_end = range_end.copy()
-                tail = row_end.copy()
-                tail.backward_char()
-                if tail.get_char() == '\n':
-                    tail.backward_char()
-                if tail.compare(row) >= 0:
-                    a, b = tv.get_iter_location(row), tv.get_iter_location(tail)
-                    # A character's rectangle is the line area of its own
-                    # font, raised with it. A character from another font in
-                    # the row, such as an emoji, widens the box to fit.
-                    top = min(a.y, b.y)
-                    bottom = max(a.y + a.height, b.y + b.height)
-                    left = self._pad_beside(tv, row, tail, pad, before=True)
-                    right = self._pad_beside(tv, row, tail, pad, before=False)
-                    wx, wy = tv.buffer_to_window_coords(
-                        Gtk.TextWindowType.WIDGET, a.x, top - pad_y)
-                    outlined_box(cr, self._inline_rgba, wx - left, wy,
-                                 b.x + b.width - a.x + left + right,
-                                 bottom - top + 2 * pad_y)
-                row = row_end
+            self._draw_inline_part(tv, cr, buf, it, range_end, pad_y)
             it = range_end
             if not it.forward_to_tag_toggle(tag):
                 break
+
+    def _draw_inline_part(self, tv, cr, buf, start, stop, pad_y):
+        row = start.copy()
+        while row.compare(stop) < 0:
+            # The start of the next display line. Its "line end" is the
+            # last cursor position of a wrapped line, which is before its
+            # last character, so it cannot bound the box.
+            row_end = row.copy()
+            if (not tv.forward_display_line(row_end)
+                    or row_end.compare(row) <= 0
+                    or row_end.compare(stop) > 0):
+                row_end = stop.copy()
+            tail = row_end.copy()
+            tail.backward_char()
+            if tail.get_char() == '\n':
+                tail.backward_char()
+            if tail.compare(row) >= 0:
+                a, b = tv.get_iter_location(row), tv.get_iter_location(tail)
+                # A character's rectangle is the line area of its own font,
+                # raised with it. The spaces at the ends are smaller than the
+                # rest, so the height is that of the other characters. One from
+                # another font in the row, such as an emoji, widens the box.
+                inner_first, inner_last = row.copy(), tail.copy()
+                while (inner_first.compare(inner_last) < 0
+                       and self._pad_kind(buf, inner_first.get_offset())):
+                    inner_first.forward_char()
+                while (inner_last.compare(inner_first) > 0
+                       and self._pad_kind(buf, inner_last.get_offset())):
+                    inner_last.backward_char()
+                c, d = (tv.get_iter_location(inner_first),
+                        tv.get_iter_location(inner_last))
+                top = min(c.y, d.y)
+                bottom = max(c.y + c.height, d.y + d.height)
+                wx, wy = tv.buffer_to_window_coords(
+                    Gtk.TextWindowType.WIDGET, a.x, top - pad_y)
+                width = b.x + b.width - a.x
+                # The box stops short of the spaces at its ends, which leaves
+                # a gap from the text beside it.
+                if self._pad_kind(buf, row.get_offset()) == 'lead':
+                    wx, width = wx + CODE_GAP, width - CODE_GAP
+                if self._pad_kind(buf, tail.get_offset()) == 'trail':
+                    width -= CODE_GAP
+                outlined_box(cr, self._inline_rgba, wx, wy, width,
+                             bottom - top + 2 * pad_y)
+            row = row_end
 
     def _draw_text_backing(self, tv, cr, buf, visible):
         # A see-through note would leave text unreadable over a dark desktop,
@@ -2572,6 +2567,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._sync_format_state()
         offset = it.get_offset()
         previous, self._cursor_offset = self._cursor_offset, offset
+        # get_has_selection() has not caught up while the mark is being set.
+        if not it.equal(buf.get_iter_at_mark(buf.get_selection_bound())):
+            event = Gtk.get_current_event()
+            keyboard = (event is not None
+                        and event.type == Gdk.EventType.KEY_PRESS)
+            GLib.idle_add(self._keep_pads_out_of_selection, previous, keyboard,
+                          priority=GLib.PRIORITY_HIGH_IDLE)
         if not buf.get_has_selection() and it.get_line() in self._divider_lines:
             GLib.idle_add(self._skip_divider, offset, offset >= previous,
                           priority=GLib.PRIORITY_HIGH_IDLE)
@@ -2903,10 +2905,18 @@ class NoteWindow(Gtk.ApplicationWindow):
         if bounds:
             return self._range_has_tag(tag, *bounds)
         it = buf.get_iter_at_mark(buf.get_insert())
+        offset = it.get_offset()
+        # The space at the end of inline code is outside of it as far as the
+        # cursor after it goes, and the one at the start of it is not inside
+        # for the cursor before it.
         if it.starts_line():
+            if tag is self._backtick_tag and self._pad_kind(buf, offset):
+                return False
             return not it.ends_line() and it.has_tag(tag)
         before = it.copy()
         before.backward_char()
+        if tag is self._backtick_tag and self._pad_kind(buf, offset - 1) == 'trail':
+            return False
         return before.has_tag(tag)
 
     def _heading_lines(self):
@@ -2927,10 +2937,246 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._bold_active = not self._bold_active
             self._refresh_format_buttons()
 
+    # ------------------------------------------------------------------ code padding
+    # Inline code has a space at each end of it, which is its padding: a box
+    # needs room beside its characters, and a space is the one thing a text
+    # view lets take room without opening gaps in the text around it. The
+    # spaces are tagged as code, sized by `_pad_tag`, and made and removed by
+    # _normalize_code_pads() whenever the text changes, so a range that comes
+    # from anywhere, an old note, a paste, or typing, gets them. The cursor is
+    # in the code or outside it on either side of a space, and Backspace and
+    # Delete step over a space as they do over a list marker.
+
+    _normalizing = False
+    _pads_sid = None
+
+    def _pad_kind(self, buf, offset):
+        """'lead' for the space at the start of an inline code range, 'trail'
+        for the one at its end, or None."""
+        if offset < 0 or offset >= buf.get_char_count():
+            return None
+        tag = self._backtick_tag
+        here = buf.get_iter_at_offset(offset)
+        if here.get_char() != CODE_PAD_CHAR or not here.has_tag(tag):
+            return None
+        before = here.copy()
+        has_before = before.backward_char() and before.has_tag(tag)
+        after = here.copy()
+        has_after = after.forward_char() and after.has_tag(tag)
+        if has_after and not has_before:
+            return 'lead'
+        if has_before and not has_after:
+            return 'trail'
+        return None
+
+    def _keep_pads_out_of_selection(self, previous=None, keyboard=True):
+        """A selection never ends in the padding of inline code, which a
+        browser would not select either. Moved by a key, the end that moves
+        goes on past a space it reached, the way it was going, so the selection
+        grows by the character beyond it or gives the space up with the one
+        before it. Dragged by the mouse, it stops short of the space, at the
+        text that is under the pointer. The end that stays gives up a space it
+        starts with."""
+        buf = self.tv.get_buffer()
+        insert = buf.get_iter_at_mark(buf.get_insert()).get_offset()
+        anchor = buf.get_iter_at_mark(buf.get_selection_bound()).get_offset()
+        if insert == anchor:
+            return False
+        new_insert, new_anchor = insert, anchor
+        edge = insert - 1 if insert > anchor else insert
+        if self._pad_kind(buf, edge):
+            if keyboard:
+                step = 1 if previous is None or insert >= previous else -1
+                if not 0 <= insert + step <= buf.get_char_count():
+                    step = -step
+            else:
+                step = -1 if insert > anchor else 1
+            new_insert = insert + step
+        if new_anchor < new_insert and self._pad_kind(buf, new_anchor):
+            new_anchor += 1
+        elif new_anchor > new_insert and self._pad_kind(buf, new_anchor - 1):
+            new_anchor -= 1
+        if (new_insert, new_anchor) != (insert, anchor):
+            buf.select_range(buf.get_iter_at_offset(new_insert),
+                             buf.get_iter_at_offset(new_anchor))
+        return False
+
+    def _queue_pad_normalization(self):
+        if self._pads_sid is None:
+            self._pads_sid = GLib.idle_add(
+                self._run_pad_normalization, priority=GLib.PRIORITY_HIGH_IDLE)
+
+    def _run_pad_normalization(self):
+        self._pads_sid = None
+        self._normalize_code_pads()
+        return False
+
+    def _normalize_code_pads(self):
+        """Give every inline code range the space at each end that is its
+        padding, and take away a range that is only spaces. Returns whether
+        the text changed. The cursor stays where it is among the characters;
+        the one at the end of a range stays inside it, and the one at the
+        start of a range stays outside it unless that is a line's start."""
+        if self._normalizing:
+            return False
+        buf = self.tv.get_buffer()
+        ranges = self._get_tag_ranges(self._backtick_tag)
+        if not ranges:
+            return False
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        edits = []
+        for first, last in ranges:
+            if self._is_code_line(buf, buf.get_iter_at_offset(first).get_line()):
+                continue
+            body = text[first:last]
+            if not body.strip(' ' + CODE_PAD_CHAR):
+                edits.append((first, 'delete', last))
+                continue
+            # A plain space there is the padding of an older note.
+            if body[0] == ' ':
+                edits.append((first, 'swap', first + 1))
+            elif body[0] != CODE_PAD_CHAR:
+                edits.append((first, 'lead', first))
+            if body[-1] == ' ':
+                edits.append((last - 1, 'swap', last))
+            elif body[-1] != CODE_PAD_CHAR:
+                edits.append((last, 'trail', last))
+        if not edits:
+            return False
+
+        marks = [buf.get_iter_at_mark(buf.get_insert()).get_offset(),
+                 buf.get_iter_at_mark(buf.get_selection_bound()).get_offset()]
+        flags = (self._bold_active, self._code_active, self._heading_active)
+        self._normalizing = True
+        try:
+            for offset, kind, stop in sorted(edits, key=lambda e: -e[0]):
+                if kind == 'delete':
+                    buf.delete(buf.get_iter_at_offset(offset),
+                               buf.get_iter_at_offset(stop))
+                    marks = [offset if offset < m < stop
+                             else m - (stop - offset) if m >= stop else m
+                             for m in marks]
+                    continue
+                if kind == 'swap':
+                    buf.delete(buf.get_iter_at_offset(offset),
+                               buf.get_iter_at_offset(stop))
+                buf.insert(buf.get_iter_at_offset(offset), CODE_PAD_CHAR)
+                buf.apply_tag(self._backtick_tag,
+                              buf.get_iter_at_offset(offset),
+                              buf.get_iter_at_offset(offset + 1))
+                if kind == 'swap':
+                    continue
+                # A lone cursor at the start of a range is before it when
+                # plain text has just been typed in front of it, and inside
+                # it at the start of a line, where Enter has carried it.
+                at_start = kind == 'lead' and (
+                    marks[0] != marks[1] or offset == 0
+                    or text[offset - 1] == '\n')
+                marks = [m + 1 if (m >= offset if at_start else m > offset)
+                         else m for m in marks]
+            insert, bound = (buf.get_iter_at_offset(m) for m in marks)
+            if marks[0] == marks[1]:
+                buf.place_cursor(insert)
+            else:
+                buf.select_range(insert, bound)
+        finally:
+            self._normalizing = False
+        self._bold_active, self._code_active, self._heading_active = flags
+        self._refresh_format_buttons()
+        self._queue_code_margins()
+        return True
+
     def _toggle_inline_code(self):
-        if not self._toggle_tag(self._backtick_tag):
+        buf = self.tv.get_buffer()
+        if buf.get_selection_bounds():
+            self._toggle_code_selection(buf)
+        elif not self._step_across_code_edge(buf):
             self._code_active = not self._code_active
             self._refresh_format_buttons()
+
+    def _toggle_code_selection(self, buf):
+        start, end = buf.get_selection_bounds()
+        all_tagged = self._range_has_tag(self._backtick_tag, start, end)
+        if self._snap_sid:
+            GLib.source_remove(self._snap_sid)
+            self._snap_sid = None
+            self._take_snapshot()
+        first = buf.create_mark(None, start, True)
+        last = buf.create_mark(None, end, False)
+        if all_tagged:
+            # Spaces of the padding in the selection go with the code.
+            pads = [o for o in range(start.get_offset(), end.get_offset())
+                    if self._pad_kind(buf, o)]
+            self._tag_text(self._backtick_tag, start, end, remove=True)
+            self._normalizing = True
+            try:
+                for offset in reversed(pads):
+                    buf.delete(buf.get_iter_at_offset(offset),
+                               buf.get_iter_at_offset(offset + 1))
+            finally:
+                self._normalizing = False
+        else:
+            self._tag_text(self._backtick_tag, start, end)
+        buf.select_range(buf.get_iter_at_mark(first),
+                         buf.get_iter_at_mark(last))
+        self._normalize_code_pads()
+        buf.delete_mark(first)
+        buf.delete_mark(last)
+        self._take_snapshot()
+        self._queue_save()
+        self._sync_format_state()
+
+    def _step_across_code_edge(self, buf):
+        """Turning inline code on or off at the edge of it: the cursor steps
+        over the space at the end, so it is where the text will go. Returns
+        whether it did."""
+        it = buf.get_iter_at_mark(buf.get_insert())
+        offset = it.get_offset()
+        before, after = self._pad_kind(buf, offset - 1), self._pad_kind(buf, offset)
+        if self._code_active:
+            if before == 'lead':
+                buf.place_cursor(buf.get_iter_at_offset(offset - 1))
+                return True
+            if after == 'trail':
+                buf.place_cursor(buf.get_iter_at_offset(offset + 1))
+                return True
+            return False
+        if after == 'lead':
+            buf.place_cursor(buf.get_iter_at_offset(offset + 1))
+            return True
+        if before == 'trail':
+            buf.place_cursor(buf.get_iter_at_offset(offset - 1))
+            return True
+        return False
+
+    def _delete_around_pad(self, buf, keyval):
+        """Backspace and Delete next to the space of inline code take the
+        character beyond it, as the box has no characters of its own there.
+        Returns whether it handled the key."""
+        offset = buf.get_iter_at_mark(buf.get_insert()).get_offset()
+        before, after = (self._pad_kind(buf, offset - 1),
+                         self._pad_kind(buf, offset))
+        if keyval == Gdk.KEY_BackSpace and before:
+            if offset < 2:
+                return True
+            low = offset - 2
+            # Code with nothing in it goes with both of its spaces.
+            if before == 'trail' and self._pad_kind(buf, low) == 'lead':
+                span = (low, offset)
+            else:
+                span = (low, offset - 1)
+        elif keyval == Gdk.KEY_Delete and after:
+            if offset + 2 > buf.get_char_count():
+                return True
+            if self._pad_kind(buf, offset + 1) == 'trail':
+                span = (offset, offset + 2)
+            else:
+                span = (offset + 1, offset + 2)
+        else:
+            return False
+        buf.delete(buf.get_iter_at_offset(span[0]),
+                   buf.get_iter_at_offset(span[1]))
+        return True
 
     def _toggle_heading(self):
         # A heading is a whole line, so it applies to every line the selection
@@ -2995,7 +3241,12 @@ class NoteWindow(Gtk.ApplicationWindow):
             styled_end = buf.get_iter_at_offset(close_offset - 1)
             self._tag_text(self._backtick_tag, styled_start, styled_end)
 
-        # Typing the closing backtick leaves the code, as in Slack.
+        # Typing the closing backtick leaves the code, as in Slack: the cursor
+        # is past the space that ends it.
+        self._normalize_code_pads()
+        cursor = buf.get_iter_at_mark(buf.get_insert()).get_offset()
+        if self._pad_kind(buf, cursor) == 'trail':
+            buf.place_cursor(buf.get_iter_at_offset(cursor + 1))
         self._code_active = False
         self._refresh_format_buttons()
         self._take_snapshot()
@@ -3580,8 +3831,6 @@ class NoteWindow(Gtk.ApplicationWindow):
             tag = self._marker_tags[marker[0]]
             tag.set_property('scale', scale)
             tag.set_property('letter-spacing', round(spread * Pango.SCALE))
-            self._marker_code_tags[marker[0]].set_property(
-                'letter-spacing', round((spread + CODE_PAD) * Pango.SCALE))
 
     def _text_width(self, font, text, scale=1.0, spacing=0):
         """Width of text in font, as a tag with that scale and letter spacing

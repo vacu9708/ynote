@@ -52,9 +52,14 @@ CODE_RADIUS = 4
 # The same box for code blocks and inline code, as in CSS: the box is the
 # font's own line area, ascent above the baseline and descent below it, plus
 # padding that is the same on all four sides. It does not depend on which
-# letters are in it. Both are the space between the outline and that area.
+# letters are in it. Both are the space between the outline and that area. (The
+# padding of inline code beside the text is a space at each end of it instead,
+# as wide as the body font's space.)
 CODE_PAD = 5
 CODE_PAD_Y = 1
+# The box of inline code stops this far inside the space that is its padding,
+# which leaves a gap between it and the text beside it.
+CODE_GAP = 2
 # A code block also keeps this room from the lines around it, as a block of
 # its own. Inline code is part of its line and has none.
 CODE_BLOCK_MARGIN = 4

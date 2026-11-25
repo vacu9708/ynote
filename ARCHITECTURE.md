@@ -236,25 +236,49 @@ sequenceDiagram
   The room inside the box is line spacing on the code tag.
 - **Inline code.** A text tag cannot have an outline or padding, so the tag
   only sets the font and color, and `_draw_inline_code()` draws the outlined
-  box around the letters of each display line of every `backtick_ranges`
+  box around the characters of each display line of every `backtick_ranges`
   range. The box is placed from the code character's own rectangle, whose
   top is the top of the code font, raised with it, not the top of the row.
   The ranges keep the name of the backticks that typed them, which are
   removed once the text is styled.
+- **Padding of inline code.** A text view makes room for nothing but
+  characters, and letter spacing, which Pango splits between both sides of a
+  character, cannot make room beside a letter without opening a gap on its far
+  side. So the padding is an en space (`CODE_PAD_CHAR`) at each end of the
+  range, tagged as code and set in the body font by `_pad_tag`. It is half an
+  em wide, which is the padding and the gap from the text beside the code:
+  the box is drawn `CODE_GAP` inside it at each end. It is not a space
+  shrunk to a width: GTK draws the cursor as tall as the font of the
+  character after it, so a smaller space gave a smaller cursor beside the
+  code, and the space of the body font is too narrow.
+  `_normalize_code_pads()` gives every range its two spaces and removes one
+  that is only spaces, whenever the text changes and when a note is loaded,
+  restored, or pasted into, so an old note gets them the first time it is
+  opened, with a plain space at an end of a range made one, and a range that
+  comes from typing, a selection, or backticks has them too. They are in the
+  saved text, and Ctrl+C leaves them out. An en space may only be at the end
+  of a range as its padding: `_pad_kind()` says which one it is.
+- **The cursor and the padding.** The cursor is inside the code on one side
+  of a padding space and outside on the other, and `_sync_format_state()`
+  takes that from `_pad_kind()`. Turning code on or off at an edge steps the
+  cursor over the space, so it is where the text will go, as in Slack. In the
+  middle of code, turning it off changes no text, and what is typed there makes
+  two ranges, which `_normalize_code_pads()` gives their spaces. Backspace and
+  Delete next to a padding space take the character beyond it, since the box
+  has no character of its own there. A selection never ends on a padding
+  space (`_keep_pads_out_of_selection()`): an end moved by a key goes on past
+  it, and one dragged by the mouse stops short of it.
 - **Room around code.** Like dividers, `_apply_code_margins()` derives tags
   from the text after every change: spacing above the first and below the last
-  line of a code block, an indent before inline code that starts a line, and
-  letter spacing on a space beside inline code, so the padding does not cover
-  the words next to it. A character other than a space is left alone, since
-  letter spacing would also open a gap on its far side, and the box gives up
-  its padding on that side instead. It runs once the edit is done, because a
-  line typed into a code block gets its tag after the buffer reports the
-  change.
+  line of a code block, and `_pad_tag` on the padding spaces. It runs once the
+  edit is done, because a line typed into a code block gets its tag after the
+  buffer reports the change.
 - **Formats at the cursor.** Bold, inline code, and heading are each on or off
   at the cursor, shown on the B, H, and `</>` buttons. `_sync_format_state()`
   takes them from the text the cursor is attached to whenever it moves, also
-  when deleting text or undoing moves it, a button or shortcut toggles one, typed text gets the ones that are on, and
-  Enter turns them all off. `heading_ranges` cover whole lines, so on an empty
+  when deleting text or undoing moves it, a button or shortcut toggles one, typed text gets the ones that are on
+  and none of the others, also inside a bold or code range, which splits it,
+  and Enter turns them all off. `heading_ranges` cover whole lines, so on an empty
   line Heading applies to the text typed there next. A heading is already
   bold, so in one B is off and disabled, and making a line a heading removes
   its bold.
