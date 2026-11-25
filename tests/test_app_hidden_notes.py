@@ -123,3 +123,63 @@ def test_a_note_that_fails_to_open_is_saved_back_unchanged(monkeypatch):
     assert app._keep_all_images
     assert written == [[{'id': 'ok', 'text': 'fine'},
                         {'id': 'bad', 'text': 'keep me'}]]
+
+
+def _start(monkeypatch, notes_file):
+    """Run the start-up load against a real notes file, with no windows."""
+    import ynote.app as app_module
+
+    class Window:
+        def __init__(self, app, data):
+            self.note_id = data['id']
+
+        def to_dict(self):
+            return {'id': self.note_id}
+
+    monkeypatch.setattr(app_module, 'NOTES_FILE', str(notes_file))
+    monkeypatch.setattr(app_module, 'NoteWindow', Window)
+    monkeypatch.setattr(app_module.GLib, 'idle_add', lambda *a, **k: None)
+    app = PostItApp.__new__(PostItApp)
+    app.notes = {}
+    app._unopened_notes = []
+    app._keep_all_images = False
+    app._work_areas = lambda: ([], None)
+    app._rebuild_indicator_menu = lambda: None
+    app._cleanup_orphaned_images = lambda *a, **k: None
+    app.new_note = lambda: None
+    app._load()
+    return app
+
+
+def test_starting_with_notes_keeps_a_copy_of_them_as_the_backup(tmp_path, monkeypatch):
+    notes = tmp_path / 'notes.json'
+    notes.write_text('[{"id": "a"}, {"id": "b"}]')
+
+    _start(monkeypatch, notes)
+
+    assert (tmp_path / 'notes.json.bak').read_text() == notes.read_text()
+
+
+def test_an_empty_notes_file_does_not_replace_a_good_backup(tmp_path, monkeypatch):
+    # After notes were lost, starting Ynote again to look must not overwrite
+    # the copy of them with the empty file.
+    (tmp_path / 'notes.json.bak').write_text('[{"id": "a"}]')
+    notes = tmp_path / 'notes.json'
+    notes.write_text('[]')
+
+    _start(monkeypatch, notes)
+    _start(monkeypatch, notes)
+
+    assert (tmp_path / 'notes.json.bak').read_text() == '[{"id": "a"}]'
+
+
+def test_an_unreadable_notes_file_does_not_replace_a_good_backup(tmp_path, monkeypatch):
+    (tmp_path / 'notes.json.bak').write_text('[{"id": "a"}]')
+    notes = tmp_path / 'notes.json'
+    notes.write_text('{this is not json')
+
+    _start(monkeypatch, notes)
+
+    assert (tmp_path / 'notes.json.bak').read_text() == '[{"id": "a"}]'
+    assert not notes.exists()
+    assert list(tmp_path.glob('notes.json.broken-*'))
