@@ -2613,8 +2613,6 @@ class NoteWindow(Gtk.ApplicationWindow):
             'Engineer-friendly sticky notes\n\n'
             f'Notes: {display_path(CONF_DIR)}\n'
             f'Running from: {display_path(PROJECT_DIR)}')
-        dialog.set_website('https://github.com/vacu9708/ynote')
-        dialog.set_website_label('github.com/vacu9708/ynote')
         # The MIT license asks for this notice to travel with the program.
         dialog.set_copyright('Copyright (c) 2026 Youngsik Yang')
         dialog.set_license_type(Gtk.License.MIT_X11)
