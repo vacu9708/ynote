@@ -15,6 +15,7 @@ def test_normalize_note_data_fills_defaults_for_old_saved_notes():
     assert note['hidden'] is False
     assert note['sort_order'] == 0.0
     assert note['bold_ranges'] == []
+    assert note['heading_ranges'] == []
     assert note['code_ranges'] == []
     assert note['backtick_ranges'] == []
     assert note['images'] == []
@@ -33,10 +34,12 @@ def test_normalize_note_data_copies_mutable_defaults():
 
     first['images'].append({'file': 'one.png'})
     first['bold_ranges'].append([0, 1])
+    first['heading_ranges'].append([0, 3])
     first['backtick_ranges'].append([2, 4])
 
     assert second['images'] == []
     assert second['bold_ranges'] == []
+    assert second['heading_ranges'] == []
     assert second['backtick_ranges'] == []
 
 

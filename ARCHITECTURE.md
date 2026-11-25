@@ -79,7 +79,8 @@ character ranges over plain text, not as markup:
   "x": 120, "y": 80, "w": 300, "h": 320,
   "on_top": false, "hidden": false, "sort_order": 0.0, "font_size": 14,
   "color": "yellow", "opacity": 1.0, "collapsed": false,
-  "bold_ranges": [[0, 8]], "code_ranges": [[9, 25]], "backtick_ranges": [],
+  "bold_ranges": [], "heading_ranges": [[0, 8]], "code_ranges": [[9, 25]],
+  "backtick_ranges": [],
   "images": []
 }
 ```
@@ -87,7 +88,7 @@ character ranges over plain text, not as markup:
 | Field | Meaning |
 | --- | --- |
 | `text` | The note text, including the special characters below. |
-| `bold_ranges`, `code_ranges`, `backtick_ranges` | `[start, end)` character offsets into `text`. GTK buffer offsets count characters, so they match Python string indices. |
+| `bold_ranges`, `heading_ranges`, `code_ranges`, `backtick_ranges` | `[start, end)` character offsets into `text`. GTK buffer offsets count characters, so they match Python string indices. |
 | `images` | `{file, original_name, offset}` per image. `offset` is where its placeholder character sits in `text`. |
 | `x`, `y`, `w`, `h` | Window position and size. A maximized note saves the rectangle it had before, and a collapsed note saves its expanded height as `h`. |
 | `hidden`, `sort_order` | Whether the note is hidden, and its place in the Hidden Notes list. |
@@ -184,9 +185,16 @@ sequenceDiagram
   an RGBA visual set before the window is realized. Below 100%,
   `_draw_text_backing()` paints an opaque strip behind each row of text so it
   stays readable.
-- **Code blocks.** `_draw_code_blocks()` draws one box per run of code lines,
-  as wide as the longest line. A multi-line selection inside a code block is
-  drawn there too, because GTK would paint it across the whole note.
+- **Code blocks.** `_draw_code_blocks()` draws one outlined box per run of code
+  lines, as wide as the longest line. A multi-line selection inside a code
+  block is drawn there too, because GTK would paint it across the whole note.
+- **Inline code.** A text tag cannot have an outline, so the tag only sets the
+  font and color, and `_draw_inline_code()` draws the outlined box behind each
+  display line of every `backtick_ranges` range. The ranges keep the name of
+  the backticks that typed them, which are removed once the text is styled.
+- **Headings.** `heading_ranges` cover whole lines and style them with a larger
+  bold serif face. Choosing Heading on an empty line styles the next text typed
+  there, tracked in `_heading_line`.
 - **Right-click popover.** A `Gtk.Popover` is drawn inside the window it is
   attached to, so one that does not fit the note, always the case for a
   collapsed note, is attached to a transparent window of its own.

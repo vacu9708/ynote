@@ -18,8 +18,8 @@ Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
 - **Hidden notes** you don't need on screen, which **All notes** search still
   finds
 - **Code blocks** you can copy one command at a time
-- **Checklists, bullet lists, bold text, dividers, links, backtick formatting**
-  for paths and names, **emoji**, and **images**
+- **Checklists, bullet lists, bold text, headings, dividers, links, inline
+  code** for paths and names, **emoji**, and **images**
 - **Snapping** notes into half-screen columns with the keyboard
 
 ![A green note at 35% opacity over a terminal full of log lines, with its right-click popover open to show the color swatches, the opacity slider, and the font size buttons, and a collapsed note below it](assets/ynote-customize.png)
@@ -70,7 +70,7 @@ buttons don't show:
 - **Right-click** the title bar or bottom bar for the note's color, opacity,
   font size, rename, and delete. Double-click the title bar to maximize.
 - Typing `- ` or `[ ] ` at the start of a line makes a bullet or a checklist,
-  `---` alone on a line makes a divider, and `` `text` `` turns red italic.
+  `---` alone on a line makes a divider, and `` `text` `` becomes inline code.
 - Paste an image with `Ctrl+V`.
 - In a code block, double-click a line to select one command, or triple-click to
   select the whole block. `Ctrl+click` opens a link.

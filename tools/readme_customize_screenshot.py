@@ -70,7 +70,7 @@ def sample_notes(left, top):
     return [
         dict(id='release', title='Release', text=text, x=left, y=top,
              w=width, h=height, opacity=0.35, color='green',
-             bold_ranges=[[0, len('Release steps')]]),
+             heading_ranges=[[0, len('Release steps')]]),
         dict(id='runbook', title='On-call runbook', text='', x=left,
              y=top + height + 30, w=width, h=300, color='purple',
              collapsed=True),

@@ -63,8 +63,8 @@ class NoteBuilder:
 
     def __init__(self):
         self.text = ''
-        self.ranges = {'bold_ranges': [], 'code_ranges': [],
-                       'backtick_ranges': []}
+        self.ranges = {'bold_ranges': [], 'heading_ranges': [],
+                       'code_ranges': [], 'backtick_ranges': []}
         self.images = []
 
     def add(self, text, kind=None):
@@ -110,10 +110,10 @@ def write_terminal_image(path):
 
 def sample_notes():
     debug = NoteBuilder()
-    debug.line('Repro', 'bold_ranges')
+    debug.line('Repro', 'heading_ranges')
     debug.line('curl -i $STAGING/api/orders', 'code_ranges')
     debug.image(TERMINAL_IMAGE)
-    debug.line('Cause', 'bold_ranges')
+    debug.line('Cause', 'heading_ranges')
     debug.line('• 🔥 The monthly report query takes ~75 s')
     debug.add('    • ').add('proxy_read_timeout', 'backtick_ranges')
     debug.line(' is 60 s')

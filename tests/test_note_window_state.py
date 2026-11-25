@@ -27,7 +27,8 @@ def make_window(position=(100, 50), size=(300, 320)):
     win._color, win._opacity = 'yellow', 1.0
     win._collapsed, win._expanded_height = False, size[1]
     win._normal_geometry = None
-    win._bold_tag = win._code_tag = win._backtick_tag = None
+    win._bold_tag = win._heading_tag = win._code_tag = None
+    win._backtick_tag = None
     win._get_tag_ranges = lambda tag: []
     win._get_images_state = lambda: []
     win.get_visible = lambda: True

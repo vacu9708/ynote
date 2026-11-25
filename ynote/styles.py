@@ -19,6 +19,18 @@ TITLE_COLOR = '#222222'
 CODE_MIX_TARGET = '#EEEEEE'
 CODE_MIX_AMOUNT = 0.7
 
+# Inline code and code blocks share a monospace font, a filled box, and a thin
+# outline, so each reads as a unit on every note color.
+CODE_FONT = 'Ubuntu Mono, DejaVu Sans Mono, monospace'
+CODE_TEXT_COLOR = '#C53030'
+CODE_OUTLINE = (0, 0, 0, 0.28)
+CODE_RADIUS = 4
+
+# A heading is told from body text by its size, its weight, and a serif face,
+# which sets it apart from the sans body font even at the same size.
+HEADING_FONT = 'Noto Serif, DejaVu Serif, serif'
+HEADING_SCALE = 1.25
+
 
 def _rgb(hex_color):
     h = hex_color.lstrip('#')
@@ -110,6 +122,12 @@ box.hdr button.pin-top {
     padding: 1px 6px;
     border-radius: 14px;
     font-size: 18px;
+}
+/* The code block button is the inline code icon inside a box. */
+box.btmbar button label.boxed {
+    border: 1px solid #333;
+    border-radius: 3px;
+    padding: 0 2px;
 }
 box.hdr button:hover, box.btmbar button:hover { background: rgba(0,0,0,0.25); }
 box.hdr button.pinned, box.btmbar button.pinned { background: rgba(0,0,0,0.55); color: #000; }

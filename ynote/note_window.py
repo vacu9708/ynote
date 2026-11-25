@@ -1,5 +1,6 @@
 import bisect
 import heapq
+import math
 import os
 import shutil
 import sys
@@ -23,7 +24,29 @@ from .links import find_links
 from .models import MAX_OPACITY, MIN_OPACITY, normalize_note_data
 from .search import find_matches
 from .snap import snap_rect
-from .styles import PALETTE, code_background, note_css
+from .styles import (
+    CODE_FONT, CODE_OUTLINE, CODE_RADIUS, CODE_TEXT_COLOR, HEADING_FONT,
+    HEADING_SCALE, PALETTE, code_background, note_css,
+)
+
+
+
+def outlined_box(cr, fill, x, y, width, height):
+    """Fill a rounded box and draw a thin outline just inside its edge."""
+    r = min(CODE_RADIUS, width / 2, height / 2)
+    x, y, width, height = x + 0.5, y + 0.5, width - 1, height - 1
+    cr.new_sub_path()
+    cr.arc(x + width - r, y + r, r, -math.pi / 2, 0)
+    cr.arc(x + width - r, y + height - r, r, 0, math.pi / 2)
+    cr.arc(x + r, y + height - r, r, math.pi / 2, math.pi)
+    cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+    cr.close_path()
+    cr.set_source_rgba(fill.red, fill.green, fill.blue, 1.0)
+    cr.fill_preserve()
+    cr.set_source_rgba(*CODE_OUTLINE)
+    cr.set_line_width(1)
+    cr.stroke()
+
 
 LIST_MARKERS = (BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER)
 CHECK_MARKERS = (CHECKBOX_MARKER, CHECKED_MARKER)
@@ -74,6 +97,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._snap_sid    = None
         self._history   = [{'text': data.get('text', ''),
                              'bold': data.get('bold_ranges', []),
+                             'heading': data.get('heading_ranges', []),
                              'code': data.get('code_ranges', []),
                              'backtick': data.get('backtick_ranges', []),
                              'images': data.get('images', [])}]
@@ -214,11 +238,17 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._bold_btn.connect('clicked', lambda _: self._toggle_bold())
         text_group.pack_start(self._bold_btn, False, False, 0)
 
-        backtick_btn = Gtk.Button(label='`')
-        backtick_btn.set_tooltip_text('Backtick format  (Ctrl+E)')
-        backtick_btn.set_can_focus(False)
-        backtick_btn.connect('clicked', lambda _: self._toggle_backtick_format())
-        text_group.pack_start(backtick_btn, False, False, 0)
+        self._heading_btn = Gtk.Button(label='H')
+        self._heading_btn.set_tooltip_text('Heading  (Ctrl+H)')
+        self._heading_btn.set_can_focus(False)
+        self._heading_btn.connect('clicked', lambda _: self._toggle_heading())
+        text_group.pack_start(self._heading_btn, False, False, 0)
+
+        inline_code_btn = Gtk.Button(label='</>')
+        inline_code_btn.set_tooltip_text('Inline code  (Ctrl+E)')
+        inline_code_btn.set_can_focus(False)
+        inline_code_btn.connect('clicked', lambda _: self._toggle_inline_code())
+        text_group.pack_start(inline_code_btn, False, False, 0)
 
         bullet_btn = Gtk.Button(label='•')
         bullet_btn.set_tooltip_text('Bullet list  (Ctrl+8)')
@@ -232,7 +262,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         check_btn.connect('clicked', lambda _: self._toggle_checklist())
         text_group.pack_start(check_btn, False, False, 0)
 
-        code_btn = Gtk.Button(label='</>')
+        # The inline code icon inside a box, as Slack draws a code block.
+        code_btn = Gtk.Button()
+        code_icon = Gtk.Label(label='</>')
+        code_icon.get_style_context().add_class('boxed')
+        code_btn.add(code_icon)
         code_btn.set_tooltip_text('Code block  (Ctrl+Shift+C)')
         code_btn.set_can_focus(False)
         code_btn.connect('clicked', lambda _: self._toggle_code_block())
@@ -246,8 +280,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # title bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, close_btn, hidden_btn,
-                    self._bold_btn, backtick_btn, bullet_btn,
-                    check_btn, code_btn):
+                    self._bold_btn, self._heading_btn, inline_code_btn,
+                    bullet_btn, check_btn, code_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
 
@@ -280,7 +314,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                                         background='#FFCC00', foreground='#000')
         self._bold_tag = buf.create_tag('bold', weight=Pango.Weight.BOLD)
         self._code_tag = buf.create_tag('code',
-                                        family='Ubuntu Mono, DejaVu Sans Mono, monospace',
+                                        family=CODE_FONT,
                                         foreground='#222',
                                         # Keep commands on one visual line
                                         # so a wrap is never mistaken for a
@@ -290,11 +324,13 @@ class NoteWindow(Gtk.ApplicationWindow):
                                         right_margin=8,
                                         pixels_above_lines=2,
                                         pixels_below_lines=2)
+        # The box behind inline code is drawn by _draw_inline_code(), since a
+        # text tag cannot have an outline.
         self._backtick_tag = buf.create_tag(
-            'backtick',
-            style=Pango.Style.ITALIC,
-            underline=Pango.Underline.SINGLE,
-            foreground='#C53030')
+            'backtick', family=CODE_FONT, foreground=CODE_TEXT_COLOR)
+        self._heading_tag = buf.create_tag(
+            'heading', family=HEADING_FONT, weight=Pango.Weight.BOLD,
+            scale=HEADING_SCALE)
         self._emoji_tag = buf.create_tag('emoji', scale=self._emoji_scale())
         # A line that is exactly DIVIDER_TEXT is drawn as a horizontal rule:
         # the dashes are hidden and _draw_dividers() paints the line.
@@ -317,6 +353,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._refresh_emoji_tags()
         for s, e in data.get('bold_ranges', []):
             buf.apply_tag(self._bold_tag,
+                          buf.get_iter_at_offset(s),
+                          buf.get_iter_at_offset(e))
+        for s, e in data.get('heading_ranges', []):
+            buf.apply_tag(self._heading_tag,
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         for s, e in data.get('code_ranges', []):
@@ -396,8 +436,10 @@ class NoteWindow(Gtk.ApplicationWindow):
                       lambda *_: self._toggle_search() or True)
         accel.connect(Gdk.KEY_b, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._toggle_bold() or True)
+        accel.connect(Gdk.KEY_h, Gdk.ModifierType.CONTROL_MASK, 0,
+                      lambda *_: self._toggle_heading() or True)
         accel.connect(Gdk.KEY_e, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._toggle_backtick_format() or True)
+                      lambda *_: self._toggle_inline_code() or True)
         accel.connect(Gdk.KEY_8, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._toggle_bullet() or True)
         accel.connect(Gdk.KEY_KP_8, Gdk.ModifierType.CONTROL_MASK, 0,
@@ -981,6 +1023,8 @@ class NoteWindow(Gtk.ApplicationWindow):
             'text': buf.get_slice(start, end, True),
             'bold': self._get_tag_ranges_between(
                 self._bold_tag, start_offset, end_offset),
+            'heading': self._get_tag_ranges_between(
+                self._heading_tag, start_offset, end_offset),
             'code': self._get_tag_ranges_between(
                 self._code_tag, start_offset, end_offset),
             'backtick': self._get_tag_ranges_between(
@@ -1073,6 +1117,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         for rel_start, rel_end in state.get('bold', []):
             buf.apply_tag(
                 self._bold_tag,
+                buf.get_iter_at_offset(insert_offset + rel_start),
+                buf.get_iter_at_offset(insert_offset + rel_end))
+
+        for rel_start, rel_end in state.get('heading', []):
+            buf.apply_tag(
+                self._heading_tag,
                 buf.get_iter_at_offset(insert_offset + rel_start),
                 buf.get_iter_at_offset(insert_offset + rel_end))
 
@@ -1321,14 +1371,15 @@ class NoteWindow(Gtk.ApplicationWindow):
             return
         self._pending_format_inserts.append(
             (self._bold_active,
-             self._iter_has_tag_context(location, self._code_tag)))
+             self._iter_has_tag_context(location, self._code_tag),
+             self._iter_has_tag_context(location, self._heading_tag)))
 
     def _after_buf_insert_text(self, buf, location, text, length):
         if self._restoring:
             return
-        apply_bold, apply_code = (
+        apply_bold, apply_code, in_heading = (
             self._pending_format_inserts.pop(0)
-            if self._pending_format_inserts else (False, False))
+            if self._pending_format_inserts else (False, False, False))
         if not text:
             return
 
@@ -1337,6 +1388,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         start.backward_chars(len(text))
         if apply_bold:
             self._apply_tag_to_non_newline_chars(buf, self._bold_tag, start, end)
+        # Typing inside or at the end of a heading stays in it, and so does the
+        # first text typed on an empty line after choosing Heading. A paste of
+        # several lines is not one heading.
+        if '\n' not in text and (
+                in_heading or self._heading_line == start.get_line()):
+            buf.apply_tag(self._heading_tag, start, end)
+        self._set_heading_line(None)
         if apply_code and text != '\n':
             for line in range(start.get_line(), end.get_line() + 1):
                 self._tag_code_line(line)
@@ -1377,6 +1435,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         last = self._history[self._hist_pos]
         if (last['text'] == state['text']
                 and last['bold'] == state['bold']
+                and last.get('heading', []) == state['heading']
                 and last.get('code', []) == state['code']
                 and last.get('backtick', []) == state['backtick']
                 and last.get('images', []) == state['images']):
@@ -1395,6 +1454,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         return {
             'text': buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True),
             'bold': self._get_tag_ranges(self._bold_tag),
+            'heading': self._get_tag_ranges(self._heading_tag),
             'code': self._get_tag_ranges(self._code_tag),
             'backtick': self._get_tag_ranges(self._backtick_tag),
             'images': self._get_images_state(),
@@ -1406,11 +1466,17 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf = self.tv.get_buffer()
         buf.set_text(state['text'])
         buf.remove_tag(self._bold_tag, buf.get_start_iter(), buf.get_end_iter())
+        buf.remove_tag(
+            self._heading_tag, buf.get_start_iter(), buf.get_end_iter())
         buf.remove_tag(self._code_tag, buf.get_start_iter(), buf.get_end_iter())
         buf.remove_tag(
             self._backtick_tag, buf.get_start_iter(), buf.get_end_iter())
         for s, e in state.get('bold', []):
             buf.apply_tag(self._bold_tag,
+                          buf.get_iter_at_offset(s),
+                          buf.get_iter_at_offset(e))
+        for s, e in state.get('heading', []):
+            buf.apply_tag(self._heading_tag,
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         for s, e in state.get('code', []):
@@ -1835,8 +1901,6 @@ class NoteWindow(Gtk.ApplicationWindow):
         pad = 8
         if self._opacity < 1.0:
             self._draw_text_backing(tv, cr, buf, visible)
-        cr.set_source_rgba(self._code_rgba.red, self._code_rgba.green,
-                           self._code_rgba.blue, 1.0)
         line = first
         while line <= last:
             if not self._is_code_line(buf, line):
@@ -1847,10 +1911,51 @@ class NoteWindow(Gtk.ApplicationWindow):
             y, height = tv.get_line_yrange(buf.get_iter_at_line(block_end))
             wx, wy = tv.buffer_to_window_coords(
                 Gtk.TextWindowType.WIDGET, left, top)
-            cr.rectangle(wx, wy, right + pad - left, y + height - top)
-            cr.fill()
+            outlined_box(cr, self._code_rgba, wx, wy,
+                         right + pad - left, y + height - top)
             line = block_end + 1
+        self._draw_inline_code(tv, cr, buf, first, last)
         return False
+
+    def _draw_inline_code(self, tv, cr, buf, first, last):
+        # One box per display line of each inline code range, so a range that
+        # wraps gets a box on every row it covers.
+        tag = self._backtick_tag
+        pad = 2
+        it = buf.get_iter_at_line(first)
+        end = buf.get_iter_at_line(last)
+        if not end.ends_line():
+            end.forward_to_line_end()
+        if not it.has_tag(tag) and not it.forward_to_tag_toggle(tag):
+            return
+        while it.compare(end) < 0:
+            range_end = it.copy()
+            if not range_end.forward_to_tag_toggle(tag):
+                break
+            row = it.copy()
+            while row.compare(range_end) < 0:
+                # The start of the next display line. Its "line end" is the
+                # last cursor position of a wrapped line, which is before its
+                # last character, so it cannot bound the box.
+                row_end = row.copy()
+                if (not tv.forward_display_line(row_end)
+                        or row_end.compare(row) <= 0
+                        or row_end.compare(range_end) > 0):
+                    row_end = range_end.copy()
+                tail = row_end.copy()
+                tail.backward_char()
+                if tail.get_char() == '\n':
+                    tail.backward_char()
+                if tail.compare(row) >= 0:
+                    a, b = tv.get_iter_location(row), tv.get_iter_location(tail)
+                    wx, wy = tv.buffer_to_window_coords(
+                        Gtk.TextWindowType.WIDGET, a.x, a.y)
+                    outlined_box(cr, self._code_rgba, wx - pad, wy + 1,
+                                 b.x + b.width - a.x + 2 * pad, a.height - 2)
+                row = row_end
+            it = range_end
+            if not it.forward_to_tag_toggle(tag):
+                break
 
     def _draw_text_backing(self, tv, cr, buf, visible):
         # A see-through note would leave text unreadable over a dark desktop,
@@ -1908,6 +2013,8 @@ class NoteWindow(Gtk.ApplicationWindow):
             return
         offset = it.get_offset()
         previous, self._cursor_offset = self._cursor_offset, offset
+        if self._heading_line not in (None, it.get_line()):
+            self._set_heading_line(None)
         if not buf.get_has_selection() and it.get_line() in self._divider_lines:
             GLib.idle_add(self._skip_divider, offset, offset >= previous,
                           priority=GLib.PRIORITY_HIGH_IDLE)
@@ -2187,13 +2294,56 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._queue_save()
         return True
 
+    # The empty line whose next typed text is a heading. See _toggle_heading().
+    _heading_line = None
+
     def _toggle_bold(self):
         if not self._toggle_tag(self._bold_tag):
             self._bold_active = not self._bold_active
             self._refresh_format_buttons()
 
-    def _toggle_backtick_format(self):
+    def _toggle_inline_code(self):
         self._toggle_tag(self._backtick_tag)
+
+    def _toggle_heading(self):
+        # A heading is a whole line, so it applies to every line the selection
+        # touches, or to the cursor's line, like a list item.
+        buf = self.tv.get_buffer()
+        first_line, last_line = self._selected_or_cursor_lines()
+        lines = [ln for ln in range(first_line, last_line + 1)
+                 if not self._is_code_line(buf, ln)
+                 and ln not in self._divider_lines]
+        texts = [ln for ln in lines
+                 if self._line_bounds(ln)[0].compare(self._line_bounds(ln)[1])]
+        if not texts:
+            # Nothing to style yet: the next text typed on this line is the
+            # heading, and pressing Heading again cancels that.
+            if len(lines) == 1:
+                self._set_heading_line(
+                    None if self._heading_line == lines[0] else lines[0])
+            return
+        remove = all(self._line_is_fully_tagged(self._heading_tag, ln)
+                     for ln in texts)
+        self._flush_snapshot()
+        for ln in texts:
+            start, end = self._line_bounds(ln)
+            if remove:
+                buf.remove_tag(self._heading_tag, start, end)
+            else:
+                buf.apply_tag(self._heading_tag, start, end)
+        self._flush_snapshot()
+        self._queue_save()
+
+    def _set_heading_line(self, line):
+        """Remember the empty line whose next typed text is a heading."""
+        if line == self._heading_line:
+            return
+        self._heading_line = line
+        ctx = self._heading_btn.get_style_context()
+        if line is None:
+            ctx.remove_class('pinned')
+        else:
+            ctx.add_class('pinned')
 
     def _format_backtick_wrapped_text(self):
         buf = self.tv.get_buffer()
@@ -2744,6 +2894,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                     hidden=not self.get_visible(),
                     sort_order=self.sort_order,
                     bold_ranges=self._get_tag_ranges(self._bold_tag),
+                    heading_ranges=self._get_tag_ranges(self._heading_tag),
                     code_ranges=self._get_tag_ranges(self._code_tag),
                     backtick_ranges=self._get_tag_ranges(self._backtick_tag),
                     images=self._get_images_state(),
