@@ -43,7 +43,9 @@ It runs, in order:
 
 1. A Python syntax check.
 2. The unit tests. To run only these, use `python3 -m pytest`; plain
-   `pytest` cannot import the `ynote` package.
+   `pytest` cannot import the `ynote` package. They run on the X11 backend
+   like the app, so they need an X display, such as a desktop session or
+   `xvfb-run -a python3 -m pytest`.
 3. A headless smoke test, `tests/smoke_launch.py`, which launches the real app
    and fails on any Python error. It is skipped without `xvfb-run`.
 4. The Debian package build.
