@@ -228,3 +228,18 @@ def test_cached_blocks_always_match_a_fresh_scan_after_random_edits():
             if win._is_code_line(buf, line):
                 assert win._code_block(win.tv, buf, line) == \
                     fresh_block(win, buf, line)
+
+
+def test_the_anchor_of_an_empty_code_line_is_hidden_so_that_it_is_not_copied():
+    from ynote.config import CODE_ANCHOR
+    win, buf = make_window(['a', CODE_ANCHOR, 'b'], [1])
+    win._anchor_tag = buf.create_tag('code-anchor', invisible=True)
+
+    win._hide_code_anchors(buf)
+    # And again, as every edit does, which must not hide anything else.
+    win._hide_code_anchors(buf)
+
+    start, end = buf.get_start_iter(), buf.get_end_iter()
+    assert buf.get_text(start, end, False) == 'a\n\nb'
+    assert buf.get_text(start, end, True) == f'a\n{CODE_ANCHOR}\nb'
+    assert win._get_tag_ranges(win._anchor_tag) == [[2, 3]]

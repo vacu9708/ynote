@@ -398,6 +398,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         # block. Inline code that starts a line is indented, and a space beside
         # inline code is widened, so the padding of its box does not cover the
         # words next to it.
+        # The anchor of an empty code line is no text, and is hidden so that
+        # GTK leaves it out of what it copies and drags, as it does the
+        # selection that middle click pastes. It has no width to lose.
+        self._anchor_tag = buf.create_tag('code-anchor', invisible=True)
         self._code_top_tag = buf.create_tag('code-top')
         self._code_bottom_tag = buf.create_tag('code-bottom')
         self._inline_indent_tag = buf.create_tag(
@@ -1912,7 +1916,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         if state == 0 and event.keyval == Gdk.KEY_space:
             line_start = buf.get_iter_at_line(cursor_line)
-            before = buf.get_text(line_start, cursor, False)
+            before = buf.get_text(line_start, cursor, True)
             indent_len = self._line_indent_len(before)
             marker = TYPED_MARKERS.get(before[indent_len:])
             if (marker is not None
@@ -1970,7 +1974,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         if self._line_is_fully_tagged(self._code_tag, cursor.get_line()):
             line_start, line_end = self._line_bounds(cursor.get_line())
-            line_text = buf.get_text(line_start, line_end, False)
+            line_text = buf.get_text(line_start, line_end, True)
             if line_text == CODE_ANCHOR:
                 buf.place_cursor(line_end)
                 buf.insert_at_cursor('\n')
@@ -1998,7 +2002,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         line_start = buf.get_iter_at_line(cursor.get_line())
         line_end = line_start.copy()
         line_end.forward_to_line_end()
-        line_text = buf.get_text(line_start, line_end, False)
+        line_text = buf.get_text(line_start, line_end, True)
         parts = self._list_parts(line_text)
         if parts is None:
             return False
@@ -2026,7 +2030,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         if line >= buf.get_line_count():
             return False
         start, end = self._line_bounds(line)
-        return (buf.get_text(start, end, False) == DIVIDER_TEXT
+        return (buf.get_text(start, end, True) == DIVIDER_TEXT
                 and not start.has_tag(self._code_tag))
 
     def _refresh_line_styles(self):
@@ -2077,6 +2081,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             buf.remove_tag(tag, start, end)
         self._tag_list_markers(buf)
         self._even_lines(buf)
+        self._hide_code_anchors(buf)
 
         # The first and last line of each run of code lines.
         line, last_line = 0, buf.get_line_count()
@@ -2120,6 +2125,16 @@ class NoteWindow(Gtk.ApplicationWindow):
             if not it.forward_to_tag_toggle(tag):
                 break
         return False
+
+    def _hide_code_anchors(self, buf):
+        buf.remove_tag(self._anchor_tag, buf.get_start_iter(),
+                       buf.get_end_iter())
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        index = text.find(CODE_ANCHOR)
+        while index >= 0:
+            buf.apply_tag(self._anchor_tag, buf.get_iter_at_offset(index),
+                          buf.get_iter_at_offset(index + 1))
+            index = text.find(CODE_ANCHOR, index + 1)
 
     def _tag_list_markers(self, buf):
         for line in range(buf.get_line_count()):
@@ -2594,7 +2609,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf = self.tv.get_buffer()
         line = buf.get_iter_at_mark(buf.get_insert()).get_line()
         start, end = self._line_bounds(line)
-        if buf.get_text(start, end, False).strip():
+        if buf.get_text(start, end, True).strip():
             buf.insert(end, '\n' + DIVIDER_TEXT)
             line += 1
         else:
@@ -2625,7 +2640,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _line_list_parts(self, line):
         buf = self.tv.get_buffer()
         line_start, line_end = self._line_bounds(line)
-        text = buf.get_text(line_start, line_end, False)
+        text = buf.get_text(line_start, line_end, True)
         return self._list_parts(text)
 
     def _line_list_marker(self, line):
@@ -2676,7 +2691,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         bounds = self._line_marker_bounds(line)
         if bounds is None:
             line_start, line_end = self._line_bounds(line)
-            text = buf.get_text(line_start, line_end, False)
+            text = buf.get_text(line_start, line_end, True)
             at = line_start.copy()
             at.forward_chars(self._line_indent_len(text))
         else:
@@ -2705,7 +2720,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _outdent_bullet_line(self, line):
         buf = self.tv.get_buffer()
         line_start, line_end = self._line_bounds(line)
-        text = buf.get_text(line_start, line_end, False)
+        text = buf.get_text(line_start, line_end, True)
         parts = self._list_parts(text)
         if parts is None or not parts[0]:
             return
@@ -2761,7 +2776,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _tag_code_line(self, line, keep_cursor=False):
         buf = self.tv.get_buffer()
         start, end = self._line_bounds(line)
-        line_text = buf.get_text(start, end, False)
+        line_text = buf.get_text(start, end, True)
 
         if line_text.replace(CODE_ANCHOR, ''):
             self._apply_tag_to_non_newline_chars(
@@ -2804,7 +2819,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf = self.tv.get_buffer()
         for line in range(last_line, first_line - 1, -1):
             start, end = self._line_bounds(line)
-            line_text = buf.get_text(start, end, False)
+            line_text = buf.get_text(start, end, True)
             if CODE_ANCHOR not in line_text:
                 continue
             if not line_text.replace(CODE_ANCHOR, ''):

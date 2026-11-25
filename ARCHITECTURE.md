@@ -102,7 +102,7 @@ Some structure lives in the text itself:
 | In `text` | Meaning |
 | --- | --- |
 | `U+FFFC` (`IMAGE_ANCHOR`) | Where an image is shown. |
-| `U+2060` (`CODE_ANCHOR`) | An invisible character that lets an empty line carry the code tag. It is stripped when text goes to the system clipboard. |
+| `U+2060` (`CODE_ANCHOR`) | An invisible character that lets an empty line carry the code tag. It is stripped when text goes to the system clipboard, and tagged `invisible` by `_hide_code_anchors()` so that GTK leaves it out of the selection that middle click pastes and of a drag. Text read from the buffer therefore includes hidden characters. |
 | `• `, `☐ `, or `☑ ` at the start of a line | A bullet, an open to-do, or a done to-do. Each nesting level adds four leading spaces. |
 | A line that is exactly `---` | A divider. The dashes are hidden and `_draw_dividers()` paints a line over them. |
 
