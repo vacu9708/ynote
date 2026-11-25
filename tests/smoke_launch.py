@@ -34,6 +34,9 @@ def sample_note():
     lines = [
         bold,
         'A long prose line that has to wrap to fit the narrow note width.',
+        '• a bullet',
+        '    ☐ a to-do with a 한글 word',
+        '☑ a done to-do',
         '---',
         code,
         'last line',
@@ -48,6 +51,25 @@ def sample_note():
         'bold_ranges': [[0, len(bold)]],
         'code_ranges': [[code_start, code_start + len(code)]],
     }
+
+
+def _wait_for_group(proc):
+    """Wait until every process the app started has gone, not only the one
+    dbus-run-session starts it from. The app saves its notes as it quits, and
+    the folder must not be removed while it is still writing there."""
+    deadline = time.monotonic() + QUIT_TIMEOUT
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(proc.pid, 0)
+        except ProcessLookupError:
+            break
+        try:
+            proc.wait(0.1)
+        except subprocess.TimeoutExpired:
+            pass
+    else:
+        os.killpg(proc.pid, signal.SIGKILL)
+    proc.wait()
 
 
 def main():
@@ -77,11 +99,7 @@ def main():
             exited_early = proc.poll() is not None
             if not exited_early:
                 os.killpg(proc.pid, signal.SIGTERM)
-                try:
-                    proc.wait(QUIT_TIMEOUT)
-                except subprocess.TimeoutExpired:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                    proc.wait()
+                _wait_for_group(proc)
 
         with open(log_path) as f:
             output = f.read()
