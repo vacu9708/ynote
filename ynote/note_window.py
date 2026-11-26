@@ -1992,6 +1992,25 @@ class NoteWindow(Gtk.ApplicationWindow):
                 self._toggle_checked(lines)
             return True
 
+        # Tab and Shift+Tab over a selection indent or outdent the list items
+        # on the selected lines, and leave the other lines as they are.
+        if (buf.get_has_selection()
+                and event.keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab)
+                and state in (0, Gdk.ModifierType.SHIFT_MASK)):
+            first_line, last_line = self._selected_or_cursor_lines()
+            lines = [ln for ln in range(first_line, last_line + 1)
+                     if self._marker_end(ln) is not None]
+            if lines:
+                self._flush_snapshot()
+                for line in lines:
+                    if state == 0:
+                        self._indent_bullet_line(line)
+                    else:
+                        self._outdent_bullet_line(line)
+                self._flush_snapshot()
+                self._queue_save()
+                return True
+
         if buf.get_has_selection():
             return False
         cursor = buf.get_iter_at_mark(buf.get_insert())

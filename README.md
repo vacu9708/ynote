@@ -71,6 +71,8 @@ buttons don't show:
   font size, rename, and delete. Double-click the title bar to maximize.
 - Typing `- ` or `[ ] ` at the start of a line makes a bullet or a checklist,
   `---` alone on a line makes a divider, and `` `text` `` becomes inline code.
+- `Tab` and `Shift+Tab` indent and outdent a list item, or every item on the
+  selected lines.
 - **B**, **H**, and `</>` light up while the text at the cursor is bold, a
   heading, or inline code, and what you type next gets it. Enter turns them
   off.

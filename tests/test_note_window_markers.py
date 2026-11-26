@@ -357,3 +357,41 @@ def test_a_list_typed_after_spaces_is_indented_by_tabs():
     assert press(win, Gdk.KEY_space)
 
     assert text_of(buf) == '\t• '
+
+
+def shift_tab(win):
+    return win._on_tv_key_press(win.tv, SimpleNamespace(
+        state=Gdk.ModifierType.SHIFT_MASK, keyval=Gdk.KEY_ISO_Left_Tab))
+
+
+def test_tab_and_shift_tab_over_a_selection_indent_each_selected_item():
+    win, buf = make_window('• one\nplain\n\t☐ two\n☑ three\n• after')
+    # From inside "one" to inside "three": the last item is not selected.
+    buf.select_range(buf.get_iter_at_offset(3), buf.get_iter_at_offset(23))
+
+    assert press(win, Gdk.KEY_Tab)
+    # A plain line keeps its text, and the selection stays.
+    assert text_of(buf) == '\t• one\nplain\n\t\t☐ two\n\t☑ three\n• after'
+    assert buf.get_has_selection()
+
+    assert shift_tab(win)
+    assert shift_tab(win)
+    assert text_of(buf) == '• one\nplain\n☐ two\n☑ three\n• after'
+
+
+def test_a_selection_ending_at_the_start_of_a_line_leaves_that_line():
+    win, buf = make_window('• one\n• two')
+    buf.select_range(buf.get_iter_at_offset(0), buf.get_iter_at_offset(6))
+
+    assert press(win, Gdk.KEY_Tab)
+
+    assert text_of(buf) == '\t• one\n• two'
+
+
+def test_tab_over_a_selection_without_list_items_is_left_to_gtk():
+    win, buf = make_window('one\ntwo')
+    buf.select_range(buf.get_iter_at_offset(0), buf.get_iter_at_offset(5))
+
+    assert not press(win, Gdk.KEY_Tab)
+    assert not shift_tab(win)
+    assert text_of(buf) == 'one\ntwo'
