@@ -497,14 +497,18 @@ class PostItApp(Gtk.Application):
         if self._hidden_notes_window is not None:
             self._hidden_notes_window.refresh()
 
-    def set_rich_clipboard(self, state):
+    def set_rich_clipboard(self, state, text=None):
+        """Keep state for a paste into a note, and put text, or the state's
+        own text, on the clipboard for other apps."""
         self._rich_clipboard = state
         self._rich_clipboard_owned = True
-        self._ignore_next_clipboard_owner_change = True 
+        self._ignore_next_clipboard_owner_change = True
 
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        text = state.get('text', '').replace(CODE_ANCHOR, '')
-        clipboard.set_text(text.replace(CODE_PAD_CHAR, ''), -1)
+        if text is None:
+            text = state.get('text', '').replace(CODE_ANCHOR, '')
+            text = text.replace(CODE_PAD_CHAR, '')
+        clipboard.set_text(text, -1)
         GLib.idle_add(self._finish_rich_clipboard_claim)
 
     def _finish_rich_clipboard_claim(self):

@@ -30,6 +30,7 @@ flowchart LR
         Snap["snap.py"]
         Search["search.py"]
         Links["links.py"]
+        Markdown["markdown.py"]
     end
 
     Main -->|starts| App
@@ -43,9 +44,10 @@ flowchart LR
     Window -->|uses| Snap
     Window -->|uses| Search
     Window -->|uses| Links
+    Window -->|uses| Markdown
 
     classDef node fill:#FFFFFF,stroke:#4A5568,color:#1A202C
-    class Main,App,Window,Manager,Tray,Storage,Images,Autostart,Models,Snap,Search,Links node
+    class Main,App,Window,Manager,Tray,Storage,Images,Autostart,Models,Snap,Search,Links,Markdown node
     style GTK fill:#FFF4D6,stroke:#B7791F,color:#3D2C00
     style Pure fill:#E8F8EF,stroke:#2F855A,color:#143C2B
 ```
@@ -64,6 +66,7 @@ flowchart LR
 | `ynote/snap.py` | Computes a snapped note rectangle from monitor work areas. |
 | `ynote/search.py` | Finds a query in every note for the search bar's All notes mode. |
 | `ynote/links.py` | Finds `http` and `https` URLs in note text. |
+| `ynote/markdown.py` | Converts a note's text and formats to Markdown for the clipboard, and pasted Markdown back. |
 | `ynote/autostart.py` | The per-user login autostart entry. |
 | `ynote/config.py` | Paths and constants. |
 | `ynote/styles.py` | The note color palette and the GTK CSS built from it. It has no GTK import, so it is unit-tested. |
@@ -173,10 +176,16 @@ sequenceDiagram
 
 ## Other mechanisms
 
-- **Rich copy and paste between notes.** Copying in a note stores the text,
-  ranges, and images in `PostItApp` and puts plain text on the system
-  clipboard. Pasting uses the stored state only while Ynote still owns the
-  clipboard, so text copied elsewhere afterwards pastes as plain text.
+- **Copy and paste.** Copying in a note stores the text, ranges, and images
+  in `PostItApp` for a paste into a note, and puts the same text on the system
+  clipboard as Markdown (`markdown.to_markdown()`), or as it is when it is all
+  code, so a command pastes into a terminal without fences. Pasting uses the
+  stored state only while Ynote still owns the clipboard. Text from another
+  app is read as Markdown (`markdown.from_markdown()`) and pasted with its
+  formats, except into code, which takes text as it is. A note is not stored
+  as Markdown: search, undo, and the editor work on the text as shown, and
+  Markdown is only how text crosses the clipboard. `Ctrl+Shift+V` pastes the
+  text alone, and a backtick in it, or in any code, never starts inline code.
 - **Login autostart.** `autostart.enable_on_first_run()` writes
   `~/.config/autostart/ynote.desktop` once per user, and only when the
   `ynote` command is installed. The Start at Login menu item adds or removes

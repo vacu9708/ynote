@@ -23,6 +23,7 @@ from .config import (
 from .help import show_help
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .links import find_links
+from .markdown import fit_between, from_markdown, is_all_code, to_markdown
 from .models import MAX_OPACITY, MIN_OPACITY, normalize_note_data
 from .search import find_matches
 from .snap import snap_rect
@@ -142,6 +143,9 @@ def cell_width(line):
 
 
 class NoteWindow(Gtk.ApplicationWindow):
+    # Set while Ctrl+Shift+V pastes text as it is.
+    _paste_plain = False
+
     def __init__(self, app, data: dict):
         super().__init__(application=app)
         self.app      = app
@@ -1180,7 +1184,10 @@ class NoteWindow(Gtk.ApplicationWindow):
         if state is None:
             return False
 
-        self.app.set_rich_clipboard(state)
+        # Other apps get Markdown, but code alone goes as it is, so a command
+        # can be pasted into a terminal. Notes still get the formats exactly.
+        text = None if is_all_code(state) else to_markdown(state)
+        self.app.set_rich_clipboard(state, text)
         return True
 
     def _paste_rich_clipboard_if_available(self):
@@ -1317,8 +1324,65 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_paste_clipboard(self, tv):
         if (self._paste_rich_clipboard_if_available()
                 or self._paste_image_if_available()
-                or self._paste_plain_text_into_code_selection()):
+                or self._paste_plain_text_into_code_selection()
+                or self._paste_markdown_if_any()):
             tv.stop_emission_by_name('paste-clipboard')
+
+    def _paste_plain_text(self):
+        """Paste the clipboard's text as it is: no Markdown is read, and no
+        backticks become inline code."""
+        state = self.app.rich_clipboard_state()
+        if state:
+            # Copied from a note: the clipboard holds it as Markdown, so the
+            # note's own text is pasted instead.
+            text = state.get('text', '')
+            for char in (CODE_ANCHOR, CODE_PAD_CHAR, IMAGE_ANCHOR):
+                text = text.replace(char, '')
+        else:
+            text = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()
+        if not text:
+            return
+        buf = self.tv.get_buffer()
+        self._flush_snapshot()
+        self._paste_plain = True
+        try:
+            buf.delete_selection(True, True)
+            buf.insert_at_cursor(text)
+        finally:
+            self._paste_plain = False
+        self._flush_snapshot()
+        self._queue_save()
+
+    def _paste_markdown_if_any(self):
+        """Paste text from another app with the formats its Markdown gives,
+        unless it goes into code, which takes text as it is."""
+        buf = self.tv.get_buffer()
+        bounds = buf.get_selection_bounds()
+        at = bounds[0] if bounds else buf.get_iter_at_mark(buf.get_insert())
+        before_at = at.copy()
+        if (self._is_code_line(buf, at.get_line())
+                or (at.has_tag(self._backtick_tag) and before_at.backward_char()
+                    and before_at.has_tag(self._backtick_tag))):
+            return False
+        text = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()
+        if not text:
+            return False
+        state = from_markdown(text)
+        if state['text'] == text and not any(
+                state[key] for key in ('bold', 'heading', 'code', 'backtick')):
+            return False
+
+        end = bounds[1] if bounds else at
+        line_start = at.copy()
+        line_start.set_line_offset(0)
+        line_end = end.copy()
+        if not line_end.ends_line():
+            line_end.forward_to_line_end()
+        state = fit_between(state, buf.get_text(line_start, at, True),
+                            buf.get_text(end, line_end, True))
+        self._flush_snapshot()
+        self._insert_rich_state_at_cursor(state)
+        return True
 
     # ------------------------------------------------------------------ search
 
@@ -1576,7 +1640,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             for line in range(start.get_line(), end.get_line() + 1):
                 self._tag_code_line(line)
             self._remove_redundant_code_anchors(start.get_line(), end.get_line())
-        if '`' in text:
+        if '`' in text and not self._paste_plain:
             self._format_backtick_wrapped_text()
         self._refresh_emoji_tags()
         if new_line:
@@ -1998,6 +2062,10 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _on_tv_key_press(self, tv, event):
         state = event.state & Gtk.accelerator_get_default_mod_mask()
+        if (state == Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK
+                and Gdk.keyval_to_lower(event.keyval) == Gdk.KEY_v):
+            self._paste_plain_text()
+            return True
         if (state == Gdk.ModifierType.CONTROL_MASK
                 and Gdk.keyval_to_lower(event.keyval) == Gdk.KEY_v):
             if self._paste_rich_clipboard_if_available():

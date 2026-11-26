@@ -77,7 +77,9 @@ buttons don't show:
 - **B**, **H**, and `</>` light up while the text at the cursor is bold, a
   heading, or inline code, and what you type next gets it. Enter turns them
   off.
-- Paste an image with `Ctrl+V`.
+- Copied text goes to other apps as Markdown, and Markdown pasted in keeps its
+  formats. Code alone is copied, and pasted into code, as it is. `Ctrl+V` also
+  pastes an image, and `Ctrl+Shift+V` pastes text without reading Markdown.
 - In a code block, double-click a line to select one command, or triple-click to
   select the whole block. `Ctrl+click` opens a link.
 - `Ctrl+F` searches every note; uncheck **All notes** to search only this one.
