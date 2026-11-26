@@ -3340,12 +3340,25 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._sync_format_state()
 
     def _format_backtick_wrapped_text(self):
+        """Make text between two backticks on a line inline code. Code is
+        text as it is, so a backtick in a code block or in inline code is
+        left alone."""
         buf = self.tv.get_buffer()
         text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        in_code = [False] * len(text)
+        for first, last in self._get_tag_ranges(self._backtick_tag):
+            in_code[first:last] = [True] * (last - first)
         pairs = []
         open_offset = None
+        line = 0
+        code_line = self._is_code_line(buf, 0)
         for offset, char in enumerate(text):
-            if char != '`':
+            if char == '\n':
+                line += 1
+                code_line = self._is_code_line(buf, line)
+                open_offset = None
+                continue
+            if char != '`' or code_line or in_code[offset]:
                 continue
             if open_offset is None:
                 open_offset = offset

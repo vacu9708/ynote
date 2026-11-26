@@ -270,6 +270,25 @@ def test_backtick_wrapped_text_becomes_code_and_the_cursor_ends_after_it():
     assert not win._code_active
 
 
+def test_backticks_in_a_code_block_stay_backticks():
+    win, buf = make_window('echo `date', cursor=10)
+    buf.apply_tag(win._code_tag, buf.get_start_iter(), buf.get_end_iter())
+
+    type_text(win, buf, '`')
+
+    assert text_of(buf) == 'echo `date`'
+    assert ranges(win) == []
+
+
+def test_backticks_on_two_lines_do_not_make_code_together():
+    win, buf = make_window('a `b\nc d', cursor=7)
+
+    type_text(win, buf, '`')
+
+    assert text_of(buf) == 'a `b\nc `d'
+    assert ranges(win) == []
+
+
 def test_plain_spaces_that_padded_code_in_an_older_note_become_en_spaces():
     win, buf = code('x  ab  y', 2, 6, cursor=4)
 
