@@ -1325,14 +1325,36 @@ class NoteWindow(Gtk.ApplicationWindow):
         if ev.keyval == Gdk.KEY_Escape:
             self._close_search()
             return True
-        if (ev.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter)
-                and self._results_scroll.get_visible()):
-            # Enter opens the first match, like picking it from the list.
-            first = self._results.get_row_at_index(0)
-            if first is not None and getattr(first, 'match', None):
-                self._on_result_activated(self._results, first)
+        if not self._results_scroll.get_visible():
+            return False
+        # The arrows pick a match while the cursor stays in the entry, so
+        # Enter opens it, not a line break in the note the focus moved to.
+        if ev.keyval in (Gdk.KEY_Down, Gdk.KEY_Up):
+            self._step_result(1 if ev.keyval == Gdk.KEY_Down else -1)
+            return True
+        if ev.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            # Enter opens the picked match, or the first one.
+            row = (self._results.get_selected_row()
+                   or self._results.get_row_at_index(0))
+            if row is not None and getattr(row, 'match', None):
+                self._on_result_activated(self._results, row)
                 return True
         return False
+
+    def _step_result(self, step):
+        """Select the match `step` rows from the selected one, or the first,
+        and scroll it into view."""
+        rows = [r for r in self._results.get_children()
+                if getattr(r, 'match', None)]
+        if not rows:
+            return
+        selected = self._results.get_selected_row()
+        index = (rows.index(selected) + step if selected in rows else 0)
+        row = rows[max(0, min(index, len(rows) - 1))]
+        self._results.select_row(row)
+        alloc = row.get_allocation()
+        self._results_scroll.get_vadjustment().clamp_page(
+            alloc.y, alloc.y + alloc.height)
 
     # ------------------------------------------------------------------ collapse
 
