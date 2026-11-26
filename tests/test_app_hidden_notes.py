@@ -183,3 +183,22 @@ def test_an_unreadable_notes_file_does_not_replace_a_good_backup(tmp_path, monke
     assert (tmp_path / 'notes.json.bak').read_text() == '[{"id": "a"}]'
     assert not notes.exists()
     assert list(tmp_path.glob('notes.json.broken-*'))
+
+
+def test_quitting_closes_an_open_dialog_so_its_loop_ends(monkeypatch):
+    import gi
+    gi.require_version('Gtk', '3.0')
+    from gi.repository import Gtk
+
+    # A dialog's run() keeps its own loop going until the dialog closes.
+    dialog = Gtk.Dialog()
+    closed = []
+    dialog.connect('destroy', lambda _d: closed.append(True))
+    app = make_app({})
+    app.save_all = lambda include_history=True: None
+    app.release = lambda: None
+    monkeypatch.setattr(Gtk.Application, 'quit', lambda self: None)
+
+    app.quit_app()
+
+    assert closed == [True]

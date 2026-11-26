@@ -605,5 +605,11 @@ class PostItApp(Gtk.Application):
         # Undo/redo history is not durable, so on quit only saved notes should
         # keep image files alive.
         self.save_all(include_history=False)
+        # A dialog such as Help, About, or a confirmation runs a main loop of
+        # its own, which quit() does not end. Closing it ends that loop, and
+        # the dialog's caller sees it as dismissed.
+        for window in Gtk.Window.list_toplevels():
+            if isinstance(window, Gtk.Dialog):
+                window.destroy()
         self.release()
         Gtk.Application.quit(self)
