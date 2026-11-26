@@ -209,7 +209,8 @@ sequenceDiagram
   and spaced to take the room the drawing needs, and `_draw_list_markers()`
   draws a filled circle or a box, sized by `BULLET_SIZE` and `CHECKBOX_SIZE` in
   em, over them. Because the drawing does not come from a font, a larger one
-  does not make its line taller.- **Even lines.** A line is as tall as the tallest font that draws it, and
+  does not make its line taller.
+- **Even lines.** A line is as tall as the tallest font that draws it, and
   the note's font lacks most scripts other than Latin, so a line of Hangul,
   Japanese, Arabic, or Thai is drawn in whichever font this computer falls back
   to, and its height differs from a line of Latin. In a note with such text,
