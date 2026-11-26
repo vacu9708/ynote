@@ -99,6 +99,15 @@ def test_a_note_that_fails_to_open_is_saved_back_unchanged(monkeypatch):
         def to_dict(self):
             return {'id': self.note_id, 'text': 'fine'}
 
+        def get_visible(self):
+            return True
+
+        def get_window(self):
+            return None
+
+        def get_mapped(self):
+            return True
+
     written = []
     backed_up = []
     monkeypatch.setattr(app_module, 'load_notes', lambda path: saved)
@@ -121,7 +130,7 @@ def test_a_note_that_fails_to_open_is_saved_back_unchanged(monkeypatch):
     assert backed_up == [app_module.NOTES_FILE]
     assert list(app.notes) == ['ok']
     assert app._keep_all_images
-    assert written == [[{'id': 'ok', 'text': 'fine'},
+    assert written == [[{'id': 'ok', 'text': 'fine', 'stack': 0},
                         {'id': 'bad', 'text': 'keep me'}]]
 
 
@@ -135,6 +144,15 @@ def _start(monkeypatch, notes_file):
 
         def to_dict(self):
             return {'id': self.note_id}
+
+        def get_visible(self):
+            return True
+
+        def get_window(self):
+            return None
+
+        def get_mapped(self):
+            return True
 
     monkeypatch.setattr(app_module, 'NOTES_FILE', str(notes_file))
     monkeypatch.setattr(app_module, 'NoteWindow', Window)
@@ -202,3 +220,45 @@ def test_quitting_closes_an_open_dialog_so_its_loop_ends(monkeypatch):
     app.quit_app()
 
     assert closed == [True]
+
+
+def test_notes_open_from_the_bottom_of_the_saved_stack_up(tmp_path, monkeypatch):
+    # The note that was on top is made last, so it opens on top again, and
+    # counts as the latest used. A file from before stacks were saved keeps
+    # its order.
+    notes = tmp_path / 'notes.json'
+    notes.write_text('[{"id": "top", "stack": 2}, {"id": "old"},'
+                     ' {"id": "mid", "stack": 1}]')
+
+    app = _start(monkeypatch, notes)
+
+    assert list(app.notes) == ['old', 'mid', 'top']
+    assert [w.note_id for w in app._recent] == ['top', 'mid', 'old']
+
+
+def test_saving_records_where_each_note_is_in_the_stack(monkeypatch):
+    written = []
+    monkeypatch.setattr('ynote.app.save_notes',
+                        lambda data, path: written.append(data))
+    class Note(StubNote):
+        def __init__(self, name, visible):
+            super().__init__(name, visible=visible)
+
+        def to_dict(self):
+            return {'id': self.title}
+
+        def get_window(self):
+            return None
+
+    bottom, top, hidden = Note('b', True), Note('t', True), Note('h', False)
+    app = make_app({'b': bottom, 't': top, 'h': hidden})
+    app.save_all = PostItApp.save_all.__get__(app)
+    app._unopened_notes = []
+    app._cleanup_orphaned_images = lambda *a, **k: None
+    # Without a window manager to ask, the latest used is on top.
+    app._recent = [top, bottom]
+
+    app.save_all()
+
+    assert written == [[{'id': 'b', 'stack': 0}, {'id': 't', 'stack': 1},
+                        {'id': 'h', 'stack': -1}]]

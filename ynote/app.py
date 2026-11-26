@@ -108,7 +108,8 @@ class PostItApp(Gtk.Application):
         autostart.set_enabled(AUTOSTART_FILE, enabled)
 
     def do_activate(self):
-        visible = [w for w in self.notes.values() if w.get_visible()]
+        # From the bottom up, so the notes keep how they are stacked.
+        visible = self._stacking_order()
         if visible:
             for w in visible:
                 w.present()
@@ -251,7 +252,9 @@ class PostItApp(Gtk.Application):
             self.new_note()
             return
         areas, primary = self._work_areas()
-        for d in saved:
+        # Made from the bottom of the stack up, so the note that was on top
+        # when Ynote quit opens on top again.
+        for d in sorted(saved, key=self._saved_stack):
             if areas and all(k in d for k in ('x', 'y', 'w', 'h')):
                 d['x'], d['y'] = keep_reachable(
                     (d['x'], d['y'], d['w'], d['h']), areas, primary)
@@ -263,6 +266,10 @@ class PostItApp(Gtk.Application):
                 self._keep_all_images = True
                 continue
             self.notes[w.note_id] = w
+        # Until notes are used, the latest used is the one on top.
+        self._recent = [w for w in reversed(list(self.notes.values()))
+                        if w.get_visible()]
+        self._restack_once_shown(list(reversed(self._recent)))
         if self._unopened_notes:
             GLib.idle_add(self._warn_unopened_notes,
                           len(self._unopened_notes))
@@ -271,6 +278,50 @@ class PostItApp(Gtk.Application):
         # images referenced by notes.json should survive.
         self._cleanup_orphaned_images([w.to_dict() for w in self.notes.values()],
                                       include_history=False)
+
+    def _restack_once_shown(self, notes):
+        """Stack the notes as saved once the window manager has shown them
+        all. The order they are shown in does not decide it: a window manager
+        may keep the first on top, as it has the focus."""
+        waiting = {w: None for w in notes if not w.get_mapped()}
+
+        def restack():
+            self._raise_in_order([w for w in notes if w.get_visible()])
+            return False
+
+        def mapped(w, _event):
+            # Only the first showing counts: a note hidden and shown again
+            # later is not restacked.
+            w.disconnect(waiting.pop(w))
+            if not waiting:
+                GLib.idle_add(restack)
+            return False
+
+        if not waiting:
+            if notes:
+                GLib.idle_add(restack)
+            return
+        for w in waiting:
+            waiting[w] = w.connect('map-event', mapped)
+
+    @staticmethod
+    def _saved_stack(d):
+        stack = d.get('stack', 0)
+        return stack if isinstance(stack, int) else 0
+
+    def _stacking_order(self):
+        """The visible notes from the bottom of the window stack to the top.
+
+        The window manager tells the stack. Without one that does, and for
+        notes it has not stacked yet, the latest used is on top."""
+        visible = [w for w in self.notes.values() if w.get_visible()]
+        screen = Gdk.Screen.get_default()
+        stack = (screen.get_window_stack() or []) if screen else []
+        by_window = {w.get_window(): w for w in visible if w.get_window()}
+        stacked = [by_window[gw] for gw in stack if gw in by_window]
+        rest = [w for w in reversed(self._notes_by_recency())
+                if w not in stacked]
+        return stacked + rest
 
     def _work_areas(self):
         """Every monitor's work area as (x, y, w, h), and the primary's."""
@@ -343,15 +394,18 @@ class PostItApp(Gtk.Application):
         w.show_match(start, end)
 
     def raise_all(self):
+        # From the bottom up, so the notes keep how they are stacked.
+        self._raise_in_order(self._stacking_order())
+
+    def _raise_in_order(self, notes):
+        """Bring the notes forward one after another, so the last is on top."""
         try:
             from gi.repository import GdkX11
             use_x11 = True
         except ImportError:
             use_x11 = False
 
-        for w in self.notes.values():
-            if not w.get_visible():
-                continue
+        for w in notes:
             w.set_urgency_hint(False)
             gdk_win = w.get_window()
             if gdk_win and use_x11:
@@ -597,7 +651,11 @@ class PostItApp(Gtk.Application):
         cleanup_orphaned_images(IMAGES_DIR, referenced)
 
     def save_all(self, include_history=True):
-        data = ([w.to_dict() for w in self.notes.values()]
+        # Where each visible note is in the stack, 0 at the bottom, so that
+        # the next start stacks them the same. A hidden note has -1.
+        stack = {w: i for i, w in enumerate(self._stacking_order())}
+        data = ([dict(w.to_dict(), stack=stack.get(w, -1))
+                 for w in self.notes.values()]
                 + self._unopened_notes)
         try:
             save_notes(data, NOTES_FILE)
