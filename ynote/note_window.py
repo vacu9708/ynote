@@ -524,6 +524,8 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         self._all_notes_check = Gtk.CheckButton(label='All notes')
         self._all_notes_check.set_tooltip_text('Search every note, hidden ones too')
+        # On by default: a note's own matches are listed first anyway.
+        self._all_notes_check.set_active(True)
         self._all_notes_check.connect('toggled', lambda _: self._do_search())
         sbar.pack_start(self._all_notes_check, False, False, 0)
 

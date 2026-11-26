@@ -79,7 +79,7 @@ buttons don't show:
 - Paste an image with `Ctrl+V`.
 - In a code block, double-click a line to select one command, or triple-click to
   select the whole block. `Ctrl+click` opens a link.
-- `Ctrl+F` searches the note; check **All notes** to search every note.
+- `Ctrl+F` searches every note; uncheck **All notes** to search only this one.
 - `Alt+` arrows snap a note into the left or right half of its monitor, move it
   up or down, or send it to a corner.
 - `Alt+` scroll over a note steps through your notes from the latest used, as
