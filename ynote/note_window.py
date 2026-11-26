@@ -596,6 +596,12 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.connect('window-state-event', self._on_window_state)
         self.connect('key-press-event',    self._on_snap_key_press)
         self.connect('key-release-event',  self._on_snap_key_release)
+        # Alt + scroll steps through the notes. The scrolled windows take
+        # scrolls for themselves, so they are asked first as well.
+        self.add_events(Gdk.EventMask.SCROLL_MASK |
+                        Gdk.EventMask.SMOOTH_SCROLL_MASK)
+        for widget in (self, self._sw, self._results_scroll):
+            widget.connect('scroll-event', self._on_switch_scroll)
         # The window manager's close button hides the note instead of quitting.
         self.connect('delete-event', lambda *_: self._hide_note() or True)
 
@@ -615,14 +621,16 @@ class NoteWindow(Gtk.ApplicationWindow):
         Gdk.KEY_Up: 'up', Gdk.KEY_Down: 'down',
     }
 
+    @staticmethod
+    def _alt_only(ev):
+        mods = ev.state & Gtk.accelerator_get_default_mod_mask()
+        return mods == Gdk.ModifierType.MOD1_MASK
+
     def _on_snap_key_press(self, _, ev):
-        # Ctrl + Super + arrow snaps the note into a column (see snap.py).
-        # Plain Super + arrows are left to GNOME's own tiling shortcuts.
+        # Alt + arrow snaps the note into a column (see snap.py). GNOME's own
+        # shortcuts with arrows all add Super, Ctrl, or Shift to Alt.
         key = self._SNAP_KEYS.get(ev.keyval)
-        if (key is None
-                or not ev.state & Gdk.ModifierType.CONTROL_MASK
-                or not ev.state & (Gdk.ModifierType.SUPER_MASK |
-                                   Gdk.ModifierType.MOD4_MASK)):
+        if key is None or not self._alt_only(ev):
             return False
         if key in self._snap_held:
             self._snap_held.remove(key)
@@ -634,10 +642,26 @@ class NoteWindow(Gtk.ApplicationWindow):
         key = self._SNAP_KEYS.get(ev.keyval)
         if key in self._snap_held:
             self._snap_held.remove(key)
-        elif ev.keyval in (Gdk.KEY_Super_L, Gdk.KEY_Super_R,
-                           Gdk.KEY_Control_L, Gdk.KEY_Control_R):
+        elif ev.keyval in (Gdk.KEY_Alt_L, Gdk.KEY_Alt_R):
             self._snap_held.clear()
+            self.app.end_note_switch()
         return False
+
+    def _on_switch_scroll(self, _, ev):
+        # Alt + scroll brings the next or previous note forward (see
+        # PostItApp.scroll_notes()).
+        if not self._alt_only(ev):
+            return False
+        dy = 0
+        if ev.direction == Gdk.ScrollDirection.SMOOTH:
+            _ok, _dx, dy = ev.get_scroll_deltas()
+        elif ev.direction == Gdk.ScrollDirection.DOWN:
+            dy = 1
+        elif ev.direction == Gdk.ScrollDirection.UP:
+            dy = -1
+        if dy:
+            self.app.scroll_notes(self, dy, ev.time)
+        return True
 
     def _snap_to(self, keys):
         win = self.get_window()

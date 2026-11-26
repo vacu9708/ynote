@@ -78,8 +78,10 @@ buttons don't show:
 - In a code block, double-click a line to select one command, or triple-click to
   select the whole block. `Ctrl+click` opens a link.
 - `Ctrl+F` searches the note; check **All notes** to search every note.
-- `Ctrl+Super+` arrows snap a note into the left or right half of its monitor,
-  move it up or down, or send it to a corner.
+- `Alt+` arrows snap a note into the left or right half of its monitor, move it
+  up or down, or send it to a corner.
+- `Alt+` scroll over a note steps through your notes from the latest used, as
+  `Alt+Tab` does, so notes stacked in one place come up one after another.
 - `✕` hides a note. Bring it back from `▤` or the tray icon's **Hidden Notes**.
 - The tray icon's menu lists your open notes, so you can jump to one that is
   buried under other windows. **Bring All to Front** in it, or a middle click on

@@ -28,6 +28,10 @@ from .storage import (
 )
 from .styles import BASE_CSS
 
+# How long Alt + scroll waits after bringing a note forward before the next.
+SWITCH_PAUSE_MS = 200
+
+
 class PostItApp(Gtk.Application):
     def __init__(self):
         super().__init__(
@@ -39,6 +43,14 @@ class PostItApp(Gtk.Application):
         self._menu_rebuild_id = None
         self._hidden_notes_window = None
         self._current_note = None
+        # Notes in the order they last had the focus, the latest first.
+        self._recent = []
+        # Alt + scroll: the order it steps through while Alt is held, where
+        # it is in it, and the amount scrolled toward the next step.
+        self._switch_order = None
+        self._switch_index = 0
+        self._switch_amount = 0.0
+        self._switch_time = None
         self._rich_clipboard = None
         self._rich_clipboard_owned = False
         self._ignore_next_clipboard_owner_change = False
@@ -134,6 +146,14 @@ class PostItApp(Gtk.Application):
     def _on_note_focus_in(self, note=None):
         if note is not None:
             self._current_note = note
+            # The notes Alt + scroll passes over do not count as used.
+            if self._switch_order is None:
+                self._mark_recent(note)
+
+    def _mark_recent(self, note):
+        if note in self._recent:
+            self._recent.remove(note)
+        self._recent.insert(0, note)
 
     def _on_note_focus_out(self):
         # An untitled note shows its first line in the tray menu. Leaving a note
@@ -339,6 +359,62 @@ class PostItApp(Gtk.Application):
                 gdk_win.focus(ts)
             else:
                 w.present()
+
+    def scroll_notes(self, under_pointer, dy, time):
+        """Alt + scroll: step through the notes from the latest used, as
+        Alt+Tab does. Scrolling down brings forward the note used before, so
+        notes stacked in one place come up one after another.
+
+        The order is fixed while Alt is held, so that the notes do not swap
+        places as they come forward, and scrolling back retraces the steps.
+        The note it stops on counts as the latest once Alt is let go. Amounts add up to one wheel notch before a step, and the scroll is
+        ignored for SWITCH_PAUSE_MS after it. A touchpad swipe sends a stream
+        of small amounts, which would otherwise race through every note."""
+        if (self._switch_time is not None
+                and (time - self._switch_time) & 0xFFFFFFFF < SWITCH_PAUSE_MS):
+            self._switch_amount = 0.0
+            return
+        if dy * self._switch_amount < 0:
+            self._switch_amount = 0.0
+        self._switch_amount += dy
+        if abs(self._switch_amount) < 1:
+            return
+        step = 1 if self._switch_amount > 0 else -1
+        self._switch_amount = 0.0
+        self._switch_time = time
+        self._step_note(under_pointer, step, time)
+
+    def _step_note(self, under_pointer, step, time):
+        order = self._switch_order
+        # Alt is let go in the note that has the focus. With none of the notes
+        # having it, that may have gone unseen, so a new order is taken.
+        if order is None or not any(w.is_active() for w in order):
+            order = self._notes_by_recency()
+            if len(order) < 2:
+                return
+            active = [w for w in order if w.is_active()]
+            start = active[0] if active else under_pointer
+            if start not in order:
+                return
+            self._switch_order = order
+            self._switch_index = order.index(start)
+        self._switch_index = (self._switch_index + step) % len(order)
+        target = order[self._switch_index]
+        self._current_note = target
+        target.present_with_time(time)
+
+    def end_note_switch(self):
+        """Alt was let go: the note Alt + scroll stopped on is the latest."""
+        if self._switch_order is None:
+            return
+        target = self._switch_order[self._switch_index]
+        self._switch_order = None
+        self._mark_recent(target)
+
+    def _notes_by_recency(self):
+        visible = [w for w in self.notes.values() if w.get_visible()]
+        used = [w for w in self._recent if w in visible]
+        return used + [w for w in visible if w not in used]
 
     def show_all(self):
         for w in self.notes.values():

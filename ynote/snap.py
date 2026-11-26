@@ -1,4 +1,4 @@
-"""Snapping used by the Ctrl + Super + arrow note shortcut.
+"""Snapping used by the Alt + arrow note shortcut.
 
 Each monitor's work area is split into COLS columns. A snapped note takes the
 column's width and keeps its own height. Rectangles are (x, y, width, height)
