@@ -44,9 +44,10 @@ def snap_rect(keys, rect, areas, index):
     """Return where a note at rect moves when the arrows in keys are held.
 
     keys lists the held arrows with the latest press last. Left/Right pick a
-    column, Up/Down move the note by its own height, and a horizontal plus a
-    vertical arrow go straight to that corner. Pressing Left/Right again from a
-    note already in that edge column moves it onto the neighboring monitor.
+    column, Up/Down alone move the note straight up or down by its own
+    height, and a horizontal plus a vertical arrow go straight to that corner.
+    Pressing Left/Right again from a note already in that edge column moves it
+    onto the neighboring monitor.
     """
     area = areas[index]
     ax, ay, aw, ah = area
@@ -55,8 +56,13 @@ def snap_rect(keys, rect, areas, index):
     h = min(cur_h, ah)
     col = _clamp((x + cur_w / 2 - ax) // w, 0, COLS - 1)
 
-    diagonal = (any(k in HORIZONTAL for k in keys)
-                and any(k in VERTICAL for k in keys))
+    if not any(k in HORIZONTAL for k in keys):
+        # Up or down only: the note keeps its place across and its width.
+        for key in keys:
+            y += -h if key == 'up' else h
+        return (x, _clamp(y, ay, ay + ah - h), cur_w, h)
+
+    diagonal = any(k in VERTICAL for k in keys)
     if not diagonal and keys[-1] in HORIZONTAL:
         key = keys[-1]
         edge = 0 if key == 'left' else COLS - 1
@@ -71,10 +77,8 @@ def snap_rect(keys, rect, areas, index):
             col = 0
         elif key == 'right':
             col = COLS - 1
-        elif diagonal:
-            y = ay if key == 'up' else ay + ah - h
         else:
-            y += -h if key == 'up' else h
+            y = ay if key == 'up' else ay + ah - h
     return _place(area, col, y, h)
 
 

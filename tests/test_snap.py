@@ -20,6 +20,13 @@ def test_snap_rect_up_down_move_by_note_height():
     assert snap_rect(['up'], note, [LEFT_AREA], 0) == (1000, 150, 1000, 150)
 
 
+def test_snap_rect_up_down_alone_keep_the_note_where_it_is_across():
+    note = (300, 250, 400, 150)
+
+    assert snap_rect(['down'], note, [LEFT_AREA], 0) == (300, 400, 400, 150)
+    assert snap_rect(['up'], note, [LEFT_AREA], 0) == (300, 100, 400, 150)
+
+
 def test_snap_rect_up_down_stop_flush_with_screen_edges():
     near_top = (0, 100, 1000, 150)
     near_bottom = (0, 600, 1000, 150)
