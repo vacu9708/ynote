@@ -20,9 +20,6 @@ HELP = [
                             'selected one'),
         ('Ctrl+Enter', 'Check or uncheck the to-dos on the selected lines'),
     ]),
-    ('Search', [
-        ('Ctrl+F', 'Search every note'),
-    ]),
     ('Mouse', [
         ('Double-click in a code block', 'Select one command'),
         ('Triple-click in a code block', 'Select the whole block'),
