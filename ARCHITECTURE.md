@@ -199,9 +199,11 @@ sequenceDiagram
   selection are moved out of one once GTK has moved them, a format is applied
   with `_tag_text()` to the text after the marker and never to a line break,
   since a format on a break reaches into the next line and moves its indent,
-  a list item is never made
-  a heading or a line of code, and Backspace at the start of an item removes
-  the whole marker. Moving left from the start of an item goes on to the end
+  a list item is never made a heading or a line of code, and Backspace at the
+  start of an item outdents it one level, or removes the whole marker from one
+  at the top level. Each level is a tab, as wide as `INDENT_SPACES` spaces of
+  the note's font; an item indented by spaces, as items were before, gets tabs
+  when its note opens. Moving left from the start of an item goes on to the end
   of the line before, while selecting left takes the whole marker first and
   the line break with the next step; a mouse selection takes a marker it
   reaches over. A bullet in a line of code is code, with no marker. The

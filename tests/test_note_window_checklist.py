@@ -95,7 +95,7 @@ def test_tab_indents_a_checkbox_line():
     win, buf = make_window('☐ a')
     press(win, Gdk.KEY_Tab)
 
-    assert text_of(buf) == '    ☐ a'
+    assert text_of(buf) == '\t☐ a'
 
 
 def test_ctrl_enter_toggles_the_selected_checkboxes_only():

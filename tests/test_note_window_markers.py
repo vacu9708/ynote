@@ -293,3 +293,67 @@ def test_selecting_left_over_text_from_an_item_takes_the_marker_next():
     buf.move_mark(buf.get_insert(), buf.get_iter_at_offset(6))
 
     assert shift_arrow(win, buf, 5, 6) == (4, 8)
+
+
+@pytest.mark.parametrize('marker', ['• ', '☐ ', '☑ '])
+def test_backspace_at_the_start_of_a_nested_item_outdents_it_one_level(marker):
+    win, buf = make_window('\t\t' + marker + 'one', cursor=4)
+
+    assert press(win, Gdk.KEY_BackSpace)
+    assert text_of(buf) == '\t' + marker + 'one'
+    assert buf.get_iter_at_mark(buf.get_insert()).get_offset() == 3
+
+    assert press(win, Gdk.KEY_BackSpace)
+    assert text_of(buf) == marker + 'one'
+
+    # At the top level it takes off the marker, as before.
+    assert press(win, Gdk.KEY_BackSpace)
+    assert text_of(buf) == 'one'
+
+
+def test_backspace_on_an_empty_nested_item_outdents_it_one_level():
+    win, buf = make_window('• a\n\t• ', cursor=8)
+
+    assert press(win, Gdk.KEY_BackSpace)
+
+    assert text_of(buf) == '• a\n• '
+
+
+def test_backspace_on_an_item_indented_by_spaces_takes_off_one_level():
+    win, buf = make_window('      • one', cursor=8)
+
+    assert press(win, Gdk.KEY_BackSpace)
+
+    assert text_of(buf) == '  • one'
+
+
+def test_tab_and_shift_tab_indent_an_item_by_one_tab():
+    win, buf = make_window('• one', cursor=2)
+
+    assert press(win, Gdk.KEY_Tab)
+    assert press(win, Gdk.KEY_Tab)
+    assert text_of(buf) == '\t\t• one'
+
+    assert win._on_tv_key_press(win.tv, SimpleNamespace(
+        state=Gdk.ModifierType.SHIFT_MASK, keyval=Gdk.KEY_ISO_Left_Tab))
+    assert text_of(buf) == '\t• one'
+
+
+def test_items_indented_by_spaces_get_tabs_and_keep_their_formats():
+    win, buf = make_window('        • bold\n    plain\n      ☐ x')
+    tag_range(buf, win._bold_tag, 10, 14)
+
+    assert win._tab_list_indents()
+
+    # Only list items: a plain line keeps its spaces.
+    assert text_of(buf) == '\t\t• bold\n    plain\n\t  ☐ x'
+    assert tagged(win, win._bold_tag) == [[4, 8]]
+    assert not win._tab_list_indents()
+
+
+def test_a_list_typed_after_spaces_is_indented_by_tabs():
+    win, buf = make_window('    -', cursor=5)
+
+    assert press(win, Gdk.KEY_space)
+
+    assert text_of(buf) == '\t• '

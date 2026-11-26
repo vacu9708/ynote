@@ -119,6 +119,17 @@ TYPED_MARKERS = {
     '• [x]': CHECKED_MARKER, '• [X]': CHECKED_MARKER,
 }
 
+# How many spaces of the note's font a tab is as wide as: one level of a list.
+# Items were indented by this many spaces before a tab took one level.
+INDENT_SPACES = 4
+
+
+def tabbed_indent(indent):
+    """The indent of a list item with each run of INDENT_SPACES spaces made a
+    tab, as items indented before tabs were are opened."""
+    return indent.replace(' ' * INDENT_SPACES, '\t')
+
+
 def cell_width(line):
     """How many monospace cells `line` takes: a tab runs to the next stop of 8
     and a full-width character or emoji takes two."""
@@ -466,8 +477,10 @@ class NoteWindow(Gtk.ApplicationWindow):
                           buf.get_iter_at_offset(e))
         self._restore_images(data.get('images', []))
         self._strip_marker_formats()
-        if self._normalize_code_pads():
-            # Notes from before inline code had spaces for padding.
+        # Notes from before inline code had spaces for padding, and from
+        # before list items were indented by tabs.
+        pads_changed = self._normalize_code_pads()
+        if self._tab_list_indents() or pads_changed:
             self._history[0] = self._current_state()
         self._refresh_line_styles()
         # Before the default handler, so the code boxes sit under the text.
@@ -2024,6 +2037,17 @@ class NoteWindow(Gtk.ApplicationWindow):
                 and self._delete_around_pad(buf, event.keyval)):
             return True
 
+        # Backspace at the start of a nested item, empty or not, outdents it
+        # one level and keeps its marker.
+        if (state == 0 and event.keyval == Gdk.KEY_BackSpace
+                and cursor.get_offset() == self._marker_end(cursor_line)
+                and self._line_list_parts(cursor_line)[0]):
+            self._flush_snapshot()
+            self._outdent_bullet_line(cursor_line)
+            self._flush_snapshot()
+            self._queue_save()
+            return True
+
         if (state == 0 and event.keyval == Gdk.KEY_BackSpace
                 and self._line_is_empty_list_item(cursor_line)):
             self._remove_empty_bullet_line(cursor_line)
@@ -2731,6 +2755,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         typed_end.forward_chars(typed_len + 1)
         buf.delete(typed, typed_end)
         buf.insert(buf.get_iter_at_line_offset(line, col), marker)
+        self._tab_list_indents([line])
         self._flush_snapshot()
 
     def _set_line_marker(self, line, marker):
@@ -2763,7 +2788,27 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _indent_bullet_line(self, line):
         buf = self.tv.get_buffer()
         line_start = buf.get_iter_at_line(line)
-        buf.insert(line_start, '    ')
+        buf.insert(line_start, '\t')
+
+    def _tab_list_indents(self, lines=None):
+        """Make the spaces that indent list items tabs (see tabbed_indent()).
+        Returns whether any changed."""
+        buf = self.tv.get_buffer()
+        changed = False
+        for line in (range(buf.get_line_count()) if lines is None else lines):
+            if self._marker_end(line) is None:
+                continue
+            indent = self._line_list_parts(line)[0]
+            tabbed = tabbed_indent(indent)
+            if tabbed == indent:
+                continue
+            start = buf.get_iter_at_line(line)
+            end = start.copy()
+            end.forward_chars(len(indent))
+            buf.delete(start, end)
+            buf.insert(buf.get_iter_at_line(line), tabbed)
+            changed = True
+        return changed
 
     def _outdent_bullet_line(self, line):
         buf = self.tv.get_buffer()
@@ -3878,6 +3923,21 @@ class NoteWindow(Gtk.ApplicationWindow):
             tag = self._marker_tags[marker[0]]
             tag.set_property('scale', scale)
             tag.set_property('letter-spacing', round(spread * Pango.SCALE))
+
+        # A tab indents a list item by INDENT_SPACES spaces of the note's
+        # font, and in code runs to the next stop of 8 characters, as
+        # cell_width() counts it for the box.
+        tv.set_tabs(self._tab_stops(
+            self._text_width(body, ' ' * INDENT_SPACES)))
+        self._code_tag.set_property('tabs', self._tab_stops(
+            self._text_width(code, ' ' * 8)))
+
+    @staticmethod
+    def _tab_stops(width):
+        """Tab stops every width pixels: Pango repeats the one stop given."""
+        tabs = Pango.TabArray.new(1, True)
+        tabs.set_tab(0, Pango.TabAlign.LEFT, max(1, round(width)))
+        return tabs
 
     def _text_width(self, font, text, scale=1.0, spacing=0):
         """Width of text in font, as a tag with that scale and letter spacing
