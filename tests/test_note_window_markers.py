@@ -1,8 +1,10 @@
 """A bullet or a to-do box is not text: no format covers it, no code block takes
-it in, and the cursor and a selection never end inside one."""
+it in, and the cursor and a selection never end inside one. A selection takes
+it whole or not at all."""
 from types import SimpleNamespace
 
 import gi
+import pytest
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk, Gtk
@@ -193,51 +195,101 @@ def test_leaving_a_marker_goes_to_its_end_or_to_the_line_before():
 
     # Left from the start of the item goes to the end of the line before.
     buf.place_cursor(buf.get_iter_at_offset(7))
-    win._leave_marker('insert', 8)
+    win._leave_marker('insert', 8, keyboard=True)
     assert buf.get_iter_at_mark(mark).get_offset() == 5
     assert not buf.get_has_selection()
 
 
-def test_a_selection_end_inside_a_marker_moves_to_the_end_of_it():
+def test_home_at_the_start_of_an_item_stays_there():
+    win, buf = make_window('first\n• item', cursor=8)
+    buf.place_cursor(buf.get_iter_at_offset(6))
+
+    win._leave_marker('insert', 8, keyboard=True)
+
+    assert buf.get_iter_at_mark(buf.get_insert()).get_offset() == 8
+
+
+def test_a_click_on_the_marker_of_the_item_in_use_stays_on_its_line():
+    win, buf = make_window('first\n• item', cursor=8)
+    buf.place_cursor(buf.get_iter_at_offset(7))
+
+    win._leave_marker('insert', 8)
+
+    assert buf.get_iter_at_mark(buf.get_insert()).get_offset() == 8
+
+
+def test_a_mouse_selection_takes_the_marker_it_reaches_over():
     win, buf = make_window('first\n• item', cursor=0)
-    # The cursor is at the end of the selection, and the other end starts
-    # inside the marker.
+    # A drag that started on the marker and went right.
     buf.select_range(buf.get_iter_at_offset(11), buf.get_iter_at_offset(7))
 
     win._leave_marker('selection_bound', None)
 
     start, end = buf.get_selection_bounds()
-    assert (start.get_offset(), end.get_offset()) == (8, 11)
+    assert (start.get_offset(), end.get_offset()) == (6, 11)
 
 
-def test_selecting_left_from_the_start_of_an_item_does_not_reach_the_line_before():
+def test_a_mouse_selection_from_above_takes_the_marker_too():
+    win, buf = make_window('first\n☐ item', cursor=0)
+    buf.select_range(buf.get_iter_at_offset(7), buf.get_iter_at_offset(2))
+
+    win._leave_marker('insert', 2)
+
+    start, end = buf.get_selection_bounds()
+    assert (start.get_offset(), end.get_offset()) == (2, 8)
+
+
+def shift_arrow(win, buf, to, previous):
+    """What GTK does for Shift+arrow: the cursor end moves, the other stays.
+    Then what the mark-set handler does once GTK is done."""
+    buf.move_mark(buf.get_insert(), buf.get_iter_at_offset(to))
+    win._leave_marker('insert', previous, keyboard=True)
+    return tuple(i.get_offset() for i in buf.get_selection_bounds())
+
+
+@pytest.mark.parametrize('marker', ['• ', '☐ ', '☑ '])
+def test_selecting_left_from_an_item_takes_the_marker_then_the_line_break(marker):
+    win, buf = make_window('one\n' + marker + 'two', cursor=6)
+
+    assert shift_arrow(win, buf, 5, 6) == (4, 6)
+    # Past the start of the line, GTK reaches the line before by itself.
+    assert shift_arrow(win, buf, 3, 4) == (3, 6)
+
+
+def test_selecting_right_toward_an_item_takes_the_line_break_then_the_marker():
+    win, buf = make_window('one\n• two', cursor=3)
+
+    assert shift_arrow(win, buf, 4, 3) == (3, 4)
+    assert shift_arrow(win, buf, 5, 4) == (3, 6)
+
+
+def test_selecting_back_over_the_marker_gives_it_up_whole():
     win, buf = make_window('one\n• two', cursor=6)
-    # What GTK does for Shift+Left: the cursor end goes into the marker, the
-    # other end stays.
-    buf.move_mark(buf.get_insert(), buf.get_iter_at_offset(5))
+    shift_arrow(win, buf, 5, 6)
 
-    win._leave_marker('insert', 6)
-
-    assert buf.get_selection_bounds() == ()
+    assert shift_arrow(win, buf, 5, 4) == ()
     assert buf.get_iter_at_mark(buf.get_insert()).get_offset() == 6
+
+
+def test_shift_home_selects_the_text_and_a_second_one_the_marker():
+    win, buf = make_window('one\n• two', cursor=9)
+
+    assert shift_arrow(win, buf, 4, 9) == (6, 9)
+    assert shift_arrow(win, buf, 4, 6) == (4, 9)
 
 
 def test_moving_left_from_the_start_of_an_item_goes_to_the_line_before():
     win, buf = make_window('one\n• two', cursor=6)
     buf.place_cursor(buf.get_iter_at_offset(5))
 
-    win._leave_marker('insert', 6)
+    win._leave_marker('insert', 6, keyboard=True)
 
     assert buf.get_iter_at_mark(buf.get_insert()).get_offset() == 3
     assert buf.get_selection_bounds() == ()
 
 
-def test_selecting_left_over_text_from_an_item_continues_into_the_line_before():
+def test_selecting_left_over_text_from_an_item_takes_the_marker_next():
     win, buf = make_window('one\n• two', cursor=8)
-    buf.move_mark(buf.get_selection_bound(), buf.get_iter_at_offset(8))
-    buf.move_mark(buf.get_insert(), buf.get_iter_at_offset(5))
+    buf.move_mark(buf.get_insert(), buf.get_iter_at_offset(6))
 
-    win._leave_marker('insert', 6)
-
-    low, high = (i.get_offset() for i in buf.get_selection_bounds())
-    assert (low, high) == (3, 8)
+    assert shift_arrow(win, buf, 5, 6) == (4, 8)

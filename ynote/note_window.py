@@ -443,6 +443,7 @@ class NoteWindow(Gtk.ApplicationWindow):
             # runs through them.
             'link', foreground='#1A55B0', underline=Pango.Underline.LOW)
         self._cursor_offset = 0
+        self._leaving_marker = False
         buf.connect('mark-set', self._on_mark_set)
         self._watch_code_blocks(buf)
         self._hl_tag.set_priority(buf.get_tag_table().get_size() - 1)
@@ -1639,41 +1640,62 @@ class NoteWindow(Gtk.ApplicationWindow):
                     buf.remove_tag(tag, first, last)
 
     def _keep_out_of_marker(self, buf, it, mark, previous):
+        if self._leaving_marker:
+            # The start of the line, where _leave_marker() put a selection end.
+            return
         marker_end = self._marker_end(it.get_line())
         if marker_end is not None and it.get_offset() < marker_end:
+            event = Gtk.get_current_event()
+            keyboard = (event is not None
+                        and event.type == Gdk.EventType.KEY_PRESS)
             # Once GTK has finished moving it, as for a divider.
             GLib.idle_add(self._leave_marker, mark.get_name(), previous,
-                          priority=GLib.PRIORITY_HIGH_IDLE)
+                          keyboard, priority=GLib.PRIORITY_HIGH_IDLE)
 
-    def _leave_marker(self, name, previous):
-        """Move the cursor, or the other end of a selection, out of a marker:
-        to its end, or, when the cursor was at the start of the item and went
-        left, to the end of the line before. Selecting left from the start of
-        an item does not reach it: that would select the line break and the
-        marker, and no text."""
+    def _leave_marker(self, name, previous, keyboard=False):
+        """Move the cursor, or an end of a selection, out of a marker.
+
+        The cursor goes to the end of the marker, or, when Left took it back
+        from the start of the item, to the end of the line before. Home there
+        leaves it where it was. An end of a
+        selection takes the marker whole or leaves it out, never part of it:
+        selecting left from the start of an item takes the marker, the next
+        step left the line break, and the way back the same steps in reverse.
+        A mouse selection takes the marker it reaches over."""
         buf = self.tv.get_buffer()
         mark = buf.get_mark(name)
         if mark is None:
             return False
         it = buf.get_iter_at_mark(mark)
+        offset = it.get_offset()
         marker_end = self._marker_end(it.get_line())
-        if marker_end is None or it.get_offset() >= marker_end:
+        if marker_end is None or offset >= marker_end:
             return False
         line = it.get_line()
+        line_start = buf.get_iter_at_line(line).get_offset()
         other = buf.get_selection_bound() if name == 'insert' else buf.get_insert()
         anchor = buf.get_iter_at_mark(other).get_offset()
-        if (previous == marker_end and line > 0 and name == 'insert'
-                and anchor != marker_end):
-            target = self._line_bounds(line - 1)[1]
-        else:
-            # Not into the line before when that would select nothing but the
-            # line break and the marker, which no text is in.
-            target = buf.get_iter_at_offset(marker_end)
-        if buf.get_iter_at_mark(other).equal(it):
+        if anchor == offset:
             # No selection: both ends move, so one does not appear.
-            buf.place_cursor(target)
+            if (keyboard and previous == marker_end
+                    and offset == marker_end - 1 and line > 0):
+                buf.place_cursor(self._line_bounds(line - 1)[1])
+            else:
+                buf.place_cursor(buf.get_iter_at_offset(marker_end))
+            return False
+        if keyboard:
+            take = (previous == marker_end
+                    or (previous is not None and previous < line_start
+                        and offset == line_start))
         else:
-            buf.move_mark(mark, target)
+            take = anchor >= marker_end
+        target = line_start if take else marker_end
+        if target != offset:
+            self._leaving_marker = True
+            try:
+                buf.move_mark(mark, buf.get_iter_at_offset(target))
+            finally:
+                self._leaving_marker = False
         return False
 
     def _on_buf_changed(self, buf):

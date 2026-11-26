@@ -201,9 +201,10 @@ sequenceDiagram
   since a format on a break reaches into the next line and moves its indent,
   a list item is never made
   a heading or a line of code, and Backspace at the start of an item removes
-  the whole marker. Selecting left from the start of an item stops there, as
-  a selection of the line break and the marker alone would hold no text; the
-  cursor without a selection goes on to the end of the line before. A bullet in a line of code is code, with no marker. The
+  the whole marker. Moving left from the start of an item goes on to the end
+  of the line before, while selecting left takes the whole marker first and
+  the line break with the next step; a mouse selection takes a marker it
+  reaches over. A bullet in a line of code is code, with no marker. The
   characters are drawn transparent by a derived tag, scaled to fit in the line
   and spaced to take the room the drawing needs, and `_draw_list_markers()`
   draws a filled circle or a box, sized by `BULLET_SIZE` and `CHECKBOX_SIZE` in
