@@ -68,7 +68,8 @@ Buttons show their shortcut when you hover over them. These are the things the
 buttons don't show:
 
 - **Right-click** the title bar or bottom bar for the note's color, opacity,
-  font size, rename, and delete. Double-click the title bar to maximize.
+  font size, rename, and delete, and **Help**, a short list of the shortcuts
+  below. Double-click the title bar to maximize.
 - Typing `- ` or `[ ] ` at the start of a line makes a bullet or a checklist,
   `---` alone on a line makes a divider, and `` `text` `` becomes inline code.
 - `Tab` and `Shift+Tab` indent and outdent a list item, or every item on the

@@ -20,6 +20,7 @@ from .config import (
     DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR, NEW_NOTE_LABEL,
     PROJECT_DIR, UNTITLED_LABEL, display_path,
 )
+from .help import show_help
 from .images import image_files_from_metadata, image_path, normalize_image_meta
 from .links import find_links
 from .models import MAX_OPACITY, MIN_OPACITY, normalize_note_data
@@ -3655,6 +3656,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                 self.app.set_autostart(not b.get_property('active')),
                 pop.popdown()))
             box.pack_start(login, False, False, 0)
+        self._ctx_item(pop, box, 'Help', lambda: show_help(self))
         self._ctx_item(pop, box, 'About', self._show_about_dialog)
         separator()
         self._ctx_item(pop, box, 'Delete Note', self._confirm_delete,
