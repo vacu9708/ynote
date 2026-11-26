@@ -217,12 +217,12 @@ def popup_labels(items):
             for item in menu.get_children()]
 
 
-def test_text_menu_puts_the_insert_items_first_and_drops_select_all():
+def test_text_menu_puts_emoji_then_the_insert_items_first_and_drops_select_all():
     labels = popup_labels(['_Cut', '_Copy', '_Paste', '_Delete', '-',
                            'Select _All', '-', 'Insert _Emoji'])
 
     assert labels == [
-        'Insert Image', 'Insert Divider  (---)', 'Insert _Emoji', '-',
+        'Insert _Emoji', 'Insert Image', 'Insert Divider  (---)', '-',
         'Undo  (Ctrl+Z)', 'Redo  (Ctrl+Shift+Z)', '-',
         'Search  (Ctrl+F)', '-',
         '_Cut', '_Copy', '_Paste', '_Delete']

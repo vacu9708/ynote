@@ -3365,7 +3365,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _on_tv_popup(self, _, menu):
         # Select All is not worth a place in the menu (Ctrl+A does it), and
-        # Insert Emoji moves up to join the other Insert items.
+        # Insert Emoji moves to the top, above the other Insert items.
         emoji_item = None
         for item in menu.get_children():
             if not isinstance(item, Gtk.MenuItem):
@@ -3395,17 +3395,18 @@ class NoteWindow(Gtk.ApplicationWindow):
         divider_item.connect('activate', lambda _: self._insert_divider())
 
         # Each prepend goes above the last, so this reads bottom to top: the
-        # Insert items first, then Undo and Redo, then Search.
+        # Insert items first, Insert Emoji at the very top, then Undo and
+        # Redo, then Search.
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(search_item)
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(redo_item)
         menu.prepend(undo_item)
         menu.prepend(Gtk.SeparatorMenuItem())
-        if emoji_item is not None:
-            menu.prepend(emoji_item)
         menu.prepend(divider_item)
         menu.prepend(image_item)
+        if emoji_item is not None:
+            menu.prepend(emoji_item)
 
         menu.show_all()
 
