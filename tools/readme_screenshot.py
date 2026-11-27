@@ -131,8 +131,8 @@ def sample_notes():
     today.line('---')
     today.line('1:1 at 3 pm', 'bold_ranges')
 
-    # The bottom bar keeps a note at least about 335 px wide. A note that
-    # grows past its width would overlap the next one in the capture.
+    # A note that grows past its width would overlap the next one in the
+    # capture, so they are wide enough for the bottom bar.
     notes = [('orders', '502 on /api/orders', debug, 340, True),
              ('today', 'Today', today, 340, False)]
     out, x = [], 0
@@ -179,16 +179,12 @@ def setup_home():
 
 
 def capture(window):
-    gdk_win = window.get_window()
-    return Gdk.pixbuf_get_from_window(
-        gdk_win, 0, 0, gdk_win.get_width(), gdk_win.get_height())
-
-
-def capture_from_screen(window):
     """Crop a window out of the screen instead of reading its own surface.
 
-    Reading the Hidden Notes window's surface aborts inside cairo on some
-    GTK/cairo builds, while reading the screen works.
+    Reading a window's own surface aborts inside cairo on some GTK/cairo
+    builds (an assertion on a surface with MIME data), as it has since an
+    update of libxrender1 on Ubuntu 22.04, while reading the screen works.
+    The windows are placed apart, so a crop shows one window alone.
     """
     gdk_win = window.get_window()
     origin_x, origin_y = gdk_win.get_origin()[1:]
@@ -232,6 +228,15 @@ def main():
         # A blinking text cursor would land in the picture at random.
         for w in app.notes.values():
             w.tv.set_cursor_visible(False)
+            # At the start of the first line where no format is on, so the
+            # Format button is not lit.
+            buf = w.tv.get_buffer()
+            for line in range(buf.get_line_count()):
+                buf.place_cursor(buf.get_iter_at_line(line))
+                w._sync_format_state()
+                if not (w._bold_active or w._heading_active
+                        or w._code_active):
+                    break
         GLib.timeout_add(300, capture_notes)
         return False
 
@@ -267,7 +272,7 @@ def main():
         return False
 
     def capture_hidden(shots, manager):
-        compose(shots + [capture_from_screen(manager)], HIDDEN_OUTPUT)
+        compose(shots + [capture(manager)], HIDDEN_OUTPUT)
         app.quit_app()
         return False
 
