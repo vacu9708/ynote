@@ -35,11 +35,24 @@ holds what those don't: how the user wants the work done.
    ```
 
 2. Rebuild the package (`./build-deb.sh`) and restart the running Ynote from
-   the checkout, without being asked: find it with
-   `pgrep -a python3 | grep ynote.py` (`pgrep -f` matches its own shell), stop
-   it with `kill -TERM` (it saves first), then
-   `setsid nohup python3 <checkout>/ynote.py &`. Installing the `.deb` needs
-   sudo, so give the user `sudo apt install ./dist/ynote_<version>.deb`.
+   the checkout, without being asked, so the user can try the change at once:
+   find it with `pgrep -a python3 | grep ynote.py` (`pgrep -f` matches its own
+   shell), stop it with `kill -TERM` (it saves first), update the test note
+   while it is stopped if the change calls for it (see "Test note"), then
+   `setsid nohup python3 <checkout>/ynote.py &`.
+3. After each commit, give the user
+   `sudo apt install --reinstall ./dist/ynote_<version>.deb`: installing needs
+   their sudo, and without `--reinstall` apt skips a build that keeps the
+   released version, as every build between releases does.
+
+## Test note
+
+The user tries each change in their note titled "test note", written in
+[tools/test-note.md](tools/test-note.md). When a change adds something the
+note should show, or changes how something in it looks or works, edit that
+file, and while Ynote is stopped in step 2, run `python3 tools/test_note.py`.
+It writes the note into the real `~/.config/ynote/notes.json`, after copying
+the file to `notes.json.bak`, keeping where the note is and its size.
 
 ## Checking UI headlessly
 
@@ -47,9 +60,9 @@ holds what those don't: how the user wants the work done.
 - Capture by cropping the screen (`Gdk.pixbuf_get_from_window` on the root
   window), never a window's own surface: that aborts inside cairo since a
   libxrender1 update.
-- Never write to the real `~/.config/ynote`: give the script a throwaway HOME,
-  or point `ynote.note_window.IMAGES_DIR` at a scratch folder before inserting
-  images.
+- Never write to the real `~/.config/ynote` (`tools/test_note.py` aside):
+  give the script a throwaway HOME, or point `ynote.note_window.IMAGES_DIR` at
+  a scratch folder before inserting images.
 
 ## Design rules learned so far
 
