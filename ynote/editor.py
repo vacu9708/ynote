@@ -1487,8 +1487,8 @@ class Editor:
         buf = self.tv.get_buffer()
         start, end = buf.get_start_iter(), buf.get_end_iter()
         for tag in (self._code_top_tag, self._code_bottom_tag,
-                    self._pad_tag, *self._marker_tags.values(),
-                    *self._slot_tags.values()):
+                    self._pad_tag, self._code_hang_tag,
+                    *self._marker_tags.values(), *self._slot_tags.values()):
             buf.remove_tag(tag, start, end)
         self._tag_list_markers(buf)
         self._even_lines(buf)
@@ -1508,6 +1508,9 @@ class Editor:
             line = end + 1
 
         # The space at each end of an inline code range is its padding.
+        indent = -getattr(self, '_code_pad_width', 0)
+        if self._code_hang_tag.get_property('indent') != indent:
+            self._code_hang_tag.set_property('indent', indent)
         for first, last in self._get_tag_ranges(self._backtick_tag):
             for offset in (first, last - 1):
                 if self._pad_kind(buf, offset):
@@ -1515,6 +1518,16 @@ class Editor:
                     after = here.copy()
                     after.forward_char()
                     buf.apply_tag(self._pad_tag, here, after)
+            # Code at the start of a line: the rows it wraps to start where
+            # its text does, so their box has its padding and lines up with
+            # the box above, as the box of the first row has the padding
+            # space before its text. Pango moves in every row but the first
+            # by a negative indent.
+            here = buf.get_iter_at_offset(first)
+            if (here.starts_line() and self._pad_kind(buf, first) == 'lead'
+                    and not self._is_code_line(buf, here.get_line())):
+                buf.apply_tag(self._code_hang_tag,
+                              *self._line_bounds(here.get_line()))
         return False
 
     def _hide_code_anchors(self, buf):
@@ -1904,11 +1917,20 @@ class Editor:
                     Gtk.TextWindowType.WIDGET, a.x, top - pad_y)
                 width = b.x + b.width - a.x
                 # The box stops short of the spaces at its ends, which leaves
-                # a gap from the text beside it.
+                # a gap from the text beside it. Where the code wraps, the box
+                # reaches past its last character by as much as at its end.
+                # On a row it wraps to, the box starts with the text, which a
+                # line that starts with the code moves in by its padding (see
+                # _apply_code_margins()); GTK cannot move in a row alone.
+                wrap_pad = getattr(self, '_inline_wrap_pad', 0)
                 if self._pad_kind(buf, row.get_offset()) == 'lead':
                     wx, width = wx + CODE_GAP, width - CODE_GAP
+                elif row.has_tag(self._code_hang_tag):
+                    wx, width = wx - wrap_pad, width + wrap_pad
                 if self._pad_kind(buf, tail.get_offset()) == 'trail':
                     width -= CODE_GAP
+                else:
+                    width += wrap_pad
                 outlined_box(cr, self._inline_rgba, wx, wy, width,
                              bottom - top + 2 * pad_y)
             row = row_end
@@ -3858,6 +3880,12 @@ class Editor:
             code.set_absolute_size(size)
         else:
             code.set_size(round(size))
+        # The padding space is set in the body font. Where inline code wraps,
+        # its box has the room its end has: that space less the gap, kept
+        # inside the text margin.
+        self._code_pad_width = round(self._text_width(body, CODE_PAD_CHAR))
+        self._inline_wrap_pad = max(0, min(
+            TEXT_MARGIN - 2, self._code_pad_width - CODE_GAP))
 
         # The outline takes a pixel of the padding, so the room is one more.
         pad = CODE_PAD_Y + 1
@@ -4183,6 +4211,10 @@ class Editor:
         # _refresh_code_spacing(). Only for a quote that is not indented:
         # tab stops count from the margin, so an indented one would move.
         self._quote_hang_tag = buf.create_tag('quote-hang')
+        # Derived: a line that starts with inline code has the rows it wraps
+        # to start as far in as its text, after the padding. See
+        # _apply_code_margins().
+        self._code_hang_tag = buf.create_tag('code-hang')
         self._refresh_quote_hang()
         self._link_tag = buf.create_tag(
             # Below the tails of the letters: the code font's own underline

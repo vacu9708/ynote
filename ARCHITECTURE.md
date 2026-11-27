@@ -324,6 +324,12 @@ sequenceDiagram
   comes from typing, a selection, or backticks has them too. They are in the
   saved text, and Ctrl+C leaves them out. An en space may only be at the end
   of a range as its padding: `_pad_kind()` says which one it is.
+  Where code wraps, its box reaches past the last character before the wrap
+  by as much as at its end. A line that starts with code moves the rows it
+  wraps to in by the padding space (`_code_hang_tag`, a negative indent), and
+  their boxes start the padding before the text, in line with the first
+  row's. Code that starts within a line wraps to rows whose boxes start with
+  the text: GTK cannot move a row in alone.
 - **The cursor and the padding.** The cursor is inside the code on one side
   of a padding space and outside on the other, and `_sync_format_state()`
   takes that from `_pad_kind()`. Turning code on or off at an edge steps the
