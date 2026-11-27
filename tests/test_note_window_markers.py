@@ -105,14 +105,11 @@ def test_bold_toggles_off_again_when_all_the_text_but_the_markers_has_it():
     assert tagged(win, win._bold_tag) == []
 
 
-def test_a_list_item_does_not_become_a_heading_or_a_line_of_code():
+def test_a_list_item_does_not_become_a_heading():
     win, buf = make_window('• item\nplain', cursor=4)
     buf.select_range(buf.get_start_iter(), buf.get_end_iter())
 
     assert win._heading_lines() == [1]
-    win._toggle_code_block()
-
-    assert tagged(win, win._code_tag) == [[7, 12]]
 
 
 def test_bullets_and_checklists_skip_the_lines_of_a_code_block():

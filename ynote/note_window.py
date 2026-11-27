@@ -1315,10 +1315,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf = self.tv.get_buffer()
         if not buf.get_has_selection():
             return None
-
         start, end = buf.get_selection_bounds()
-        start_offset = start.get_offset()
-        end_offset = end.get_offset()
+        return self._rich_state(start.get_offset(), end.get_offset())
+
+    def _rich_state(self, start_offset, end_offset):
+        """The text between two offsets with its formats and images, as the
+        clipboard holds it."""
+        buf = self.tv.get_buffer()
+        start = buf.get_iter_at_offset(start_offset)
+        end = buf.get_iter_at_offset(end_offset)
         return {
             'text': buf.get_slice(start, end, True),
             'bold': self._get_tag_ranges_between(
@@ -4828,32 +4833,62 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._queue_save()
 
     def _toggle_code_block(self):
+        """Make the cursor's or the selected lines a code block, or, when they
+        all are code already, plain lines again.
+
+        Nothing in code is formatted, so the lines become what they would be
+        copied out as: Markdown, such as "# Title", "**bold**", "- item", or a
+        table's rows, with every format taken off. Lines already code stay as
+        they are. A line with an image is left out, as an image is no text."""
         buf = self.tv.get_buffer()
         first_line, last_line = self._selected_or_cursor_lines()
-        # A list item is not a line of code.
-        lines = [ln for ln in range(first_line, last_line + 1)
-                 if self._marker_end(ln) is None]
-        if not lines:
-            return
-        first_line, last_line = lines[0], lines[-1]
-        all_code = all(
-            self._line_is_fully_tagged(self._code_tag, ln) for ln in lines)
-
-        if self._snap_sid:
-            GLib.source_remove(self._snap_sid)
-            self._snap_sid = None
-            self._take_snapshot()
-
-        if all_code:
+        lines = range(first_line, last_line + 1)
+        if all(self._is_code_line(buf, ln) for ln in lines):
+            self._flush_snapshot()
             for ln in reversed(lines):
                 self._remove_code_from_line(ln)
-        else:
-            keep_cursor = not buf.get_has_selection()
-            for ln in reversed(lines):
-                self._tag_code_line(ln, keep_cursor=keep_cursor)
+            self._flush_snapshot()
+            self._queue_save()
+            return
 
-        self._take_snapshot()
-        self._queue_save()
+        # Runs of lines without an image, each made code on its own.
+        runs = []
+        for ln in lines:
+            start, end = self._line_bounds(ln)
+            if IMAGE_ANCHOR in buf.get_slice(start, end, True):
+                continue
+            if runs and runs[-1][1] == ln - 1:
+                runs[-1][1] = ln
+            else:
+                runs.append([ln, ln])
+        if not runs:
+            return
+
+        def edit(buf):
+            cursor = None
+            # From the last, so the lines of the runs before stay where they
+            # are. The cursor goes after the last, kept by a mark as the runs
+            # before it change.
+            for first, last in reversed(runs):
+                start = buf.get_iter_at_line(first).get_offset()
+                end = self._line_bounds(last)[1].get_offset()
+                state = self._rich_state(start, end)
+                # Code lines in it are text as they are, with no fences.
+                state['code'] = []
+                text = to_markdown(state)
+                buf.delete(buf.get_iter_at_offset(start),
+                           buf.get_iter_at_offset(end))
+                self._insert_plain(start, text)
+                new_last = first + text.count('\n')
+                for ln in range(new_last, first - 1, -1):
+                    self._tag_code_line(ln)
+                if cursor is None:
+                    cursor = buf.create_mark(
+                        None, self._line_bounds(new_last)[1], True)
+            buf.place_cursor(buf.get_iter_at_mark(cursor))
+            buf.delete_mark(cursor)
+            self._refresh_emoji_tags()
+        self._edit_lines(edit)
 
     def _refresh_format_buttons(self):
         # The Format button is lit while a format is on at the cursor, so

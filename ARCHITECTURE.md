@@ -281,7 +281,9 @@ sequenceDiagram
 - **Code blocks.** `_draw_code_blocks()` draws one outlined box per run of code
   lines, as wide as the longest line. A multi-line selection inside a code
   block is drawn there too, because GTK would paint it across the whole note.
-  The room inside the box is line spacing on the code tag.
+  The room inside the box is line spacing on the code tag. Nothing in code is
+  formatted, so `_toggle_code_block()` turns the lines it makes code into the
+  Markdown they would be copied as, with every format taken off.
 - **Inline code.** A text tag cannot have an outline or padding, so the tag
   only sets the font and color, and `_draw_inline_code()` draws the outlined
   box around the characters of each display line of every `backtick_ranges`
