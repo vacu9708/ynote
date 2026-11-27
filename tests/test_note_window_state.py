@@ -297,7 +297,7 @@ def test_a_note_without_a_title_shows_a_dimmed_placeholder():
 
 
 def test_changed_end_is_where_an_edit_ends_in_the_new_text():
-    from ynote.note_window import changed_end
+    from ynote.editor import changed_end
 
     # Undoing typed text: the cursor goes where the text was.
     assert changed_end('ab typed cd', 'ab cd') == 3
@@ -314,7 +314,7 @@ def test_changed_end_is_where_an_edit_ends_in_the_new_text():
 
 
 def test_even_slots_leave_a_note_of_one_font_as_it_is():
-    from ynote.note_window import even_slots
+    from ynote.editor import even_slots
 
     base = (14.2, 3.0)
     assert even_slots([base, base, base], base, (2, 2)) == [(2, 2)] * 3
@@ -322,7 +322,7 @@ def test_even_slots_leave_a_note_of_one_font_as_it_is():
 
 
 def test_even_slots_give_every_line_the_same_room_above_and_below_the_baseline():
-    from ynote.note_window import even_slots
+    from ynote.editor import even_slots
 
     base = (14.0, 3.0)
     tall = (17.0, 5.0)
@@ -336,7 +336,7 @@ def test_even_slots_give_every_line_the_same_room_above_and_below_the_baseline()
 
 
 def test_even_slots_never_take_less_than_a_line_of_the_notes_font():
-    from ynote.note_window import even_slots
+    from ynote.editor import even_slots
 
     # A font only a little taller than the note's own fits in its spacing.
     base = (14.0, 3.0)
@@ -346,7 +346,7 @@ def test_even_slots_never_take_less_than_a_line_of_the_notes_font():
 
 
 def test_even_slots_never_go_negative_for_a_line_taller_than_the_rest_need():
-    from ynote.note_window import even_slots
+    from ynote.editor import even_slots
 
     base = (14.0, 3.0)
     assert all(a >= 0 and b >= 0 for a, b in
@@ -354,7 +354,7 @@ def test_even_slots_never_go_negative_for_a_line_taller_than_the_rest_need():
 
 
 def test_slot_ascent_is_where_every_baseline_lies_below_the_top_of_its_line():
-    from ynote.note_window import even_slots, slot_ascent
+    from ynote.editor import even_slots, slot_ascent
 
     base = (14, 3)
     # A note of one font: the spacing above, and the font's own ascent.

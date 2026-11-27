@@ -7,7 +7,8 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 
-from ynote.note_window import NoteWindow, cell_width
+from ynote.editor import cell_width
+from ynote.note_window import NoteWindow
 
 
 class FakeTextView:

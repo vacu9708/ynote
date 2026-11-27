@@ -18,6 +18,7 @@ flowchart LR
     subgraph GTK["GTK layer"]
         App["app.py<br/>PostItApp"]
         Window["note_window.py<br/>NoteWindow"]
+        Editor["editor.py<br/>Editor"]
         Manager["note_manager_window.py<br/>Hidden Notes window"]
         Tray["tray.py<br/>tray indicator"]
     end
@@ -31,6 +32,7 @@ flowchart LR
         Search["search.py"]
         Links["links.py"]
         Markdown["markdown.py"]
+        Sections["sections.py"]
     end
 
     Main -->|starts| App
@@ -40,14 +42,16 @@ flowchart LR
     App -->|uses| Storage
     App -->|uses| Images
     App -->|uses| Autostart
+    Window -->|is an| Editor
     Window -->|uses| Models
     Window -->|uses| Snap
     Window -->|uses| Search
-    Window -->|uses| Links
-    Window -->|uses| Markdown
+    Editor -->|uses| Links
+    Editor -->|uses| Markdown
+    Editor -->|uses| Sections
 
     classDef node fill:#FFFFFF,stroke:#4A5568,color:#1A202C
-    class Main,App,Window,Manager,Tray,Storage,Images,Autostart,Models,Snap,Search,Links,Markdown node
+    class Main,App,Window,Editor,Manager,Tray,Storage,Images,Autostart,Models,Snap,Search,Links,Markdown,Sections node
     style GTK fill:#FFF4D6,stroke:#B7791F,color:#3D2C00
     style Pure fill:#E8F8EF,stroke:#2F855A,color:#143C2B
 ```
@@ -57,7 +61,9 @@ flowchart LR
 | `ynote.py`, `ynote/main.py` | Entry point. Handles `--version`, selects GTK's X11 backend, then runs `PostItApp`. |
 | `ynote/__init__.py` | Holds `__version__`, the only place the version is set. |
 | `ynote/app.py` | Application lifecycle, tray icon, the set of notes, hidden-note order, the shared rich clipboard, and saving. |
-| `ynote/note_window.py` | One note: its window, text editing and formatting, undo/redo, search, images, snapping, and the right-click popover with color, opacity, and font size. |
+| `ynote/note_window.py` | One note's window: its title bar, bottom bar with the Format and Insert menus, search bar, snapping, collapsing, saving, and the right-click popover with color, opacity, and font size. A `NoteWindow` is an `Editor`. |
+| `ynote/editor.py` | The text editor: formats, lists, quotes, code, tables, expands, images, typed Markdown, undo/redo, the clipboard, and drawing what GTK does not. It needs only `self.tv` and what its owner sets (`app`, the font size and colors); `_queue_save()` and `_refresh_format_buttons()` are hooks the owner overrides. |
+| `ynote/sections.py` | Finds the expands in a note's lines. |
 | `ynote/note_manager_window.py` | The Hidden Notes window: list, reorder, and restore hidden notes. |
 | `ynote/tray.py` | Loads the application indicator library and makes the tray indicator, which the desktop draws and positions. Also words the tray menu's labels. |
 | `ynote/models.py` | Fills defaults into saved note data, so older `notes.json` files still load. |
