@@ -747,12 +747,28 @@ class Editor:
         prev = it.copy()
         return prev.backward_char() and prev.has_tag(tag)
 
+    _code_gap = None
+
+    def _note_deleted_code(self, buf, start, end):
+        """Where text was deleted from lines of code, as a selection typed
+        over or a line cleared before typing: what is typed there next is
+        code too, though no code is left beside it."""
+        self._code_gap = None
+        if self._restoring or self._normalizing or start.equal(end):
+            return
+        if all(self._is_code_line(buf, line)
+               for line in range(start.get_line(), end.get_line() + 1)):
+            self._code_gap = start.get_offset()
+
     def _on_buf_insert_text(self, buf, location, text, length):
         if self._restoring or self._normalizing:
             return
+        in_code = (self._iter_has_tag_context(location, self._code_tag)
+                   or self._code_gap == location.get_offset())
+        self._code_gap = None
         self._pending_format_inserts.append(
             (self._bold_active, self._code_active, self._heading_active,
-             self._iter_has_tag_context(location, self._code_tag)))
+             in_code))
 
     def _after_buf_insert_text(self, buf, location, text, length):
         if self._restoring or self._normalizing:
@@ -4158,6 +4174,7 @@ class Editor:
         buf.set_text(data.get('text', ''))
         buf.connect('insert-text', self._on_buf_insert_text)
         buf.connect_after('insert-text', self._after_buf_insert_text)
+        buf.connect('delete-range', self._note_deleted_code)
         buf.connect('changed', self._on_buf_changed)
         # Deleting text moves the cursor without a mark-set, as Backspace does
         # when it joins a line to the one above, so the formats are taken from
