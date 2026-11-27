@@ -356,7 +356,9 @@ sequenceDiagram
   and Enter turns them all off. `heading_ranges` cover whole lines, so on an empty
   line Heading applies to the text typed there next. A heading is already
   bold, so in one Bold is off and disabled, and making a line a heading
-  removes its bold.
+  removes its bold. The text at the start of a list item or quote, after its
+  marker, takes formats from the text after the cursor, as at the start of a
+  line.
 - **Format and Insert menus.** The bottom bar keeps one button for the formats
   of text and one for the elements to insert, so it does not grow with each
   new element. `_popup_bar_menu()` opens a `Gtk.Menu`, a window of its own,

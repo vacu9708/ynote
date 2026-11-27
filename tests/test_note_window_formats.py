@@ -63,6 +63,18 @@ def test_at_the_start_of_a_line_the_character_after_the_cursor_counts():
     assert win._code_active and pinned(win._format_btn)
 
 
+def test_at_the_start_of_a_list_item_or_quote_the_text_after_it_counts():
+    for marker in ('• ', '☐ ', '▍ '):
+        win, buf = make_window(f'one\n{marker}bold item')
+        start = 4 + len(marker)
+        tag_range(buf, win._bold_tag, start, start + 4)
+
+        buf.place_cursor(buf.get_iter_at_offset(start))
+        win._sync_format_state()
+
+        assert win._bold_active, marker
+
+
 def test_a_selection_counts_only_when_all_of_it_has_the_format():
     win, buf = make_window('bold plain')
     tag_range(buf, win._bold_tag, 0, 4)

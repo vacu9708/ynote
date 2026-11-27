@@ -3324,8 +3324,10 @@ class Editor:
         offset = it.get_offset()
         # The space at the end of inline code is outside of it as far as the
         # cursor after it goes, and the one at the start of it is not inside
-        # for the cursor before it.
-        if it.starts_line():
+        # for the cursor before it. The text of a list item or a quote starts
+        # after its marker, as a line's starts at the line's start.
+        if (it.starts_line()
+                or offset == self._marker_end(it.get_line())):
             if tag is self._backtick_tag and self._pad_kind(buf, offset):
                 return False
             return not it.ends_line() and it.has_tag(tag)
