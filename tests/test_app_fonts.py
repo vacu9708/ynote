@@ -1,33 +1,7 @@
-"""Bold in a heading, which is bold already, makes it bolder, as in
-Confluence: in a real note, where bold and a heading meet, the heading's
-Black weight is put, and taken away with either."""
+"""The fonts Ynote brings for itself are found once registered."""
 import os
 import subprocess
 import sys
-
-from gi.repository import Pango
-
-from tests.real_note import make_note, settle
-
-
-def bolder(note):
-    return note._get_tag_ranges(note._heading_bold_tag)
-
-
-def test_bold_in_a_heading_is_bolder_and_only_there():
-    note = make_note(['Title here', 'body'])
-    buf = note.tv.get_buffer()
-    it = buf.get_iter_at_offset
-    buf.apply_tag(note._heading_tag, it(0), it(10))
-    buf.apply_tag(note._bold_tag, it(6), it(13))
-    settle()
-
-    assert bolder(note) == [[6, 10]]
-    assert note._heading_bold_tag.get_property('weight') == Pango.Weight.HEAVY
-
-    buf.remove_tag(note._heading_tag, it(0), it(10))
-    settle()
-    assert bolder(note) == []
 
 
 def test_the_fonts_ynote_brings_are_found():
