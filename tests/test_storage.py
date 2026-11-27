@@ -56,6 +56,22 @@ def test_save_notes_writes_json_and_replaces_temp_file(tmp_path):
     assert not notes_file.with_name(notes_file.name + '.tmp').exists()
 
 
+def test_saved_notes_keep_korean_as_it_is_and_a_range_on_one_line(tmp_path):
+    notes_file = tmp_path / 'notes.json'
+    # Text that looks like a list of numbers is left as it is.
+    text = '한글 [ 1, 2 ] [  3,  4 ]\n"quoted"'
+    data = [{'text': text, 'bold_ranges': [[0, 2], [10, 12]],
+             'x': -3, 'tables': [{'offset': 5, 'rows': [[{'text': '셀'}]]}]}]
+
+    save_notes(data, notes_file)
+
+    saved = notes_file.read_text(encoding='utf-8')
+    assert json.loads(saved) == data
+    assert '한글' in saved and '\\u' not in saved
+    assert '      [0, 2],\n      [10, 12]\n' in saved
+    assert load_notes(notes_file) == data
+
+
 
 def test_back_up_copies_the_file_next_to_it_and_replaces_an_old_copy(tmp_path):
     from ynote.storage import back_up

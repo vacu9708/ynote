@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import re
 import shutil
 
 from .config import NOTES_FILE
@@ -15,17 +16,33 @@ def load_json(path):
     if not os.path.exists(path):
         return None
     try:
-        with open(path) as f:
+        with open(path, encoding='utf-8') as f:
             return json.load(f)
     except Exception:
         return None
 
 
+# A list of numbers, such as a range, as json.dumps() spreads it over lines:
+# a line break and indent around each number. A string in JSON never holds a
+# line break, which is escaped, so no text is matched.
+_NUMBER = r'-?[0-9][0-9.eE+-]*'
+_NUMBER_LIST_RE = re.compile(
+    rf'\[\n *({_NUMBER}(?:,\n *{_NUMBER})*)\n *\]')
+
+
+def to_json(data):
+    """data as JSON a person can read: indented, with text such as Korean as
+    it is, and each list of numbers, such as a range, on one line."""
+    text = json.dumps(data, indent=2, ensure_ascii=False)
+    return _NUMBER_LIST_RE.sub(
+        lambda m: '[' + re.sub(r',\n *', ', ', m.group(1)) + ']', text)
+
+
 def save_json(data, path):
     path = os.fspath(path)
     tmp = path + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(data, f, indent=2)
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(to_json(data))
     os.replace(tmp, path)
 
 
@@ -39,7 +56,7 @@ def load_notes(path=NOTES_FILE):
     if not os.path.exists(path):
         return None
     try:
-        with open(path) as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
     except (OSError, ValueError) as e:
         raise UnreadableNotesError(str(e)) from e

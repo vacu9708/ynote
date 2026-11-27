@@ -83,8 +83,10 @@ flowchart LR
 
 ## Note data model
 
-`notes.json` is a list with one object per note. Formatting is stored as
-character ranges over plain text, not as markup:
+`notes.json` is a list with one object per note, in UTF-8 with text such as
+Korean as it is and each range on one line, so a person can read it
+(`to_json()`). Formatting is stored as character ranges over plain text, not
+as markup:
 
 ```json
 {
