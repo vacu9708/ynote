@@ -58,6 +58,11 @@ def outlined_box(cr, fill, x, y, width, height):
 
 # Space between the note's edge and its text, the same on all four sides.
 TEXT_MARGIN = 8
+# What moves the cursor once GTK has handled an event, such as stepping it
+# off a divider, runs before the next event: keys typed fast would otherwise
+# land where the cursor was not meant to stay. GTK's idle priorities come
+# after input.
+AFTER_EVENT = GLib.PRIORITY_HIGH
 
 # Characters below this are Latin, which the note's font has, so they never
 # need another font. Everything from here on is looked up.
@@ -930,7 +935,7 @@ class Editor:
                         and event.type == Gdk.EventType.KEY_PRESS)
             # Once GTK has finished moving it, as for a divider.
             GLib.idle_add(self._leave_marker, mark.get_name(), previous,
-                          keyboard, priority=GLib.PRIORITY_HIGH_IDLE)
+                          keyboard, priority=AFTER_EVENT)
 
     def _leave_marker(self, name, previous, keyboard=False):
         """Move the cursor, or an end of a selection, out of a marker.
@@ -2023,7 +2028,7 @@ class Editor:
             keyboard = (event is not None
                         and event.type == Gdk.EventType.KEY_PRESS)
             GLib.idle_add(self._keep_pads_out_of_selection, previous, keyboard,
-                          priority=GLib.PRIORITY_HIGH_IDLE)
+                          priority=AFTER_EVENT)
         # A key that brings the cursor onto a table's line takes it into the
         # table. A click leaves it beside the table, as in Confluence.
         event = Gtk.get_current_event()
@@ -2031,10 +2036,10 @@ class Editor:
         if (by_key and not buf.get_has_selection() and self._table_widgets
                 and self._table_on_line(it.get_line()) is not None):
             GLib.idle_add(self._enter_table, offset, offset >= previous,
-                          priority=GLib.PRIORITY_HIGH_IDLE)
+                          priority=AFTER_EVENT)
         if not buf.get_has_selection() and it.get_line() in self._skip_lines:
             GLib.idle_add(self._skip_divider, offset, offset >= previous,
-                          priority=GLib.PRIORITY_HIGH_IDLE)
+                          priority=AFTER_EVENT)
 
     def _skip_divider(self, offset, forward):
         buf = self.tv.get_buffer()
@@ -3460,7 +3465,7 @@ class Editor:
     def _queue_pad_normalization(self):
         if self._pads_sid is None:
             self._pads_sid = GLib.idle_add(
-                self._run_pad_normalization, priority=GLib.PRIORITY_HIGH_IDLE)
+                self._run_pad_normalization, priority=AFTER_EVENT)
 
     def _run_pad_normalization(self):
         self._pads_sid = None
