@@ -19,6 +19,7 @@ HELP = [
         ('Ctrl+Enter', 'Check or uncheck the to-dos on the selected lines'),
     ]),
     ('Expand', [
+        ('Insert it over selected lines', 'Put the lines in it'),
         ('Ctrl+Enter on the title', 'Fold or open it'),
         ('Enter on its empty last line', 'Go on writing below it'),
         ('Backspace at the title\'s start',
@@ -30,7 +31,14 @@ HELP = [
         ('Esc', 'Leave the table, to the line after it'),
         ('Right-click a cell', 'Add or delete rows and columns'),
     ]),
+    ('Copy and paste', [
+        ('Ctrl+C', 'Copy as Markdown for other apps; a note gets the '
+                   'formats as they are'),
+        ('Ctrl+V', 'Paste Markdown with its formats, or an image'),
+        ('Ctrl+Shift+V', 'Paste the text alone, without its Markdown'),
+    ]),
     ('Mouse', [
+        ('Double-click the title bar', 'Maximize or restore the note'),
         ('Double-click in a code block', 'Select one command'),
         ('Triple-click in a code block', 'Select the whole block'),
     ]),
