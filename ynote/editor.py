@@ -158,6 +158,10 @@ class Editor:
     def _refresh_format_buttons(self):
         """Hook: the formats on at the cursor changed."""
 
+    def _new_text_view(self):
+        """Hook: the text view to edit in."""
+        return Gtk.TextView()
+
     # Set while Ctrl+Shift+V pastes text as it is.
     _paste_plain = False
     # The expands found when the note was last styled, and the lines they
@@ -2157,6 +2161,33 @@ class Editor:
                 parent.remove(widget)
         self._table_widgets = []
 
+    def _relayout_table_line(self, table):
+        """A table grew or shrank, as its cells' text wrapped again: GTK keeps
+        the height its line had when the table was put there, so the table
+        is put there again, keeping the cell the cursor is in, each cell's
+        selection, which taking a text view out drops, and whether a folded
+        expand hides the table."""
+        if table not in self._table_widgets or table.get_parent() is None:
+            return
+        focus = next((cell for cell in table.all_cells()
+                      if cell.tv.has_focus()), None)
+        marks = []
+        for cell in table.all_cells():
+            cbuf = cell.tv.get_buffer()
+            marks.append((cbuf, *(
+                cbuf.get_iter_at_mark(mark).get_offset()
+                for mark in (cbuf.get_insert(), cbuf.get_selection_bound()))))
+        visible = table.get_visible()
+        self.tv.remove(table)
+        self.tv.add_child_at_anchor(table, table.anchor)
+        table.set_visible(visible)
+        for cbuf, insert, bound in marks:
+            cbuf.select_range(cbuf.get_iter_at_offset(insert),
+                              cbuf.get_iter_at_offset(bound))
+        if focus is not None:
+            focus.tv.grab_focus()
+        self.tv.queue_draw()
+
     def _on_table_changed(self):
         """A cell or the shape of a table changed: it is saved, and is a
         step of the note's undo, as an edit of the text is."""
@@ -4035,7 +4066,7 @@ class Editor:
         # order. See _watch_code_blocks().
         self._code_blocks = []
 
-        self.tv = Gtk.TextView()
+        self.tv = self._new_text_view()
         # Soft-wrap prose to the note width so narrow notes stay readable.
         # Code lines opt out through the code tag's wrap mode.
         self.tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)

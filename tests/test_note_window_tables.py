@@ -66,6 +66,21 @@ def test_text_deleted_over_a_table_takes_the_table_with_it():
     assert buf.get_slice(*buf.get_bounds(), True) == 'abow'
 
 
+def test_laying_a_table_out_again_keeps_selections_and_hidden():
+    note = make_note(['above', table_row('banana', 'b'), table_row('c', 'd')])
+    table = note._table_widgets[0]
+    cbuf = table.cells[0][0].tv.get_buffer()
+    cbuf.select_range(cbuf.get_iter_at_offset(1), cbuf.get_iter_at_offset(4))
+
+    note._relayout_table_line(table)
+    bounds = cbuf.get_selection_bounds()
+    assert [it.get_offset() for it in bounds] == [1, 4]
+
+    table.hide()
+    note._relayout_table_line(table)
+    assert not table.get_visible()
+
+
 def test_leaving_a_table_skips_an_expands_end_the_way_it_leaves():
     note = make_note([EXPAND_OPEN + 'Title', table_row('a', 'b'), EXPAND_END,
                       'after'])

@@ -18,6 +18,31 @@ from .styles import (
 MIN_COLUMN_EM = 3
 
 
+def fit_columns(natural, room, least):
+    """Widths for columns whose text is `natural` wide, in `room`. A column
+    narrower than an even share of the room keeps its width, and the room
+    left is shared by the wider ones in proportion to their width, as a
+    browser lays out a table, so a narrow column is not squeezed."""
+    if sum(natural) <= room:
+        return list(natural)
+    widths = {}
+    wide = set(range(len(natural)))
+    left = room
+    while wide:
+        share = left / len(wide)
+        narrow = {c for c in wide if natural[c] <= share}
+        if not narrow:
+            break
+        for c in narrow:
+            widths[c] = natural[c]
+            left -= natural[c]
+        wide -= narrow
+    total = sum(natural[c] for c in wide)
+    for c in wide:
+        widths[c] = max(least, int(natural[c] * left / total))
+    return [widths[c] for c in range(len(natural))]
+
+
 def empty_cell():
     return {'text': '', 'bold': [], 'heading': [], 'code': [],
             'backtick': [], 'images': []}
@@ -32,6 +57,18 @@ class _NoScroll:
 
     def get_vadjustment(self):
         return self._adjustment
+
+
+class CellView(Gtk.TextView):
+    """A cell's text view, as wide as its column and no wider. A text view
+    otherwise asks to be as wide as its longest line, and the table would
+    grow past the note."""
+    column_width = 0
+
+    def do_get_preferred_width(self):
+        if self.column_width:
+            return self.column_width, self.column_width
+        return Gtk.TextView.do_get_preferred_width(self)
 
 
 class CellEditor(Editor):
@@ -85,6 +122,9 @@ class CellEditor(Editor):
 
     def get_scale_factor(self):
         return self.note.get_scale_factor()
+
+    def _new_text_view(self):
+        return CellView()
 
     def _toggle_search(self):
         # Search, from a cell's right-click menu, is the note's.
@@ -238,6 +278,7 @@ class TableWidget(Gtk.Grid):
         self._widths_sid = None
         self.connect('draw', self._draw_header)
         self.connect_after('draw', self._draw_lines)
+        self._height_sid = None
         self._lay_out()
         self.show()
         # Shown and hidden by the note alone, as a folded expand hides it.
@@ -275,6 +316,9 @@ class TableWidget(Gtk.Grid):
                 # Each cell is shown itself: the table's show_all() does
                 # nothing, since the note alone shows and hides the table.
                 cell.tv.show_all()
+                if not getattr(cell.tv, 'ynote_watched', False):
+                    cell.tv.connect('size-allocate', self._queue_height_check)
+                    cell.tv.ynote_watched = True
         self.queue_widths()
 
     def queue_widths(self):
@@ -291,14 +335,12 @@ class TableWidget(Gtk.Grid):
                 natural[c] = max(natural[c], self._natural_width(cell))
         room = max(columns * least, self.note.tv.get_allocated_width()
                    - 2 * TEXT_MARGIN - 2)
-        total = sum(natural)
-        if total > room:
-            widths = [max(least, int(n * room / total)) for n in natural]
-        else:
-            widths = natural
+        widths = fit_columns(natural, room, least)
         for row in self.cells:
             for c, cell in enumerate(row):
-                cell.tv.set_size_request(widths[c], -1)
+                if cell.tv.column_width != widths[c]:
+                    cell.tv.column_width = widths[c]
+                    cell.tv.queue_resize()
         return False
 
     @staticmethod
@@ -324,6 +366,19 @@ class TableWidget(Gtk.Grid):
                 it.forward_char()
             widest = max(widest, width)
         return int(widest) + 2 * TEXT_MARGIN + 4
+
+    def _queue_height_check(self, *_):
+        if self._height_sid is None:
+            self._height_sid = GLib.idle_add(self._check_height)
+
+    def _check_height(self):
+        """A cell's text wraps again once its column has its width, and the
+        table is then taller or shorter than the line GTK keeps for it, which
+        is laid out again."""
+        self._height_sid = None
+        if self.get_preferred_height()[1] != self.get_allocated_height():
+            self.note._relayout_table_line(self)
+        return False
 
     # -------------------------------------------------------------- drawing
 
