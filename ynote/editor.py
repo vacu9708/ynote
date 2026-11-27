@@ -1651,20 +1651,36 @@ class Editor:
         self._baseline_offset = slot_ascent(
             metrics, self._body_metrics, self._line_spacing)
         for (first, last), slot in zip(offsets, slots):
-            if slot != self._line_spacing:
-                buf.apply_tag(self._slot_tag(slot),
+            # The rows of a wrapped line are as far apart as the lines are.
+            # A line whose tall font needs no spacing can wrap to a row
+            # without it, which would then touch the row above: with inline
+            # code, whose boxes reach into the spacing, the rows keep the
+            # spacing of the note's own font.
+            wrap = sum(slot)
+            if self._range_touches_code(first, last):
+                wrap = max(wrap, sum(self._line_spacing))
+            if slot != self._line_spacing or wrap != sum(slot):
+                buf.apply_tag(self._slot_tag(slot, wrap),
                               buf.get_iter_at_offset(first),
                               buf.get_iter_at_offset(last))
 
-    def _slot_tag(self, slot):
-        tag = self._slot_tags.get(slot)
+    def _range_touches_code(self, first, last):
+        """Whether any text from first to last is inline code."""
+        buf = self.tv.get_buffer()
+        it = buf.get_iter_at_offset(first)
+        if it.has_tag(self._backtick_tag):
+            return True
+        return (it.forward_to_tag_toggle(self._backtick_tag)
+                and it.get_offset() < last)
+
+    def _slot_tag(self, slot, wrap):
+        tag = self._slot_tags.get((slot, wrap))
         if tag is None:
             above, below = slot
-            # The rows of a wrapped line are as far apart as the lines are.
             tag = self.tv.get_buffer().create_tag(
-                f'slot-{above}-{below}', pixels_above_lines=above,
-                pixels_below_lines=below, pixels_inside_wrap=above + below)
-            self._slot_tags[slot] = tag
+                f'slot-{above}-{below}-{wrap}', pixels_above_lines=above,
+                pixels_below_lines=below, pixels_inside_wrap=wrap)
+            self._slot_tags[(slot, wrap)] = tag
         return tag
 
     def _line_metrics(self, line_text):

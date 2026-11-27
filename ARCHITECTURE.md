@@ -286,6 +286,9 @@ sequenceDiagram
   takes: the most any line needs, and no less than a Latin line has. A font
   with room of its own takes the place of the spacing, so lines are no
   further apart than they have to be. Nothing in it names a font or a script.
+  The rows of a wrapped line are as far apart as lines are, but a row can
+  lack the tall font, and inline code's boxes reach into the spacing, so a
+  line with inline code keeps at least the note's spacing between its rows.
   Emoji, and the dingbats drawn like them, keep their own height; headings,
   code, and dividers are spaced on their own. Notes without non-Latin text are
   unchanged.
