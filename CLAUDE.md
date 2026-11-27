@@ -11,14 +11,20 @@ holds what those don't: how the user wants the work done.
 
 ## Docs
 
-- **README.md must stay as short as possible, well organized, and without any
-  redundancy.** A long README makes users not want to read it. Say each thing
-  once, in the section it belongs to; fold a new feature into an existing line
-  rather than adding a bullet; leave out what the UI already shows (menus,
-  tooltips). Re-read the whole README after editing it.
-- **Help** (`ynote/help.py`) lists only what nothing on screen shows. The
-  Format and Insert menus show each item's shortcut and Markdown, so those are
-  not in Help.
+- **README.md is taken in at a glance.** One look at it tells what Ynote is:
+  a short list of features and the pictures, then install. Nothing in it is
+  tedious to read. Say each thing once; fold a new feature into an existing
+  line rather than adding a bullet; leave out what the UI shows (menus,
+  tooltips) and what Help lists. The one hidden thing it keeps is the way to
+  Help: right-click a note's title bar. Re-read the whole README after
+  editing it.
+- **The README pictures show as much of what Ynote does as they can**: every
+  element a note holds, colors, the right-click menu, search, hidden notes.
+  A new feature goes into them (`tools/readme_screenshot.py`).
+- **Help** (`ynote/help.py`) lists only what nothing on screen shows, and
+  everything that is so: the README does not list shortcuts. The Format and
+  Insert menus show each item's shortcut and Markdown, so those are not in
+  Help.
 - Update ARCHITECTURE.md when a mechanism changes. After a visible UI change,
   regenerate the README screenshots (see CONTRIBUTING.md).
 
@@ -36,6 +42,11 @@ holds what those don't: how the user wants the work done.
   between windows behaves otherwise.
 - After writing a test for a fixed bug, put the bug back and see the test
   fail: several tests passed without testing anything until checked so.
+- Test where edge cases hide, down to the small details: editing, the cursor
+  and selections, formats, tables, expands, the clipboard, wrapping. A simple
+  feature with little room for edge cases, or whose failure hardly matters,
+  is left out until it matters, as the tray, opacity (it needs a compositor),
+  and two monitors are; weigh that before building test machinery for it.
 - When what should happen is unclear, follow Confluence, and note any
   exception and why in BEHAVIORS.md.
 

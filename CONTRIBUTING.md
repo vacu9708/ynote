@@ -93,16 +93,9 @@ also what About and `ynote --version` show.
 the real app, so regenerate them after any visible UI change:
 
 ```bash
-dbus-run-session -- xvfb-run -a -s "-screen 0 2600x1400x24" \
+dbus-run-session -- xvfb-run -a -s "-screen 0 2600x2000x24" \
     python3 tools/readme_screenshot.py
 ```
 
-The sample notes are defined in `tools/readme_screenshot.py`.
-
-`assets/ynote-customize.png` shows a see-through note, which a virtual X server
-cannot draw, so it needs a real compositing X11 desktop. Run this instead, and
-check that the picture shows nothing but the sample backdrop and notes:
-
-```bash
-dbus-run-session -- python3 tools/readme_customize_screenshot.py [monitor]
-```
+The sample notes are defined in `tools/readme_screenshot.py`. They show as
+much of what Ynote does as they can: a new element of a note goes into them.
