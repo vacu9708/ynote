@@ -372,3 +372,20 @@ def test_D7c_with_no_note_used_yet_alt_scroll_starts_under_the_pointer(app):
     x, y, w, h = a.box()
     app.inp.scroll(x + 50, y + 100, down=True, mods=['alt'])
     wait_until(lambda: a.active() or b.active(), what='a note to come up')
+
+
+def test_A17_a_moved_and_resized_note_opens_where_it_was(app):
+    (t,) = started(app, note('t', x=200, y=150, w=500, h=400))
+    x, y, w, h = t.box()
+    # Drag the title bar, away from its buttons.
+    app.inp.drag((x + w // 2, y + 12), (x + w // 2 + 300, y + 12 + 200))
+    wait_until(lambda: t.box()[0] >= x + 250, what='the note to move')
+    mx, my, mw, mh = t.box()
+    app.inp.drag((mx + mw - 2, my + mh // 2), (mx + mw + 100, my + mh // 2))
+    wait_until(lambda: t.box()[2] >= mw + 80, what='the note to widen')
+    moved = t.box()
+    app.quit()
+    saved = app.saved_note('t')
+    assert (saved['x'], saved['y'], saved['w'], saved['h']) == moved
+    app.start()
+    assert app.note('t').box() == moved

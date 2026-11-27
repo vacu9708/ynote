@@ -1,276 +1,278 @@
-# Ynote 동작 목록
+# Ynote behaviors
 
-테스트를 만들고 고치면서 함께 고쳐 나가는 목록이다.
+The list the end-to-end tests are written from, kept up to date as tests are
+added or changed. One item is one test, named after its id. Each is checked
+in the real app: real mouse and key input (XTEST), and results read from
+notes.json, the clipboard, the accessibility tree (AT-SPI), or pixels.
 
-항목 하나 = e2e 테스트 하나. 확인 방법: 실제 마우스/키 입력(XTEST) → notes.json, 클립보드, 접근성 정보(AT-SPI), 픽셀로 결과 확인.
+Marks: **[WM]** needs a window manager (the test desktop runs openbox) ·
+**[px]** checked by pixels · **[2204]** also checked on Ubuntu 22.04
 
-표시: **[WM]** 창 관리자가 있어야 확인 가능 (Xvfb에 openbox 등을 함께 띄워야 함) · **[px]** 픽셀로 확인 · **[2204]** 22.04에서도 확인 필요
+When what should happen is unclear, Ynote follows Confluence. Where it does
+not, the item says why.
+
+Not tested, until they matter: the tray menu (simple, with little room for
+edge cases), opacity (B6: it needs a compositor, and matters little), and
+placing notes across two monitors (D4, D9: much effort for little).
 
 ---
 
-## A. 시작, 저장, 파일
+## A. Starting, saving, files
 
-- A1 노트가 하나도 없이 시작하면 마우스 위치에 새 노트가 하나 생긴다
-- A2 숨긴 노트 1개만 있고 보이는 노트가 없으면, 그 노트가 마우스 위치에 열린다
-- A3 숨긴 노트가 여러 개이고 보이는 노트가 없으면 Hidden Notes 창이 마우스 위치에 열린다
-- A4 편집하면 자동 저장된다 (notes.json에 반영)
-- A5 시작할 때마다 notes.json이 notes.json.bak으로 복사된다
-- A6 빈 notes.json은 기존 .bak을 덮어쓰지 않는다
-- A7 읽을 수 없는 notes.json은 notes.json.broken-<시각>으로 옮겨지고, 경고 창이 뜨고, 이미지 정리를 건너뛴다
-- A8 열리지 않는 노트가 있으면 그 노트는 그대로 다시 저장되고, 경고가 뜨고, 이미지 정리를 건너뛴다
-- A9 종료할 때의 창 쌓임 순서가 다음 시작 때 그대로 복원된다 [WM] — openbox는 저장된 순서대로 보여주기만 해도 맞게 쌓여서, GNOME(mutter)에서 필요한 '다시 쌓기'의 효과는 이 환경에서 확인되지 않는다
-- A10 notes.json은 한글이 그대로, 범위는 한 줄에 저장되고 UTF-8로 읽고 쓴다
-- A11 이미 실행 중일 때 다시 실행하면 새 프로세스 대신 기존 노트들이 앞으로 온다 [WM]
-- A12 `ynote --version`이 버전을 출력한다
-- A13 dialog(Help, About, 삭제 확인)가 열린 채로 Quit하면 종료되고, 삭제 확인은 취소로 처리된다
-- A14 화면 밖에 저장된 노트(모니터를 뺀 경우)는 시작할 때 주 모니터 안으로 옮겨진다
-- A15 주 모니터가 지정되지 않은 X 서버에서도 첫 노트가 화면 안에 놓인다
-- A16 [2204] 22.04(PyGObject 3.42)에서 앱이 뜨고 노트가 보인다
+- A1 Starting with no notes at all makes a new note at the mouse pointer
+- A2 With one hidden note and none shown, that note opens at the pointer
+- A3 With several hidden notes and none shown, the Hidden Notes window opens at the pointer
+- A4 An edit is saved without quitting (notes.json changes)
+- A5 Each start copies notes.json to notes.json.bak
+- A6 An empty notes.json does not replace a good .bak
+- A7 An unreadable notes.json is renamed notes.json.broken-<time>, a dialog says so, and image cleanup is skipped
+- A8 A note that fails to open is saved back unchanged, with a warning, and image cleanup is skipped
+- A9 Notes open stacked as they were when Ynote quit [WM]. Openbox stacks them right even without the restacking GNOME (mutter) needs, so that part is not shown here
+- A10 notes.json keeps Korean as it is and each range on one line, read and written as UTF-8
+- A11 Starting Ynote while it runs brings its notes forward instead of a second copy [WM]
+- A12 `ynote --version` prints the version
+- A13 Quit with a dialog open (Help, About, Delete) quits; a Delete confirmation counts as cancelled
+- A14 A note saved off screen, as after a monitor was unplugged, moves onto the primary monitor
+- A15 On an X server with no primary monitor, the first note is still placed on screen
+- A16 [2204] On 22.04 (PyGObject 3.42) the app starts and shows its notes
+- A17 A note moved and resized is saved where it is, and opens there again [WM]
 
-## B. 노트 창
+## B. A note's window
 
-- B1 + 버튼: 새 노트가 현재 노트 오른쪽(안 되면 왼쪽)에, 모니터 안에 완전히 들어가는 곳에 정사각형으로 생긴다
-- B2 ✕: 노트가 숨겨지고 Hidden Notes 목록 맨 위에 온다
-- B3 창 관리자의 닫기 버튼/Alt+F4: 앱이 종료되지 않고 그 노트만 숨겨진다 [WM]
-- B4 삭제: 내용이 있으면 확인을 묻고, 빈 노트는 바로 삭제한다
-- B5 색 7가지를 popover에서 고를 수 있고 저장된다
-- B6 투명도 슬라이더가 저장되고, 투명할 때도 글자 뒤에 불투명한 띠가 있어 읽힌다 (테스트 생략)
-- B7 글자 크기 A−/A+는 1씩, 8~32 사이에서만 바뀐다
-- B8 제목 바꾸기(rename)가 저장되고, 제목이 없으면 흐린 기울임 Untitled가 보인다
-- B9 접기(collapse): 제목 바만 남고, 다시 펴면 원래 높이로 돌아오며, 접힌 상태가 저장된다
-- B10 제목 바 더블클릭으로 최대화/복원, 최대화 전 크기가 저장된다 [WM]
-- B11 최대화 중에는 접기 버튼이 비활성, 접힌 동안 최대화는 동작하지 않는다 [WM]
-- B12 모든 가장자리에서 크기 조절이 된다 [WM]
-- B13 고정(pin) 버튼: 항상 위에 있게 하고 저장된다 [WM]
-- B14 제목 바/아래 바 우클릭 popover: 색, 투명도, 글자 크기, 이름 바꾸기, 삭제, Start at Login, Help, About
-- B15 Start at Login을 끄면 autostart 파일이 꺼지고, 이후 실행에서도 꺼진 채로 유지된다
-- B16 About에 버전, 노트 저장 위치, 실행 중인 위치가 보인다
-- B17 Help에는 화면에 안 보이는 단축키만 나온다 (메뉴에 있는 Markdown/단축키는 제외)
+- B1 The + button makes a square note right of the current one, else left, wholly on a monitor
+- B2 ✕ hides the note and puts it first in Hidden Notes
+- B3 The window manager's close button or Alt+F4 hides that note; Ynote keeps running [WM]
+- B4 Delete asks first for a note with text; an empty note goes at once
+- B5 One of seven colors is picked in the popover and saved
+- B6 Opacity is saved, and text in a see-through note keeps an opaque strip behind it (not tested)
+- B7 A− and A+ step the font size by one, between 8 and 32
+- B8 A new title is saved; a note without one shows a dimmed, italic Untitled
+- B9 Collapsing leaves the title bar, opening restores the height, and the state is saved
+- B10 A double click on the title bar maximizes and restores; the size before is saved [WM]
+- B11 While maximized, collapse is disabled; while collapsed, maximize does nothing [WM]
+- B12 Every edge resizes the note [WM]
+- B13 Pin keeps the note on top, and is saved [WM]
+- B14 Right-clicking the title or bottom bar opens the popover: color, opacity, font size, title, delete, Start at Login, Help, About
+- B15 Start at Login turned off turns the autostart entry off, and it stays off on later starts
+- B16 About shows the version, where notes are saved, and where the running copy is
+- B17 Help lists only shortcuts nothing on screen shows (not the menus' Markdown or shortcuts)
 
-## C. Hidden Notes 창과 트레이
+## C. Hidden Notes
 
-- C1 Hidden Notes 창에 숨긴 노트가 최근 숨긴 순서로 나온다
-- C2 여러 개를 한 번에 숨기면(Hide All) 그 순서대로 맨 위에 온다
-- C3 더블클릭이나 Restore로 노트가 다시 보이고, 창이 닫힌다
-- C4 창을 열자마자 Restore하면 가장 최근에 숨긴 노트(맨 위, 자동 선택됨)가 복원된다
-- C5 화살표 버튼으로 숨긴 노트 순서를 바꿀 수 있고 저장된다
+- C1 The Hidden Notes window lists hidden notes, the latest hidden first
+- C2 Notes hidden together (Hide All) come first in that order
+- C3 A double click or Restore shows the note and closes the window
+- C4 Restore right after the window opens restores the note hidden last (first, chosen already)
+- C5 The arrow buttons reorder hidden notes, and the order is saved
 - C6 Restore All
-- C7 아래 바의 눈 아이콘 툴팁에 숨긴 노트 수가 나온다
+- C7 The eye button's tooltip tells how many notes are hidden
 
-테스트하지 않는 것: 트레이 메뉴(단순한 기능이라 엣지 케이스 가능성이 낮음), 투명도(B6, compositor가 필요한데 중요도가 낮음), 모니터 2개에서의 배치(D4, D9, 노력 대비 효과가 작음). 중요해지면 그때 추가한다.
+## D. Arranging notes
 
-## D. 창 배치
+- D1 Alt+Left/Right snap into the left or right half of the monitor, keeping height and y
+- D2 Alt+Up/Down alone move the note up or down by its height, keeping x and width, and stop at the screen's edge
+- D3 Alt with two arrows sends the note to a corner
+- D4 Alt+Left/Right again from an edge column goes to the next monitor, if there is one (not tested)
+- D5 A collapsed note snaps to its new width at once
+- D6 Snapping does nothing while maximized [WM]
+- D7 Alt+scroll steps through notes from the latest used; the order holds while Alt is held, so scrolling back retraces it, and the note stopped on counts as the latest once Alt is let go [WM]
+- D8 Small scrolls add up to one step, and a quick second one is ignored
+- D9 Notes are placed within the work area, panels left out, across monitors (not tested)
 
-- D1 Alt+Left/Right: 모니터의 왼쪽/오른쪽 절반 열로 snap, 높이와 y 유지
-- D2 Alt+Up/Down만: 가로 위치와 너비는 그대로 두고 노트 높이만큼 위/아래로 이동, 화면 끝에서 멈춤
-- D3 Alt+두 방향: 모서리로
-- D4 가장자리 열에서 같은 방향을 다시 누르면 옆 모니터로 넘어가고, 옆 모니터가 없으면 그대로
-- D5 접힌 노트도 snap하면 새 너비가 바로 적용된다
-- D6 최대화 중에는 snap이 동작하지 않는다 [WM]
-- D7 Alt+스크롤: 최근 사용 순으로 노트를 하나씩 앞으로, Alt를 누르는 동안 순서 유지(되돌아가기 가능), Alt를 떼면 멈춘 노트가 최신 [WM]
-- D8 작은 스크롤은 모아서 한 단계, 빠른 연속 스크롤은 무시
-- D9 여러 모니터: 작업 영역(패널 제외) 안에서만 배치
+## E. Text formats: bold, heading, inline code
 
-## E. 글자 서식 (bold, heading, inline code)
+- E1 Ctrl+B bolds or unbolds a selection; without one it turns bold on or off for what is typed
+- E2 With bold text before the cursor, Bold is on and the Format button lights up
+- E3 At the start of a line, the text after the cursor counts
+- E4 At the start of a list item's, to-do's, or quote's text, after its marker, the text after the cursor counts
+- E5 At the left edge of bold within a line, Bold is off: the text before the cursor counts, as in Confluence
+- E6 A selection shows a format on only when all of it has it
+- E7 Bold turned off in the middle of bold text types plain text there, splitting it
+- E8 Enter turns every format off
+- E9 Ctrl+H makes the cursor's line, or every line a selection touches, a heading; again takes it away when all are headings
+- E10 Heading on an empty line makes the text typed next a heading; again cancels it
+- E11 Code lines, dividers, and list items do not become headings
+- E12 Enter at the end of a heading starts a plain line
+- E13 A heading is bold with Bold off; Bold on makes it bolder, in the font's Black weight [px]
+- E14 Making a line a heading, or taking the heading away, keeps the bold in it
+- E15 Bold in a heading goes out and comes back as Markdown, `# Title **bold**`
+- E16 Ctrl+E turns inline code on or off, or makes a selection code or plain
+- E17 Inline code has a padding character at each end, which copying leaves out
+- E18 Text typed right after inline code is plain; typed inside it, code
+- E19 Turning code on or off at its edge steps the cursor over the padding
+- E20 Backspace and Delete next to the padding take the character beyond it
+- E21 Deleting the last character of inline code takes its padding too
+- E22 A selection never ends on the padding: keys step over it, a drag stops at the text
+- E23 Code turned off in its middle splits it, each part with its padding
+- E24 Enter does not carry inline code to the next line
 
-- E1 Ctrl+B: 선택 영역을 bold로/해제, 선택이 없으면 입력 모드 토글
-- E2 커서 앞 글자가 bold면 Bold가 켜지고 Format 버튼에 불이 들어온다
-- E3 줄 맨 앞에서는 커서 뒤 글자를 따른다
-- E4 목록 항목, 할 일, 인용의 맨 앞(마커 뒤)에서도 커서 뒤 글자를 따른다
-- E5 줄 중간 bold의 왼쪽 끝에서는 Bold가 켜지지 않는다 (커서 앞 글자를 따름, Confluence와 같음)
-- E6 선택 영역은 전부가 서식을 가질 때만 켜짐으로 표시된다
-- E7 bold 중간에서 Bold를 끄고 입력하면 그 부분만 일반 글자로 나뉜다
-- E8 Enter를 치면 모든 서식이 꺼진다
-- E9 Ctrl+H: 커서 줄(또는 선택이 걸친 모든 줄)을 heading으로, 모두 heading이면 해제
-- E10 빈 줄에서 heading을 켜면 다음에 입력한 글자가 heading이 되고, 다시 누르면 취소
-- E11 heading은 code 줄, 구분선, 목록 항목에는 적용되지 않는다
-- E12 heading 끝에서 Enter를 치면 다음 줄은 일반 글자다
-- E13 heading은 기본 bold이고 B는 꺼져 있으며, B를 켜면 더 굵게(Black) 보인다 [px]
-- E14 heading을 만들거나 해제해도 그 안의 bold는 그대로다
-- E15 heading 안의 bold는 Markdown 복사/붙여넣기에서 `# 제목 **굵게**`로 유지된다
-- E16 Ctrl+E: inline code 켜기/끄기, 선택 영역에 적용/해제
-- E17 inline code 양 끝에 여백 문자가 생기고, 복사할 때는 빠진다
-- E18 inline code 끝 바로 뒤에서 입력하면 code가 이어지지 않고, 안에서 입력하면 이어진다
-- E19 code 앞뒤에서 code를 켜고 끄면 커서가 여백 문자를 건너간다
-- E20 Backspace/Delete가 여백 문자를 건너서 그 너머 글자를 지운다
-- E21 code의 마지막 글자를 지우면 여백 문자도 같이 없어진다
-- E22 선택 영역의 끝은 여백 문자에 걸리지 않는다 (키보드는 건너가고, 마우스 드래그는 글자에서 멈춤)
-- E23 code 중간에서 code를 끄면 나뉘고, 각자 여백을 가진다
-- E24 Enter는 inline code를 이어가지 않는다
+## F. Markdown typed into a note
 
-## F. Markdown으로 입력
+- F1 `**text**` typed makes bold; stars around spaces, or in a glob like `*.txt`, stay as they are
+- F2 `` `text` `` typed makes inline code, with the cursor after it
+- F3 Backticks in a code block, in inline code, or on two lines do not make code
+- F4 `# ` on an empty line makes the next text a heading; before text, its line; after text, `#` stays
+- F5 ` ``` ` on an empty line starts a code block; after text it stays text
+- F6 `- ` makes a bullet, `[ ] ` a to-do, also after a bullet; not in a code block
+- F7 `> ` starts a quote
+- F8 A line of `---` is a divider
+- F9 Each item of the Insert and Format menus shows its icon, shortcut, and Markdown
 
-- F1 `**글자**` 입력 → bold (공백만 감싼 별표, `*.txt` 같은 glob은 그대로)
-- F2 `` `글자` `` 입력 → inline code, 커서는 code 뒤에
-- F3 code block 안, 이미 code인 곳, 서로 다른 줄의 backtick 두 개는 code를 만들지 않는다
-- F4 빈 줄에서 `# ` → 다음 글자가 heading / 글자 앞에서 `# ` → 그 줄이 heading / 글자 뒤의 `#`는 그대로
-- F5 빈 줄에서 ` ``` ` → code block, 글자 뒤의 ` ``` `는 그대로
-- F6 `- ` → bullet, `[ ] ` → 할 일, bullet 뒤의 `[ ] `도 할 일, code block 안에서는 변환 안 됨
-- F7 `> ` → 인용
-- F8 `---` 줄 → 구분선
-- F9 Insert 메뉴와 Format 메뉴의 각 항목에 아이콘, 단축키, Markdown이 보인다
+## G. Lists: bullets and to-dos
 
-## G. 목록 (bullet, 할 일)
+- G1 Ctrl+8 toggles a bullet and Ctrl+9 a to-do; Ctrl+8 on a to-do makes it a bullet
+- G2 Enter starts the next item of the kind (a to-do unchecked); Enter on an empty item ends the list
+- G3 Enter at an item's start or in its marker adds an empty item above; in its text, splits it
+- G4 Tab and Shift+Tab indent and outdent by one level, one tab character
+- G5 Tab and Shift+Tab over a selection indent each item in it and keep the selection; a selection ending at a line's start leaves that line out; one without list items is left to GTK
+- G6 Backspace at a top item's start takes the marker; at a nested item's, empty or not, outdents it one level
+- G7 Delete at a line's end, joining the next item, takes its marker first
+- G8 A click on a box checks it without moving the cursor; checked items are gray
+- G9 Ctrl+Enter checks or unchecks the to-dos on the selected lines only
+- G10 The cursor and selection ends never go into a marker; a click on a marker stays on its line
+- G11 Home stays at an item's start; Shift+Home once selects its text, twice its marker too
+- G12 Shift+Left from an item's start takes the marker, then the line break; back gives them up in that order; a mouse selection takes a marker it reaches over
+- G13 Left from an item's start goes to the end of the line before
+- G14 Bold over several list lines leaves the markers and line breaks without it
+- G15 Bullets and to-dos do not apply to code block lines, as Ctrl+8 in a code block
+- G16 A list item does not become a heading
+- G17 An older note's lists indented by spaces get tabs when it opens, keeping their formats; a list typed after spaces gets tabs too
+- G18 Formats on markers and line breaks in an older note are taken off when it opens
 
-- G1 Ctrl+8 bullet, Ctrl+9 할 일 토글. 할 일 줄에 Ctrl+8을 누르면 bullet로 바뀐다
-- G2 Enter는 같은 종류의 다음 항목을 만들고(할 일은 체크 해제 상태로), 빈 항목에서 Enter는 목록을 끝낸다
-- G3 항목 맨 앞이나 마커 안에서 Enter → 위에 빈 항목을 추가, 본문 중간에서 Enter → 항목을 나눔
-- G4 Tab/Shift+Tab: 한 단계(탭 문자 하나) 들여쓰기/내어쓰기
-- G5 선택 영역 위에서 Tab/Shift+Tab: 선택된 모든 항목을 각각 들여쓰기, 선택 유지, 다음 줄 맨 앞에서 끝나는 선택은 그 줄 제외, 목록이 없는 선택은 GTK 기본 동작
-- G6 Backspace: 맨 바깥 항목 맨 앞에서는 마커 전체를 지우고, 들여쓴 항목(빈 항목 포함)에서는 한 단계 내어쓴다
-- G7 Delete: 줄 끝에서 다음 항목과 합칠 때 그 마커부터 지운다
-- G8 체크박스 클릭으로 체크(커서는 움직이지 않음), 체크된 항목은 회색
-- G9 Ctrl+Enter: 선택한 줄들의 할 일만 체크/해제
-- G10 커서와 선택 끝은 마커 안으로 들어가지 않는다. 마커 클릭은 그 줄에 머문다
-- G11 Home은 항목 맨 앞에 머문다. Shift+Home 한 번은 글자, 두 번째는 마커까지 선택
-- G12 항목 맨 앞에서 Shift+Left: 마커 → 줄바꿈 순으로 선택, 되돌리면 같은 순서로 해제. 마우스 선택은 지나간 마커를 통째로 포함
-- G13 항목 맨 앞에서 Left: 앞 줄 끝으로
-- G14 여러 목록 줄에 bold를 적용해도 마커와 줄바꿈에는 서식이 붙지 않는다
-- G15 code block 줄에는 bullet/할 일이 적용되지 않는다 (예: code block 안에서 Ctrl+8)
-- G16 목록 항목은 heading이 되지 않는다
-- G17 공백으로 들여쓴 예전 노트는 열 때 탭으로 바뀐다(서식 유지), 공백 뒤에 입력한 목록도 탭으로
-- G18 예전 노트의 마커와 줄바꿈에 붙은 서식은 열 때 제거된다
+## H. Quotes
 
-## H. 인용
+- H1 Insert > Quote or `> ` starts a quote, with a bar beside it
+- H2 Enter continues a quote; Enter on an empty line ends it
+- H3 A wrapped quote's later rows start as far in as its text [px]
 
-- H1 Insert > Quote 또는 `> `로 시작, 옆에 막대
-- H2 Enter는 인용을 이어가고, 빈 줄에서 Enter는 인용을 끝낸다
-- H3 줄바꿈된 인용의 둘째 행부터 마커 폭만큼 들어가 맞춰진다 [px]
+## I. Code blocks
 
-## I. Code block
+- I1 Insert > Code block, or ` ``` ` on an empty line
+- I2 The box is as wide as the longest line, and follows edits; lines do not wrap, the block scrolls sideways [px]
+- I3 A double click in a code block selects the line without its line break; a triple click, the whole block
+- I4 Empty lines in a code block stay in it, through pastes and replaced selections too
+- I5 Text pasted or typed over a selection in a code block stays code, as over a line selected by a double click
+- I6 A paste into code takes the text as it is, without reading Markdown
+- I7 Lines with formats made a code block show their Markdown (`# Title`, `**bold**`, `- item`) in one block; Ctrl+Z brings them back in one step
+- I8 Lines already code stay as they are; a line with an image is left out
+- I9 A code block made plain again keeps the Markdown as text
+- I10 A search match in a code block is highlighted [px]
+- I11 A long code block (3000 lines) opens fast and typing in it stays fast
+- I12 A selection over several lines of a code block looks like GTK's, out to the right edge
 
-- I1 Insert > Code block 또는 빈 줄에서 ` ``` `
-- I2 상자는 가장 긴 줄만큼의 너비, 줄은 접히지 않고 가로 스크롤 [px]
-- I3 code block 안 더블클릭: 그 줄(줄바꿈 제외) 선택, 트리플클릭: 블록 전체 선택
-- I4 code block 안 빈 줄이 유지된다 (붙여넣기, 선택 영역 바꿔치기 포함)
-- I5 code block 선택 영역을 다른 글로 바꿔도(붙여넣기나 입력) code 서식이 유지된다. 더블클릭으로 한 줄을 선택하고 입력해도 그 줄은 code로 남는다
-- I6 code에 붙여넣으면 Markdown을 해석하지 않고 그대로 들어간다
-- I7 서식이 있는 줄들을 code block으로 만들면 Markdown 텍스트(`# 제목`, `**굵게**`, `- 항목` 등)로 바뀌어 한 블록이 되고, Ctrl+Z 한 번에 되돌아간다
-- I8 이미 code인 줄은 그대로, 이미지가 있는 줄은 제외
-- I9 code block을 다시 일반 글자로 바꾸면 Markdown 텍스트가 글자로 남는다
-- I10 code block 안 검색 강조가 보인다 [px]
-- I11 매우 긴 code block(3000줄)도 빠르게 열리고 입력이 느려지지 않는다
-- I12 code block 안의 여러 줄 선택은 GTK 기본 선택 모양(오른쪽 끝까지)
+## J. Dividers, links, emoji
 
-## J. 구분선, 링크, 이모지
+- J1 A `---` line is drawn as a line, and the cursor skips it either way
+- J2 http and https addresses are underlined links: Ctrl+click opens one, a click only places the cursor, and a tooltip says so
+- J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports
+- J4 Insert Emoji comes first in the text's right-click menu
+- J5 Emoji are drawn larger without making their line taller [px]
 
-- J1 `---` 줄은 선이 그려지고, 커서는 구분선에 머물지 않는다 (방향에 따라 건너뜀)
-- J2 http/https 주소는 링크로 밑줄, Ctrl+클릭으로 열린다, 일반 클릭은 커서만 둔다, 툴팁 표시
-- J3 링크 끝의 문장 부호는 제외, 괄호/쿼리/포트는 포함
-- J4 Insert Emoji가 텍스트 우클릭 메뉴 맨 위에 있다
-- J5 이모지는 크게 보이지만 줄 높이를 망가뜨리지 않는다 [px]
+## K. Images
 
-## K. 이미지
+- K1 Ctrl+V pastes an image; Insert > Image inserts a file
+- K2 Image files are saved in images/, and one no note uses is cleaned up
+- K3 Images still in the undo history or Ynote's clipboard are not cleaned up
+- K4 An image in a table cell counts as in use
 
-- K1 Ctrl+V로 이미지 붙여넣기, Insert > Image로 파일 삽입
-- K2 이미지 파일은 images/에 저장되고, 어떤 노트에도 안 쓰이는 파일은 정리된다
-- K3 undo 기록과 Ynote 클립보드에 남은 이미지는 정리되지 않는다
-- K4 표 셀 안의 이미지도 사용 중으로 취급된다
+## L. Tables
 
-## L. 표
+- L1 Insert > Table adds a table with a header row and the cursor in its first cell
+- L2 A click in a cell puts the cursor where it was clicked, also right of or below the text
+- L3 A drag selects in a cell, and a double click selects a word
+- L4 Tab and Shift+Tab go to the next or previous cell; Tab past the last cell adds a row and goes to its first cell, which shows and takes typing
+- L5 Tab on a list item in a cell indents it
+- L6 Enter makes a new line in a cell, not a row, and the table grows
+- L7 Up and Down at a cell's first or last row go to the cell above or below, or out of the table; Esc leaves it
+- L8 The arrows go into a table from the lines around it: the first cell from above, the last from below
+- L9 Esc or Down from a table last in an expand goes past it, not back into the table
+- L10 A cell's right-click menu: Add Row Below, Add Column Right, Delete Row, Delete Column, Delete Table; cells added show and take typing; deleting the last row or column deletes the table
+- L10a Deleting the header row makes the next row the header, in bold. Unlike Confluence the table keeps a header, which a Markdown table must have
+- L11 A deleted table comes back with Ctrl+Z, and takes clicks
+- L12 Ctrl+Z in a cell undoes that cell's edits
+- L13 A cell holds lists, quotes, code blocks, inline formats, and images
+- L14 The Format and Insert menus and the shortcuts act on the cell with the cursor; Insert > Table is off in a cell
+- L15 A column is as wide as its text, measured in its fonts (bold, inline code); in a note too narrow, narrow columns keep their width and wide ones share the rest
+- L16 Short inline code, as `x | y`, does not wrap in a narrow column
+- L17 The header row is shaded and bold, and its bold turns off; an empty header cell, and a line after Enter in one, start bold
+- L18 A note has one selection: a double click in a cell, then a click elsewhere, leaves no selection behind
+- L19 Typing or Backspace over a selection across a table removes it without a crash, and Ctrl+Z brings it back
+- L20 Backspace at the start of the line below a table goes into its last cell, or takes that line away when empty; Delete at the end of the line above does nothing
+- L21 A click right of a table puts the cursor beside it, not in a cell; typing there goes on the line after it, as in Confluence
+- L21b Beside a table, Enter opens a line after it (or goes to the empty one there), Backspace goes into the last cell, Delete does nothing, and the arrows go into the table
+- L22 Text in cells is found by search, in the note and across all notes; Enter on a match selects it in its cell
+- L23 A folded expand hides a table in it
+- L24 A table copies as a GitHub Markdown table: `<br>` for a line break in a cell, `\|` for a pipe, code lines as inline code, no bold markers in the header
+- L25 A pasted Markdown table becomes a table, `<br>` a line break in a cell, its header bold
+- L26 Markdown pasted into a cell keeps its formats; a table is not put in a cell
+- L27 A table in the 1.13 format, rows of tab-separated text, becomes a table of cells when its note opens
+- L28 A cell's right-click opens one menu, not the note's too
+- L29 Cells are saved with their text, formats, and images in the note's tables field, and open as they were
 
-- L1 Insert > Table: 헤더 행이 있는 표, 첫 셀에 커서
-- L2 셀 클릭: 클릭한 위치에 커서 (텍스트 오른쪽/아래 빈 곳 클릭 포함)
-- L3 셀 안 드래그 선택, 더블클릭 단어 선택
-- L4 Tab/Shift+Tab: 다음/이전 셀, 마지막 셀에서 Tab → 새 행 + 그 첫 셀 (새 셀이 보이고 입력됨)
-- L5 셀 안 목록 항목에서 Tab은 들여쓰기
-- L6 Enter: 셀 안 새 줄 (행 추가 아님), 표 높이가 늘어남
-- L7 셀의 첫/마지막 행에서 Up/Down: 위/아래 셀, 표 밖으로 / Esc: 표 밖으로
-- L8 표 위/아래 줄에서 화살표로 표 안에 들어간다 (아래로 들어가면 첫 셀, 위로 들어가면 마지막 셀)
-- L9 표가 expand의 마지막에 있을 때 Esc/Down으로 표 밖으로 나간다 (다시 표로 돌아오지 않음)
-- L10 셀 우클릭 메뉴: Add Row Below, Add Column Right, Delete Row, Delete Column, Delete Table / 추가된 셀이 보이고 입력됨 / 마지막 행이나 열을 지우면 표가 삭제됨
-- L10a 첫 행(헤더)을 지우면 다음 행이 헤더가 되고, 그 행 글자도 헤더처럼 bold가 된다 (Markdown 표에는 헤더가 꼭 있어야 하므로 Confluence와 달리 헤더를 없애지 않음)
-- L11 표 삭제 후 Ctrl+Z로 표 복원, 복원된 표도 클릭 동작
-- L12 셀 안 Ctrl+Z는 그 셀의 편집만 되돌린다
-- L13 셀 안에 목록, 인용, code block, inline 서식, 이미지
-- L14 Format/Insert 메뉴와 단축키는 커서가 있는 셀에 적용, 셀 안에서는 Insert > Table 비활성
-- L15 열 너비: 내용 너비(굵게, inline code 실제 글꼴로 측정), 노트보다 넓으면 좁은 열은 유지하고 넓은 열들이 나눠 가짐
-- L16 짧은 inline code(`x | y`)가 좁은 열에서 줄바꿈되지 않는다
-- L17 헤더 행: 음영, 기본 bold, 끌 수 있음, 빈 헤더 셀/헤더 셀 Enter 후 입력도 bold로 시작
-- L18 셀을 더블클릭해 선택한 뒤 다른 셀이나 본문을 누르면 이전 선택이 풀린다 (노트 전체에 선택은 하나)
-- L19 표를 포함한 선택 영역 위에 입력하거나 Backspace를 쳐도 앱이 죽지 않고 표가 지워지며, Ctrl+Z로 복원
-- L20 표 바로 아래 줄 맨 앞에서 Backspace → 표의 마지막 셀로, 빈 줄이면 그 줄을 지움 / 표 바로 위 줄 끝에서 Delete → 아무 일 없음
-- L21 표 오른쪽 빈 곳 클릭 → 커서는 표 오른쪽에 놓이고(셀로 들어가지 않음), 입력하면 표 다음 줄에 들어간다 (Confluence와 같음)
-- L21b 표 오른쪽에 커서가 있을 때: Enter는 표 다음에 줄을 열고(비어 있는 다음 줄이 있으면 그 줄로), Backspace는 마지막 셀로, Delete는 아무 일 없음. 화살표 키로는 표 안으로 들어간다
-- L22 셀 안 텍스트도 검색되고(이 노트, All notes), Enter로 열면 셀 안 일치 부분이 선택된다
-- L23 접힌 expand 안의 표는 숨겨진다
-- L24 복사: GitHub Markdown 표, 셀 안 줄바꿈은 `<br>`, `|`는 `\|`, code 줄은 inline code, 헤더 셀 bold는 생략
-- L25 Markdown 표 붙여넣기 → 표 (`<br>`은 셀 안 줄바꿈, 헤더는 bold)
-- L26 셀 안에 Markdown 붙여넣기 (서식 적용), 셀 안에 표는 들어가지 않는다
-- L27 1.13 형식(탭으로 구분한 줄)의 표는 열 때 셀 편집기 표로 변환된다
-- L28 셀 안 오른쪽 클릭 메뉴는 하나만 뜬다 (노트 메뉴가 겹쳐 뜨지 않음)
-- L29 표 저장/복원: 셀의 글자, 서식, 이미지가 tables 필드에 저장되고 다시 열면 그대로
+## M. Expands
 
-## M. Expand
+- M1 Insert > Expand puts the selected lines in it; inserted on the empty last line, it leaves a line after it
+- M2 A click on the arrow, or Ctrl+Enter on the title, folds or opens it; folding moves a cursor inside to the title
+- M3 An expand holds code blocks, lists, tables, and other expands
+- M4 Enter on its empty last line goes on below the expand
+- M5 Backspace after an expand takes an empty line into it; Delete never joins a line to its end
+- M6 Backspace at the title's start keeps what it holds
+- M7 An expand never ended gets an end, and an end without one is taken out
+- M8 A search match in a folded expand shows it open until the search closes
+- M9 An expand copies as `<details>` and pastes back as an expand
+- M10 The cursor does not rest on an expand's end line
 
-- M1 Insert > Expand: 선택한 줄들이 expand 안으로, 마지막 빈 줄에서 삽입하면 뒤에 줄이 남는다
-- M2 화살표 클릭 또는 제목에서 Ctrl+Enter로 접기/펴기, 접으면 안쪽 커서는 제목으로
-- M3 expand 안에 code block, 목록, 표, 다른 expand
-- M4 마지막 빈 줄에서 Enter → expand 아래로 나감
-- M5 expand 뒤에서 Backspace → 빈 줄을 expand 안으로 / Delete는 expand 끝과 줄을 합치지 않음
-- M6 제목 맨 앞 Backspace는 내용을 유지
-- M7 끝이 없는 expand는 끝이 추가되고, 짝 없는 끝은 제거된다
-- M8 검색 결과가 접힌 expand 안에 있으면 열어서 보여주고, 검색을 닫으면 다시 접힌다
-- M9 복사하면 `<details>`, 붙여넣으면 expand
-- M10 커서는 expand 끝 줄에 머물지 않는다
+## N. Clipboard
 
-## N. 클립보드
+- N1 Copied text goes to other apps as Markdown: headings, bold, inline code, fenced code, list levels, to-dos, quotes, dividers, tables, expands
+- N2 Code alone is copied as it is, without fences
+- N3 A paste into another note keeps formats, images, and tables exactly
+- N4 Once another app takes the clipboard, its text is pasted, not Ynote's formats
+- N5 Markdown from another app pastes in with its formats, and links as their text and address
+- N6 A list, heading, or code block pasted after text starts a line of its own
+- N7 Ctrl+Shift+V pastes the text alone, without reading Markdown
+- N8 Cut and paste brings everything back, tables included
+- N9 Copying out and pasting back as Markdown gives the same note, but for a blank line before a divider
+- N10 Names with underscores and lone stars stay text; inline code holding a backtick gets longer backticks
+- N11 Middle-click pastes and drags carry no invisible characters, such as an empty code line's mark
 
-- N1 다른 앱으로 복사하면 Markdown (heading, bold, inline code, fenced code, 목록 단계, 할 일, 인용, 구분선, 표, expand)
-- N2 code만 선택하면 펜스 없이 그대로 복사
-- N3 Ynote 노트끼리 복사/붙여넣기는 서식, 이미지, 표가 정확히 유지된다
-- N4 다른 앱이 클립보드를 가져가면 Ynote 서식 정보는 버려지고 일반 텍스트로 붙는다
-- N5 다른 앱의 Markdown 붙여넣기 → 서식 적용, 링크는 텍스트와 주소로
-- N6 목록, heading, code block을 글자 뒤에 붙여넣으면 새 줄에서 시작
-- N7 Ctrl+Shift+V: Markdown을 해석하지 않고 글자만
-- N8 잘라내기(Ctrl+X) 후 붙여넣기로 표 포함 내용이 그대로 돌아온다
-- N9 Markdown 왕복(복사 → 붙여넣기)으로 노트가 같아진다 (구분선 앞 빈 줄 제외)
-- N10 이름의 밑줄, 혼자 있는 별표는 글자로 남는다. backtick이 든 inline code는 더 긴 backtick으로 감싼다
-- N11 가운데 클릭 붙여넣기와 드래그에 보이지 않는 문자(code 줄 표시 문자)가 섞이지 않는다
+## O. Undo and redo
 
-## O. Undo/Redo
+- O1 Ctrl+Z and Ctrl+Shift+Z keep the scroll position and put the cursor where the edit was
+- O2 A table's shape changes and cell edits are steps of the note's undo
+- O3 After undo, the Format button follows the formats at the cursor
 
-- O1 Ctrl+Z / Ctrl+Shift+Z, 스크롤 위치 유지, 커서는 편집한 자리로
-- O2 표 모양 변경, 셀 편집이 노트 undo 단계가 된다
-- O3 undo 후에도 Format 버튼이 커서 위치 서식을 따른다
+## P. Search
 
-## P. 검색
+- P1 Ctrl+F opens the search bar with All notes on, this note's matches first
+- P2 With All notes off, only this note is searched
+- P3 Matching ignores case and takes the query literally, not as a pattern
+- P4 Each match shows the note's title and the matching line, cut around the match; a hidden note's mark always shows
+- P5 Up and Down in the entry pick a match, the cursor staying in the entry; Enter opens it, or the first
+- P6 Opening a match brings its note forward, restoring it if hidden, and selects the match
+- P7 Highlights go when the search closes
+- P8 Esc closes the search
 
-- P1 Ctrl+F: 검색 바, All notes가 기본으로 켜짐, 이 노트 결과가 먼저
-- P2 All notes를 끄면 이 노트만
-- P3 대소문자 무시, 입력한 그대로(정규식 아님)
-- P4 결과 목록: 노트 제목 + 일치한 줄(길면 일치 주변으로 잘림), 숨긴 노트는 (hidden) 표시가 항상 보인다
-- P5 검색창에서 Up/Down으로 결과 고르기(포커스는 검색창에 유지), Enter로 열기(안 골랐으면 첫 결과)
-- P6 결과를 열면 그 노트가 앞으로 오고(숨겼으면 복원), 일치 부분이 선택된다
-- P7 강조 표시는 검색을 닫으면 사라진다
-- P8 Esc로 검색 닫기
+## Q. Drawing and wrapping [px]
 
-## Q. 화면 그리기와 줄바꿈 [px]
+- Q1 A long line wraps at the note's width; a code block's lines do not
+- Q2 In a note with Korean, every line is as far from the next
+- Q3 Inline code that wraps has padding at the end of the row it wraps from
+- Q4 Inline code that starts a line and wraps lines up its later rows, box and text, with the first, with padding
+- Q5 Inline code that starts within a line and wraps starts its later rows' boxes with the text
+- Q6 Rows of wrapped inline code with Korean in it do not overlap
+- Q7 A word of code too long for its row starts on it, leaving no empty box before
+- Q8 Code boxes have the same padding on all sides; an inline code box sits in the middle of its line
+- Q9 List markers (dots, boxes) are drawn at an em-based size and do not make their line taller
+- Q10 After Enter in a list, quote, code block, or table, and any key the note handles, the new line is in view
+- Q11 Bold in a heading is drawn bolder, in English and Korean, on 22.04 too [2204]
+- Q12 A see-through note keeps an opaque strip behind text, table cells too
 
-- Q1 긴 줄은 노트 폭에 맞춰 줄바꿈된다 (code block 제외)
-- Q2 한글이 섞인 노트도 모든 줄 간격이 같다
-- Q3 inline code가 줄을 넘어가면 줄 끝 쪽에 여백이 있다
-- Q4 줄 맨 앞에서 시작한 inline code가 넘어가면 둘째 행의 상자와 글자가 첫 행과 맞춰지고 여백이 있다
-- Q5 줄 중간에서 시작한 inline code가 넘어가면 둘째 행 상자는 글자와 함께 시작
-- Q6 한글이 든 inline code가 넘어가도 상자가 겹치지 않는다
-- Q7 한 줄보다 긴 code 단어가 앞 여백만 남기고 다음 줄로 가지 않는다 (빈 상자 없음)
-- Q8 code 상자 안쪽 여백이 위아래 좌우 같다, inline code 상자가 줄 가운데에 있다
-- Q9 목록 마커(점, 체크박스)는 em 단위 크기로 그려지고 줄 높이를 늘리지 않는다
-- Q10 Enter, 목록, 인용, code block, 표에서 Enter 후 새 줄이 보이도록 스크롤된다 (노트가 직접 처리하는 모든 키)
-- Q11 heading bold의 더 굵은 글꼴이 22.04에서도 보인다 [2204]
-- Q12 투명한 노트에서도 글자 뒤 불투명 띠, 표 셀도 불투명
+## R. Notes from older versions
 
-## R. 데이터 호환 (예전 노트 열기)
-
-- R1 일반 공백 여백, en space(U+2002) 여백의 inline code → figure space 여백으로
-- R2 공백 들여쓰기 목록 → 탭
-- R3 마커, 줄바꿈에 붙은 서식 제거
-- R4 1.13 텍스트 표 → 셀 편집기 표
-- R5 기본값이 없는 예전 노트 필드(색, 투명도, 접기 등)가 채워진다
-- R6 저장 후 예전 버전에서 읽을 수 있는 형식 유지 (tables 필드 제외)
-
----
-
-## 정해진 것 (2026-11-27)
-
-의도가 불분명한 동작은 Confluence를 따른다. 다르게 정한 것은 그 항목에 이유를 적는다.
+- R1 Inline code padded by plain spaces or en spaces (U+2002) gets figure spaces
+- R2 Lists indented by spaces get tabs
+- R3 Formats on markers and line breaks are taken off
+- R4 Tables of tab-separated rows (1.13) become tables of cells
+- R5 A note saved without newer fields (color, opacity, collapsed...) gets their defaults
+- R6 What is saved stays readable by an older version, but for the tables field
