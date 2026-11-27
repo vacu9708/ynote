@@ -6,7 +6,9 @@ holds what those don't: how the user wants the work done.
 
 ## Talking with the user
 
-- The user writes in Korean. Answer in Korean.
+- The user writes in Korean. Answer in Korean, but write everything in the
+  repository in English: code, comments, docs, commit messages, and test
+  data, but for Korean text that tests how Korean is handled.
 - They want each change visible right away: see "After every change".
 
 ## Docs
