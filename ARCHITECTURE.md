@@ -383,6 +383,42 @@ sequenceDiagram
   an empty note. A maximized or tiled note cannot be collapsed, because the
   window manager ignores its resizes.
 
+## Ynote 2.0
+
+Ynote 2.0 is being built beside 1.x, and runs only with `YNOTE_WEB` set
+(`config.WEB`), with its notes in `~/.config/ynote-web/`. The editor of 1.x,
+a `Gtk.TextView` with structure drawn over it, gives way to ProseMirror, the
+editor Confluence's is built on, in a WebKit web view. The whole note is the
+web page: its title bar, bottom bar, menus, and editor, so they share one
+design. The GTK window stays, frameless, for what only a window can do.
+
+| Part | Responsibility |
+| --- | --- |
+| `ynote/web_note_window.py` | `WebNoteWindow`, one note's window: position, size, moving and resizing on the page's request, collapse, keep on top, hide, snapping, saving. It answers what `PostItApp` asks of a note, as `NoteWindow` does. |
+| `ynote/web/note.html`, `note.css` | The note page and its look. The window sets the note's colors and font size on `:root`. |
+| `web/src/` | The page's code, bundled by `web/build.sh` into `ynote/web/note.js`: `schema.js` (what a note holds), `editor.js` (keys, typed Markdown), `commands.js` (what menus and shortcuts do), `views.js` (expand and to-do buttons), `links.js`, `chrome.js` (the bars and menus), `main.js` (`window.ynote`). |
+| `ynote/convert.py` | Turns a 1.x note, text with ranges, into a 2.0 document, and a document into plain text for search. |
+
+- **Content.** A note is saved as its ProseMirror document's JSON, in its
+  `doc` field, in place of `text` and the ranges. A note without `doc` is a
+  1.x note and is converted when it opens (`convert.note_doc()`). A bullet
+  and a to-do are items of one list (`list_item.attrs.checked` is `null` for a
+  bullet), an expand is a node holding a title and blocks, and a table's cells
+  hold any block but a table. Links are found in the text as it changes, and
+  not saved.
+- **Page and window.** The page sends JSON messages through
+  `window.webkit.messageHandlers.ynote`; `_on_message()` runs `_do_<type>()`.
+  `ready` makes the window send the note with `ynote.load()`, `changed`
+  carries the document after every edit, and `move` and `resize` start a move
+  or resize from the mouse press the window saw last, as a window manager
+  needs. The window changes the page with `ynote.set()`.
+- **One web process.** Every note's web view is related to another's, so all
+  pages run in one web process: one each would take about 250 MB per note.
+  Hardware acceleration is off, which saves hundreds of MB on some systems.
+- **Corners.** With a compositing window manager, the window has an RGBA
+  visual and the page a transparent background, so the note's corners are
+  round. Without one, they are square.
+
 ## Why X11
 
 Ynote always runs on GTK's X11 backend, through XWayland on a Wayland session.

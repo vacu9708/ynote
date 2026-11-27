@@ -7,7 +7,7 @@ ARG BASE=ubuntu:26.04
 FROM ${BASE}
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-        python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
+        python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
         gir1.2-ayatanaappindicator3-0.1 \
         xvfb xauth openbox dbus dbus-x11 \
         at-spi2-core gir1.2-atspi-2.0 libatk-adaptor \

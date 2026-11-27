@@ -22,7 +22,11 @@ from .images import (
     state_image_files,
 )
 from .note_manager_window import HiddenNotesWindow
-from .note_window import NoteWindow
+from .config import WEB, OLD_CONF_DIR
+if WEB:
+    from .web_note_window import WebNoteWindow as NoteWindow
+else:
+    from .note_window import NoteWindow
 from .search import Note
 from .snap import center_at, keep_reachable, place_beside
 from .storage import (
@@ -67,6 +71,9 @@ class PostItApp(Gtk.Application):
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
+        if (WEB and not os.path.exists(NOTES_FILE)
+                and os.path.exists(os.path.join(OLD_CONF_DIR, 'notes.json'))):
+            shutil.copytree(OLD_CONF_DIR, CONF_DIR, dirs_exist_ok=True)
         os.makedirs(CONF_DIR, exist_ok=True)
         os.makedirs(IMAGES_DIR, exist_ok=True)
 
@@ -375,7 +382,10 @@ class PostItApp(Gtk.Application):
             w.move(ax + (aw - size[0]) // 2 + (n * 30) % 90,
                    ay + (ah - size[1]) // 2 + (n * 25) % 75)
         self.notes[w.note_id] = w
-        w.tv.grab_focus()
+        if WEB:
+            w.grab_text_focus()
+        else:
+            w.tv.grab_focus()
         focus.present_now(w)
         self.save_all()
         self._rebuild_indicator_menu()

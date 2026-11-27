@@ -46,6 +46,10 @@ done < <(find "$ROOT_DIR/ynote" -type f -name '*.py' | sort)
 for file in "$ROOT_DIR"/ynote/fonts/*; do
     install -D -m 0644 "$file" "$BUILD_DIR/usr/share/ynote/ynote/fonts/${file##*/}"
 done
+# The note page of 2.0: HTML, CSS, and the editor bundled by web/build.sh.
+for file in "$ROOT_DIR"/ynote/web/*; do
+    install -D -m 0644 "$file" "$BUILD_DIR/usr/share/ynote/ynote/web/${file##*/}"
+done
 install -m 0644 "$ROOT_DIR/icon.png" "$BUILD_DIR/usr/share/ynote/icon.png"
 install -m 0644 "$ROOT_DIR/icon.png" "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/ynote.png"
 install -m 0644 "$ROOT_DIR/packaging/ynote.desktop" "$BUILD_DIR/usr/share/applications/ynote.desktop"

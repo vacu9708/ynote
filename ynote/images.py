@@ -41,10 +41,24 @@ def state_image_files(state):
     """The image files a note's text, or a rich state of it, uses: its own
     images and those in the cells of its tables, however deep."""
     files = image_files_from_metadata(state.get('images', []))
+    if state.get('doc'):
+        files.update(doc_image_files(state['doc']))
     for table in state.get('tables', []) or []:
         for row in table.get('rows', []):
             for cell in row:
                 files.update(state_image_files(cell))
+    return files
+
+
+def doc_image_files(node):
+    """The image files a note of 2.0 shows, from its document."""
+    files = set()
+    if node.get('type') == 'image':
+        name = (node.get('attrs') or {}).get('file', '')
+        if name and not os.path.isabs(name):
+            files.add(os.path.basename(name))
+    for child in node.get('content') or []:
+        files.update(doc_image_files(child))
     return files
 
 

@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Architecture: all
 Maintainer: Youngsik Yang
-Depends: python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1 | gir1.2-appindicator3-0.1
+Depends: python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-webkit2-4.1, gir1.2-ayatanaappindicator3-0.1 | gir1.2-appindicator3-0.1
 Description: Engineer-friendly sticky notes for GNOME desktops
  Ynote is a lightweight GTK desktop notes app for Ubuntu and GNOME-based
  Linux desktops, with code blocks, images, search, formatting, and

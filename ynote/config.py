@@ -3,11 +3,19 @@ import os
 
 APP_ID = 'io.github.youngsikyang.ynote'
 
+# Ynote 2.0 while it is built: notes drawn by a web view (web_note_window.py)
+# when YNOTE_WEB is set. It keeps its notes apart, in ~/.config/ynote-web,
+# which starts as a copy of the 1.x notes, and runs beside 1.x.
+WEB = bool(os.environ.get('YNOTE_WEB'))
+OLD_CONF_DIR = os.path.expanduser('~/.config/ynote')
+if WEB:
+    APP_ID += '.web'
+
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(PACKAGE_DIR)
 ICON_PATH = os.path.join(PROJECT_DIR, 'icon.png')
 
-CONF_DIR = os.path.expanduser('~/.config/ynote')
+CONF_DIR = os.path.expanduser('~/.config/ynote-web' if WEB else '~/.config/ynote')
 NOTES_FILE = os.path.join(CONF_DIR, 'notes.json')
 IMAGES_DIR = os.path.join(CONF_DIR, 'images')
 SETTINGS_FILE = os.path.join(CONF_DIR, 'settings.json')

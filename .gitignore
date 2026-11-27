@@ -12,3 +12,6 @@ venv/
 
 # Screenshots and logs of failed end-to-end tests.
 tests/e2e/out/
+
+# Node.js packages that web/build.sh bundles into ynote/web/note.js.
+web/node_modules/

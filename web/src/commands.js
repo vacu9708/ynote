@@ -1,0 +1,254 @@
+// What the Format and Insert menus and the shortcuts do. Each is a
+// ProseMirror command: (state, dispatch) => whether it applies.
+import {setBlockType, toggleMark, wrapIn, lift} from 'prosemirror-commands';
+import {wrapInList, liftListItem, sinkListItem, splitListItem} from 'prosemirror-schema-list';
+import {goToNextCell, addRowAfter, isInTable} from 'prosemirror-tables';
+import {TextSelection} from 'prosemirror-state';
+import {schema} from './schema.js';
+
+const {paragraph, heading, code_block, blockquote, horizontal_rule, bullet_list,
+  list_item, expand, expand_title, table, table_row, table_cell, table_header} = schema.nodes;
+
+export const toggleBold = toggleMark(schema.marks.strong);
+export const toggleInlineCode = toggleMark(schema.marks.code);
+
+// The nearest ancestor of the selection's start of a type, as {node, pos, depth}.
+export function ancestor(state, type) {
+  const $from = state.selection.$from;
+  for (let d = $from.depth; d > 0; d--) {
+    if ($from.node(d).type === type) return {node: $from.node(d), pos: $from.before(d), depth: d};
+  }
+  return null;
+}
+
+export function headingActive(state) {
+  return state.selection.$from.parent.type === heading;
+}
+
+export function toggleHeading(state, dispatch) {
+  if (headingActive(state)) return setBlockType(paragraph)(state, dispatch);
+  // A list item is never made a heading, as in 1.x.
+  if (ancestor(state, list_item)) return false;
+  return setBlockType(heading)(state, dispatch);
+}
+
+export function toggleCodeBlock(state, dispatch) {
+  if (state.selection.$from.parent.type === code_block) return setBlockType(paragraph)(state, dispatch);
+  const {from, to} = state.selection;
+  // Lines selected over several blocks become one block of code, a line each.
+  if (state.selection.$from.sameParent(state.selection.$to) || !dispatch) {
+    return setBlockType(code_block)(state, dispatch);
+  }
+  const range = state.selection.$from.blockRange(state.selection.$to);
+  if (!range) return false;
+  const lines = [];
+  state.doc.nodesBetween(from, to, node => {
+    if (node.isTextblock) { lines.push(node.textContent); return false; }
+    return true;
+  });
+  const tr = state.tr.replaceWith(range.start, range.end,
+    code_block.create(null, lines.join('\n') ? schema.text(lines.join('\n')) : null));
+  tr.setSelection(TextSelection.create(tr.doc, range.start + 1 + lines.join('\n').length));
+  dispatch(tr.scrollIntoView());
+  return true;
+}
+
+// The list items the selection is in, as {node, pos}: those at the depth of
+// the innermost list holding the selection's start.
+function selectedItems(state) {
+  const item = ancestor(state, list_item);
+  if (!item) return [];
+  const {from, to} = state.selection;
+  const list = state.doc.resolve(item.pos).parent;
+  const listStart = state.doc.resolve(item.pos).start();
+  const items = [];
+  list.forEach((node, offset) => {
+    const pos = listStart + offset;
+    if (pos + node.nodeSize > from && pos <= Math.max(to, from)) items.push({node, pos});
+  });
+  return items;
+}
+
+function setChecked(state, dispatch, checked) {
+  const items = selectedItems(state);
+  if (!items.length) return false;
+  if (dispatch) {
+    const tr = state.tr;
+    for (const {node, pos} of items) tr.setNodeMarkup(pos, null, {...node.attrs, checked});
+    dispatch(tr);
+  }
+  return true;
+}
+
+// A bullet list, a checklist: turns the selected lines into items of that
+// kind, items of the other kind into this one, or items of this kind back
+// into lines.
+function toggleList(checked) {
+  return (state, dispatch) => {
+    const items = selectedItems(state);
+    if (items.length) {
+      const allThis = items.every(({node}) => (node.attrs.checked === null) === (checked === null));
+      if (allThis) return liftListItem(list_item)(state, dispatch);
+      return setChecked(state, dispatch, checked);
+    }
+    if (!wrapInList(bullet_list)(state)) return false;
+    if (!dispatch) return true;
+    wrapInList(bullet_list)(state, tr => {
+      if (checked !== null) {
+        const {from, to} = tr.selection;
+        tr.doc.nodesBetween(from, to, (node, pos) => {
+          if (node.type === list_item) tr.setNodeMarkup(pos, null, {checked});
+        });
+      }
+      dispatch(tr);
+    });
+    return true;
+  };
+}
+export const toggleBullet = toggleList(null);
+export const toggleChecklist = toggleList(false);
+
+export function toggleQuote(state, dispatch) {
+  if (ancestor(state, blockquote)) return lift(state, dispatch);
+  return wrapIn(blockquote)(state, dispatch);
+}
+
+// Check or uncheck the to-dos on the selected lines: all checked when any is
+// open, else all unchecked.
+export function toggleTodos(state, dispatch) {
+  const todos = selectedItems(state).filter(({node}) => node.attrs.checked !== null);
+  if (!todos.length) return false;
+  const anyOpen = todos.some(({node}) => !node.attrs.checked);
+  if (dispatch) {
+    const tr = state.tr;
+    for (const {node, pos} of todos) tr.setNodeMarkup(pos, null, {...node.attrs, checked: anyOpen});
+    dispatch(tr);
+  }
+  return true;
+}
+
+export function setExpandOpen(tr, pos, open) {
+  const node = tr.doc.nodeAt(pos);
+  tr.setNodeMarkup(pos, null, {...node.attrs, open});
+  // Folding is not an edit to undo: the content stays as it was.
+  tr.setMeta('addToHistory', false);
+  return tr;
+}
+
+// Ctrl+Enter on an expand's title folds or opens it.
+export function toggleExpandAtTitle(state, dispatch) {
+  if (state.selection.$from.parent.type !== expand_title) return false;
+  const found = ancestor(state, expand);
+  if (dispatch) dispatch(setExpandOpen(state.tr, found.pos, !found.node.attrs.open));
+  return true;
+}
+
+export function insertDivider(state, dispatch) {
+  const {$from} = state.selection;
+  if ($from.parent.type === code_block) return false;
+  if (dispatch) {
+    const tr = state.tr.replaceSelectionWith(horizontal_rule.create());
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+// An expand, holding the selected lines when there are some, as in 1.x.
+export function insertExpand(state, dispatch) {
+  const {$from, $to, empty} = state.selection;
+  const range = $from.blockRange($to);
+  if (!range) return false;
+  if (dispatch) {
+    let content;
+    if (empty && $from.parent.content.size === 0) {
+      content = [paragraph.create()];
+    } else if (empty) {
+      content = null;
+    } else {
+      content = [];
+      for (let i = range.startIndex; i < range.endIndex; i++) content.push(range.parent.child(i));
+    }
+    const tr = state.tr;
+    if (content) {
+      const node = expand.create(null, [expand_title.create(), ...content]);
+      tr.replaceWith(range.start, range.end, node);
+      tr.setSelection(TextSelection.create(tr.doc, range.start + 2));
+    } else {
+      const after = $from.after(range.depth + 1);
+      const node = expand.create(null, [expand_title.create(), paragraph.create()]);
+      tr.insert(after, node);
+      tr.setSelection(TextSelection.create(tr.doc, after + 2));
+    }
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+export function insertTable(state, dispatch, rows = 3, cols = 3) {
+  if (isInTable(state)) return false;
+  if (dispatch) {
+    const row = type => table_row.create(null,
+      Array.from({length: cols}, () => type.createAndFill()));
+    const node = table.create(null, [row(table_header),
+      ...Array.from({length: rows - 1}, () => row(table_cell))]);
+    const {$from} = state.selection;
+    const tr = state.tr;
+    let pos;
+    if ($from.parent.content.size === 0 && $from.depth > 0) {
+      pos = $from.before();
+      tr.replaceWith(pos, $from.after(), node);
+    } else {
+      pos = $from.after(1);
+      tr.insert(pos, node);
+    }
+    tr.setSelection(TextSelection.near(tr.doc.resolve(pos + 3)));
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+// Tab in a table goes to the next cell, adding a row after the last one.
+export function nextCellOrRow(state, dispatch, view) {
+  if (!isInTable(state)) return false;
+  if (goToNextCell(1)(state, dispatch)) return true;
+  if (!dispatch) return true;
+  addRowAfter(state, dispatch);
+  goToNextCell(1)(view.state, view.dispatch);
+  return true;
+}
+
+// Esc in a table goes on to the line after it, making one at the end.
+export function leaveTable(state, dispatch) {
+  const found = ancestor(state, table);
+  if (!found) return false;
+  if (dispatch) {
+    const after = found.pos + found.node.nodeSize;
+    const tr = state.tr;
+    const $after = tr.doc.resolve(after);
+    if (!$after.nodeAfter || !$after.nodeAfter.isTextblock) tr.insert(after, paragraph.create());
+    tr.setSelection(TextSelection.create(tr.doc, after + 1));
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+export function indentItem(state, dispatch) { return sinkListItem(list_item)(state, dispatch); }
+export function outdentItem(state, dispatch) { return liftListItem(list_item)(state, dispatch); }
+
+// Enter in a list: a new item of the same kind, an open to-do after a done
+// one. An empty item ends the list (splitListItem lifts it).
+export function splitItem(state, dispatch) {
+  const item = ancestor(state, list_item);
+  if (!item) return false;
+  return splitListItem(list_item, item.node.attrs.checked === null ? null : {checked: false})(state, dispatch);
+}
+
+// Backspace at the start of an item outdents it, or ends the list at its top.
+export function backspaceInItem(state, dispatch) {
+  const {$cursor} = state.selection;
+  if (!$cursor || $cursor.parentOffset > 0) return false;
+  const item = ancestor(state, list_item);
+  if (!item || $cursor.index(item.depth) !== 0) return false;
+  return liftListItem(list_item)(state, dispatch);
+}
+

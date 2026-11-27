@@ -1,0 +1,240 @@
+/* A note: a title bar and a bottom bar in the note's bar color around its
+   text on the note's color, with rounded corners when the desktop draws
+   transparency. The app sets the colors and sizes below on :root. */
+
+@font-face {
+  font-family: 'Ynote Heading';
+  src: url('../fonts/NotoSerif-Black.ttf');
+  font-weight: 900;
+}
+@font-face {
+  font-family: 'Ynote Heading';
+  src: url('../fonts/NotoSerifKR-Black.otf');
+  font-weight: 900;
+  unicode-range: U+1100-11FF, U+3130-318F, U+AC00-D7AF;
+}
+
+:root {
+  --paper: #FFFF99;
+  --bar: #E8D800;
+  --bar-soft: #F7EE5C;
+  --tint: #FFFFC8;
+  --line: #AEA200;
+  --opacity: 1;
+  --font-size: 14px;
+  --ink: #1F1F1F;
+  --ink-dim: rgba(0, 0, 0, .55);
+  --code-ink: #C53030;
+  --select: rgba(45, 107, 224, .28);
+  --accent: #2D6BE0;
+  --menu-bg: #FBFBFC;
+  --menu-hover: #ECEEF2;
+  --menu-line: #E1E4E9;
+  --radius: 10px;
+  --title-h: 38px;
+  --bottom-h: 42px;
+  --body: Ubuntu, Cantarell, 'DejaVu Sans', 'Noto Sans CJK KR', sans-serif;
+  --mono: 'DejaVu Sans Mono', 'Noto Sans Mono', 'Ubuntu Mono', monospace;
+  --heading: 'Ynote Heading', 'Noto Serif', serif;
+}
+/* Without a compositing window manager, corners would show black. */
+:root.square, :root.maximized { --radius: 0px; }
+
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: transparent;
+  font: var(--font-size)/1.5 var(--body);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: default; }
+.icon { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+#note {
+  position: relative; height: 100%; display: flex; flex-direction: column;
+  border-radius: var(--radius); overflow: hidden;
+  /* An edge a shade darker than the bar, so notes stand apart from what is
+     behind them without a shadow the window would need room for. */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .14);
+}
+
+/* --- Title bar ---------------------------------------------------------- */
+#titlebar {
+  flex: none; height: var(--title-h); box-sizing: border-box;
+  display: flex; align-items: center; gap: 2px; padding: 0 6px;
+  background: var(--bar);
+  user-select: none;
+}
+#title {
+  flex: 1; min-width: 0; padding: 2px 4px; border-radius: 5px;
+  font-weight: 700; font-size: 15.5px; color: #222;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#title.untitled { color: rgba(0, 0, 0, .45); }
+#title[contenteditable="plaintext-only"], #title[contenteditable="true"] {
+  background: rgba(255, 255, 255, .7); outline: 2px solid var(--accent); user-select: text; text-overflow: clip;
+}
+.bar-btn {
+  height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  border-radius: 7px; color: #222;
+}
+.bar-btn:hover, .bar-btn.open { background: rgba(0, 0, 0, .09); }
+.bar-btn:active { background: rgba(0, 0, 0, .15); }
+.bar-btn.pin { color: rgba(0, 0, 0, .4); }
+.bar-btn.pin.on { color: #222; background: rgba(0, 0, 0, .12); }
+.bar-btn.text { padding: 0 6px 0 8px; font-weight: 500; }
+.bar-btn.lit { color: var(--accent); }
+
+/* --- Text --------------------------------------------------------------- */
+#scroll {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  background: color-mix(in srgb, var(--paper) calc(var(--opacity) * 100%), transparent);
+  cursor: text;
+}
+#scroll::-webkit-scrollbar { width: 10px; }
+#scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, .18); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+#scroll::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 0, 0, .3); }
+#editor { padding: 8px 12px 12px; }
+
+.ProseMirror {
+  outline: none; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere;
+  hyphens: none; -webkit-hyphens: none; tab-size: 4;
+  font-variant-ligatures: none;
+}
+.ProseMirror ::selection { background: var(--select); }
+.ProseMirror > :first-child, .item-content > :first-child, .expand-content > :first-child,
+td > :first-child, th > :first-child, blockquote > :first-child { margin-top: 0; }
+.ProseMirror p { margin: 0; min-height: 1.5em; }
+.ProseMirror h1 {
+  font: 900 1.3em/1.3 var(--heading); margin: .45em 0 .1em;
+}
+.ProseMirror strong { font-weight: 700; }
+.ProseMirror h1 strong { font-weight: 900; }
+
+/* Inline code: its own box on each row it wraps to. */
+.ProseMirror code {
+  font: .93em var(--mono); color: var(--code-ink);
+  background: color-mix(in srgb, var(--paper) 70%, #D0D0D0);
+  border: 1px solid rgba(0, 0, 0, .16); border-radius: 4px;
+  padding: 0 .3em; margin: 0 .1em;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
+.ProseMirror pre {
+  font: .93em/1.45 var(--mono); color: #1F1F1F;
+  background: color-mix(in srgb, var(--paper) 25%, #F2F2F2);
+  border: 1px solid rgba(0, 0, 0, .16); border-radius: 6px;
+  padding: 6px 10px; margin: 6px 0;
+  width: fit-content; min-width: 4em; max-width: 100%; box-sizing: border-box;
+  white-space: pre-wrap;
+}
+.ProseMirror pre code { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; }
+
+.ProseMirror hr { border: 0; border-top: 2px solid rgba(0, 0, 0, .2); margin: 10px 0; }
+.ProseMirror hr.ProseMirror-selectednode { border-top-color: var(--accent); }
+
+.ProseMirror blockquote {
+  margin: 4px 0; padding-left: 10px; border-left: 3px solid rgba(0, 0, 0, .32); color: rgba(0, 0, 0, .68);
+}
+
+/* Lists: a bullet or a to-do box beside each item. */
+.ProseMirror ul { margin: 0; padding-left: 1.45em; list-style-type: disc; }
+.ProseMirror li { position: relative; }
+.ProseMirror li.todo { list-style: none; }
+.ProseMirror ul:has(> li.todo:first-child) { padding-left: 1.45em; }
+.todo-box {
+  position: absolute; left: -1.35em; top: .3em; width: .9em; height: .9em; box-sizing: border-box;
+  border: 2px solid rgba(0, 0, 0, .62); border-radius: 3px; cursor: pointer;
+}
+.todo-box:hover { border-color: #000; }
+li.done > .todo-box { background: rgba(0, 0, 0, .62); }
+li.done > .todo-box::after {
+  content: ""; position: absolute; left: .22em; top: .02em; width: .22em; height: .48em;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+li.done > .item-content > p { color: rgba(0, 0, 0, .48); text-decoration: line-through; text-decoration-color: rgba(0, 0, 0, .3); }
+
+/* Expands: a box with a chevron before the title; folded, the title only. */
+.expand {
+  position: relative; margin: 6px 0; padding: 3px 8px 4px 28px;
+  border: 1px solid rgba(0, 0, 0, .14); border-radius: 7px;
+  background: color-mix(in srgb, var(--paper) 60%, #ffffff);
+}
+.expand:not(.open) { border-color: transparent; background: transparent; }
+.expand-toggle {
+  position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(0, 0, 0, .65);
+  transition: transform .12s;
+}
+.expand-toggle:hover { background: rgba(0, 0, 0, .09); color: #000; }
+.expand:not(.open) > .expand-toggle { transform: rotate(-90deg); }
+.expand:not(.open) > .expand-content > :not(:first-child) { display: none; }
+.expand-content > summary { display: block; font-weight: 500; color: rgba(0, 0, 0, .75); min-height: 1.5em; }
+.expand-content > summary::-webkit-details-marker { display: none; }
+
+/* Tables: the first row is the header, shaded. */
+.ProseMirror .tableWrapper { overflow-x: auto; margin: 6px 0; }
+.ProseMirror table { border-collapse: collapse; table-layout: auto; }
+.ProseMirror td, .ProseMirror th {
+  border: 1px solid rgba(0, 0, 0, .22); padding: 3px 8px; vertical-align: top; text-align: left;
+  min-width: 2.5em; position: relative;
+}
+.ProseMirror th { background: color-mix(in srgb, var(--paper) 50%, #ffffff); font-weight: 700; }
+.ProseMirror .selectedCell::after {
+  content: ""; position: absolute; inset: 0; background: var(--select); pointer-events: none;
+}
+
+.ProseMirror img { max-width: 100%; vertical-align: bottom; border-radius: 3px; }
+.ProseMirror img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
+
+.ProseMirror .link { color: #1659B8; text-decoration: underline; text-underline-offset: 2px; }
+
+.ProseMirror-gapcursor { display: none; pointer-events: none; position: absolute; }
+.ProseMirror-gapcursor:after {
+  content: ""; display: block; position: absolute; top: -2px; width: 20px; border-top: 1px solid var(--ink);
+  animation: gapcursor-blink 1.1s steps(2, start) infinite;
+}
+@keyframes gapcursor-blink { to { visibility: hidden; } }
+.ProseMirror-focused .ProseMirror-gapcursor { display: block; }
+
+/* --- Bottom bar ---------------------------------------------------------- */
+#bottombar {
+  flex: none; height: var(--bottom-h); box-sizing: border-box;
+  display: flex; align-items: center; gap: 2px; padding: 0 6px;
+  background: var(--bar-soft); border-top: 1px solid rgba(0, 0, 0, .1);
+  user-select: none; overflow: hidden;
+}
+.bar-sep { width: 1px; height: 18px; background: rgba(0, 0, 0, .2); margin: 0 6px; flex: none; }
+
+/* A collapsed note is its title bar alone. */
+#note.collapsed #scroll, #note.collapsed #bottombar { display: none; }
+
+/* --- Menus --------------------------------------------------------------- */
+.menu {
+  position: absolute; z-index: 20; min-width: 200px; max-width: calc(100vw - 8px); overflow-y: auto; box-sizing: border-box;
+  background: var(--menu-bg); color: #1F1F1F; border-radius: 9px; padding: 5px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 8px 24px rgba(0, 0, 0, .22);
+  font-size: 14px; user-select: none;
+}
+.menu-row {
+  display: grid; grid-template-columns: 22px auto 1fr auto; align-items: center; gap: 10px;
+  width: 100%; padding: 5px 8px; border-radius: 6px; text-align: left; white-space: nowrap;
+}
+.menu-row:hover:not(:disabled) { background: var(--menu-hover); }
+.menu-row:disabled { opacity: .4; }
+.menu-row.active .menu-icon { color: var(--accent); }
+.menu-icon { display: flex; justify-content: center; font-size: 15px; }
+.menu-md { font: 12.5px var(--mono); color: rgba(0, 0, 0, .5); padding-left: 8px; }
+.menu-keys { font-size: 12.5px; color: rgba(0, 0, 0, .5); }
+@media (max-width: 420px) { .menu-md { display: none; } .menu-row { grid-template-columns: 22px 1fr auto; } }
+
+/* --- Resize edges ---------------------------------------------------------- */
+.grip { position: absolute; z-index: 30; }
+.grip-n, .grip-s { left: 10px; right: 10px; height: 5px; }
+.grip-e, .grip-w { top: 10px; bottom: 10px; width: 5px; }
+.grip-n { top: 0; cursor: ns-resize; } .grip-s { bottom: 0; cursor: ns-resize; }
+.grip-e { right: 0; cursor: ew-resize; } .grip-w { left: 0; cursor: ew-resize; }
+.grip-ne, .grip-nw, .grip-se, .grip-sw { width: 10px; height: 10px; }
+.grip-ne { top: 0; right: 0; cursor: nesw-resize; } .grip-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.grip-nw { top: 0; left: 0; cursor: nwse-resize; } .grip-se { bottom: 0; right: 0; cursor: nwse-resize; }
+#note.collapsed .grip-n, #note.collapsed .grip-s, #note.collapsed [class*="grip-n"], #note.collapsed [class*="grip-s"] { display: none; }
+:root.maximized .grip { display: none; }

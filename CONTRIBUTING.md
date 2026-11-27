@@ -8,10 +8,12 @@ code is organized, see [ARCHITECTURE.md](ARCHITECTURE.md).
 Ynote uses Python, GTK 3, and PyGObject. On Ubuntu/Debian:
 
 ```bash
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1
+sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-ayatanaappindicator3-0.1
 ```
 
 - `python3-gi-cairo` lets PyGObject draw with cairo, which divider lines need.
+- `gir1.2-webkit2-4.1` shows the notes of Ynote 2.0, which is being built
+  (see [Ynote 2.0](#ynote-20)).
 - `gir1.2-ayatanaappindicator3-0.1` draws the tray icon. Without it Ynote runs
   with no tray icon.
 
@@ -30,6 +32,29 @@ python3 ynote.py
 Notes are read from and saved to `~/.config/ynote/`, the same place an
 installed Ynote uses. Quit any running Ynote first: only one instance runs at
 a time, so a second launch just brings the running one forward.
+
+## Ynote 2.0
+
+Ynote 2.0 draws each note, its bars and its editor, as a web page in a web
+view (see [ARCHITECTURE.md](ARCHITECTURE.md#ynote-20)). While it is built, it
+runs only with `YNOTE_WEB` set, beside a running 1.x and with notes of its
+own in `~/.config/ynote-web/`, copied from `~/.config/ynote/` the first time:
+
+```bash
+YNOTE_WEB=1 python3 ynote.py
+```
+
+The page's code is in `web/src/`, bundled into `ynote/web/note.js`, which is
+committed, so building the package needs no Node.js. After changing
+`web/src/`, rebuild the bundle:
+
+```bash
+(cd web && npm ci --no-bin-links)   # once
+web/build.sh
+```
+
+`--no-bin-links` lets npm install on file systems without symbolic links.
+`YNOTE_DEBUG=1` turns on WebKit's developer extras, the web inspector.
 
 ## Test
 
