@@ -313,19 +313,22 @@ sequenceDiagram
 - **Padding of inline code.** A text view makes room for nothing but
   characters, and letter spacing, which Pango splits between both sides of a
   character, cannot make room beside a letter without opening a gap on its far
-  side. So the padding is an en space (`CODE_PAD_CHAR`) at each end of the
-  range, tagged as code and set in the body font by `_pad_tag`. It is half an
-  em wide, which is the padding and the gap from the text beside the code:
-  the box is drawn `CODE_GAP` inside it at each end. It is not a space
+  side. So the padding is a figure space (`CODE_PAD_CHAR`) at each end of the
+  range, tagged as code and set in the body font by `_pad_tag`. It is about
+  half an em wide, which is the padding and the gap from the text beside the
+  code: the box is drawn `CODE_GAP` inside it at each end. No line breaks
+  beside it, so a word of code too long for its row does not leave the
+  padding alone on the row before. It is not a space
   shrunk to a width: GTK draws the cursor as tall as the font of the
   character after it, so a smaller space gave a smaller cursor beside the
   code, and the space of the body font is too narrow.
   `_normalize_code_pads()` gives every range its two spaces and removes one
   that is only spaces, whenever the text changes and when a note is loaded,
   restored, or pasted into, so an old note gets them the first time it is
-  opened, with a plain space at an end of a range made one, and a range that
+  opened, with a plain space or the en space of a note from before 1.14 at an
+  end of a range made one, and a range that
   comes from typing, a selection, or backticks has them too. They are in the
-  saved text, and Ctrl+C leaves them out. An en space may only be at the end
+  saved text, and Ctrl+C leaves them out. A figure space may only be at the end
   of a range as its padding: `_pad_kind()` says which one it is.
   Where code wraps, its box reaches past the last character before the wrap
   by as much as at its end. A line that starts with code moves the rows it

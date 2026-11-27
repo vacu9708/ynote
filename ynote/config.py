@@ -22,9 +22,12 @@ IMAGE_ANCHOR = '\uFFFC'
 CODE_ANCHOR = '\u2060'
 
 # The padding of inline code: one of these at each end of it, in the body font.
-# An en space is half an em wide, so the box has room for its padding and for
-# a gap from the text beside it. It is copied out as a plain space.
-CODE_PAD_CHAR = '\u2002'
+# A figure space is about half an em wide, so the box has room for its padding
+# and for a gap from the text beside it, and no line breaks next to it, so the
+# padding never wraps apart from the code. It is copied out as a plain space.
+CODE_PAD_CHAR = '\u2007'
+# The padding before 1.14, an en space, after which a line could break.
+OLD_CODE_PAD_CHAR = '\u2002'
 
 # A line holding exactly this text is drawn as a divider, like in Markdown.
 DIVIDER_TEXT = '---'

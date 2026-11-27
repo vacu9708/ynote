@@ -21,7 +21,7 @@ from gi.repository import Gtk, Gdk, GLib, Pango, PangoCairo, GdkPixbuf
 from .config import (
     BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, CODE_ANCHOR, CODE_PAD_CHAR,
     DIVIDER_TEXT, EXPAND_CLOSED, EXPAND_END, EXPAND_OPEN, IMAGE_ANCHOR,
-    IMAGES_DIR, QUOTE_MARKER, TABLE_MARKER,
+    IMAGES_DIR, OLD_CODE_PAD_CHAR, QUOTE_MARKER, TABLE_MARKER,
 )
 from .images import image_path, normalize_image_meta, state_image_files
 from .links import find_links
@@ -3470,15 +3470,16 @@ class Editor:
             if self._is_code_line(buf, buf.get_iter_at_offset(first).get_line()):
                 continue
             body = text[first:last]
-            if not body.strip(' ' + CODE_PAD_CHAR):
+            if not body.strip(' ' + CODE_PAD_CHAR + OLD_CODE_PAD_CHAR):
                 edits.append((first, 'delete', last))
                 continue
-            # A plain space there is the padding of an older note.
-            if body[0] == ' ':
+            # A plain space or an en space there is the padding of an older
+            # note.
+            if body[0] in (' ', OLD_CODE_PAD_CHAR):
                 edits.append((first, 'swap', first + 1))
             elif body[0] != CODE_PAD_CHAR:
                 edits.append((first, 'lead', first))
-            if body[-1] == ' ':
+            if body[-1] in (' ', OLD_CODE_PAD_CHAR):
                 edits.append((last - 1, 'swap', last))
             elif body[-1] != CODE_PAD_CHAR:
                 edits.append((last, 'trail', last))

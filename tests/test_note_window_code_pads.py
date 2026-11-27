@@ -1,6 +1,6 @@
-"""Inline code has an en space at each end of it for padding: the cursor steps
-over it, Backspace and Delete skip it, and it is made and removed with the
-code. · stands for such a space in the text of these tests."""
+"""Inline code has a figure space at each end of it for padding: the cursor
+steps over it, Backspace and Delete skip it, and it is made and removed with
+the code. · stands for such a space in the text of these tests."""
 from types import SimpleNamespace
 
 import gi
@@ -9,7 +9,7 @@ gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk
 
 from tests.test_note_window_heading import make_window, type_text
-from ynote.config import CODE_PAD_CHAR
+from ynote.config import CODE_PAD_CHAR, OLD_CODE_PAD_CHAR
 
 
 def pd(text):
@@ -289,7 +289,7 @@ def test_backticks_on_two_lines_do_not_make_code_together():
     assert ranges(win) == []
 
 
-def test_plain_spaces_that_padded_code_in_an_older_note_become_en_spaces():
+def test_plain_spaces_that_padded_code_in_an_older_note_become_pads():
     win, buf = code('x  ab  y', 2, 6, cursor=4)
 
     assert win._normalize_code_pads()
@@ -298,6 +298,17 @@ def test_plain_spaces_that_padded_code_in_an_older_note_become_en_spaces():
     assert ranges(win) == [[2, 6]]
     assert cursor(buf) == 4
     assert not win._normalize_code_pads()
+
+
+def test_en_spaces_that_padded_code_before_1_14_become_pads():
+    old = OLD_CODE_PAD_CHAR
+    win, buf = code(f'x {old}ab{old} y', 2, 6, cursor=4)
+
+    assert win._normalize_code_pads()
+
+    assert text_of(buf) == pd('x ·ab· y')
+    assert ranges(win) == [[2, 6]]
+    assert cursor(buf) == 4
 
 
 def selection(buf):
