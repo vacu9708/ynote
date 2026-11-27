@@ -1,5 +1,6 @@
-"""Bold, inline code, and heading follow the cursor, show on their buttons,
-apply to typed text, and turn off on Enter."""
+"""Bold, inline code, and heading follow the cursor, light up the Format
+button and are checked in its menu, apply to typed text, and turn off on
+Enter."""
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
@@ -21,6 +22,14 @@ def pinned(button):
     return 'pinned' in button.context.classes
 
 
+def format_item(win, label):
+    """(on, can be chosen) of an item of the Format menu."""
+    for item in win._format_items():
+        if item.label == label:
+            return item.active, item.sensitive
+    raise KeyError(label)
+
+
 def test_the_cursor_after_bold_text_turns_bold_on():
     win, buf = make_window('plain bold')
     tag_range(buf, win._bold_tag, 6, 10)
@@ -28,8 +37,10 @@ def test_the_cursor_after_bold_text_turns_bold_on():
     buf.place_cursor(buf.get_iter_at_offset(10))
     win._sync_format_state()
 
-    assert win._bold_active and pinned(win._bold_btn)
-    assert not win._code_active and not pinned(win._inline_code_btn)
+    assert win._bold_active and pinned(win._format_btn)
+    assert format_item(win, 'Bold') == (True, True)
+    assert not win._code_active
+    assert format_item(win, 'Inline code') == (False, True)
 
 
 def test_the_cursor_after_plain_text_turns_bold_off():
@@ -39,7 +50,7 @@ def test_the_cursor_after_plain_text_turns_bold_off():
     buf.place_cursor(buf.get_iter_at_offset(10))
     win._sync_format_state()
 
-    assert not win._bold_active and not pinned(win._bold_btn)
+    assert not win._bold_active and not pinned(win._format_btn)
 
 
 def test_at_the_start_of_a_line_the_character_after_the_cursor_counts():
@@ -49,7 +60,7 @@ def test_at_the_start_of_a_line_the_character_after_the_cursor_counts():
     buf.place_cursor(buf.get_iter_at_offset(4))
     win._sync_format_state()
 
-    assert win._code_active and pinned(win._inline_code_btn)
+    assert win._code_active and pinned(win._format_btn)
 
 
 def test_a_selection_counts_only_when_all_of_it_has_the_format():
@@ -71,11 +82,11 @@ def test_the_cursor_on_a_heading_line_turns_heading_on():
 
     buf.place_cursor(buf.get_iter_at_offset(2))
     win._sync_format_state()
-    assert win._heading_active and pinned(win._heading_btn)
+    assert win._heading_active and pinned(win._format_btn)
 
     buf.place_cursor(buf.get_iter_at_offset(8))
     win._sync_format_state()
-    assert not win._heading_active and not pinned(win._heading_btn)
+    assert not win._heading_active and not pinned(win._format_btn)
 
 
 def test_inline_code_turned_on_applies_to_typed_text():
@@ -107,7 +118,7 @@ def test_turning_inline_code_off_after_it_types_plain_text():
     type_text(win, buf, ' now')
 
     assert ranges(win, win._backtick_tag) == [[4, 6]]
-    assert not win._code_active and not pinned(win._inline_code_btn)
+    assert not win._code_active and not pinned(win._format_btn)
 
 
 def test_inline_code_turned_off_in_its_middle_splits_it_and_types_plain_text():
@@ -173,7 +184,7 @@ def test_enter_turns_every_format_off():
 
     type_text(win, buf, '\n')
     assert not (win._bold_active or win._code_active)
-    assert not any(pinned(b) for b in (win._bold_btn, win._inline_code_btn))
+    assert not pinned(win._format_btn)
 
     type_text(win, buf, 'next')
     for tag in (win._bold_tag, win._backtick_tag):
@@ -188,7 +199,7 @@ def test_enter_at_the_end_of_a_heading_starts_a_plain_line():
 
     type_text(win, buf, '\nbody')
 
-    assert not win._heading_active and not pinned(win._heading_btn)
+    assert not win._heading_active and not pinned(win._format_btn)
     assert ranges(win, win._heading_tag) == [[0, 5]]
 
 
@@ -213,14 +224,14 @@ def test_bold_is_off_and_unavailable_in_a_heading():
     buf.place_cursor(buf.get_iter_at_offset(5))
     win._sync_format_state()
     assert win._heading_active and not win._bold_active
-    assert not win._bold_btn.sensitive and not pinned(win._bold_btn)
+    assert format_item(win, 'Bold') == (False, False)
 
     win._toggle_bold()
     assert not win._bold_active
 
     buf.place_cursor(buf.get_iter_at_offset(8))
     win._sync_format_state()
-    assert win._bold_btn.sensitive
+    assert format_item(win, 'Bold')[1]
 
 
 def test_text_typed_in_a_heading_is_not_bold():

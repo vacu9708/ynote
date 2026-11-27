@@ -14,6 +14,9 @@ class FakeTextView:
     def get_buffer(self):
         return self._buf
 
+    def scroll_mark_onscreen(self, mark):
+        pass
+
     def grab_focus(self):
         self.focused = True
 

@@ -13,6 +13,9 @@ class FakeTextView:
     def get_buffer(self):
         return self._buf
 
+    def scroll_mark_onscreen(self, mark):
+        pass
+
 
 class FakeStyleContext:
     def __init__(self):
@@ -46,9 +49,7 @@ def make_window(text, cursor=0):
     win._bold_tag = buf.create_tag('bold')
     win._backtick_tag = buf.create_tag('backtick')
     win._heading_tag = buf.create_tag('heading')
-    win._bold_btn = FakeButton()
-    win._heading_btn = FakeButton()
-    win._inline_code_btn = FakeButton()
+    win._format_btn = FakeButton()
     win._divider_lines = []
     win._pending_format_inserts = []
     win._restoring = False
@@ -128,7 +129,7 @@ def test_heading_on_an_empty_line_waits_for_the_first_typed_text():
 
     assert headed(win, buf) == []
     assert win._heading_active
-    assert 'pinned' in win._heading_btn.context.classes
+    assert 'pinned' in win._format_btn.context.classes
 
 
 def test_heading_on_an_empty_line_again_cancels_the_wait():
@@ -138,7 +139,7 @@ def test_heading_on_an_empty_line_again_cancels_the_wait():
     win._toggle_heading()
 
     assert not win._heading_active
-    assert 'pinned' not in win._heading_btn.context.classes
+    assert 'pinned' not in win._format_btn.context.classes
 
 
 def test_the_first_text_typed_after_choosing_heading_becomes_the_heading():

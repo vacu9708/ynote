@@ -142,3 +142,14 @@ def keep_reachable(rect, areas, fallback):
         return x, y
     nx, ny, _w, _h = _clamp_into(rect, fallback)
     return nx, ny
+
+
+def center_at(point, size, areas, fallback):
+    """Return (x, y) for a window of size centered on point, such as the
+    pointer, and pulled wholly into the work area the point is in, or into
+    fallback when it is in none."""
+    px, py = point
+    w, h = size
+    area = next((a for a in areas if _inside((px, py, 1, 1), a)), fallback)
+    x, y, _w, _h = _clamp_into((px - w // 2, py - h // 2, w, h), area)
+    return x, y

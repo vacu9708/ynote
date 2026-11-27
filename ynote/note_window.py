@@ -1,7 +1,9 @@
 import bisect
 import heapq
+from collections import namedtuple
 import math
 import os
+import re
 import shutil
 import sys
 import unicodedata
@@ -11,14 +13,16 @@ import uuid
 import cairo
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GLib, Pango, GdkPixbuf
+gi.require_version('PangoCairo', '1.0')
+from gi.repository import Gtk, Gdk, GLib, Pango, PangoCairo, GdkPixbuf
 
 from . import __version__
 from .config import (
-    BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, CODE_ANCHOR,
+    BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, CODE_ANCHOR, EXPAND_CLOSED,
+    EXPAND_END, EXPAND_OPEN, QUOTE_MARKER,
     CODE_PAD_CHAR, CONF_DIR,
     DIVIDER_TEXT, ICON_PATH, IMAGE_ANCHOR, IMAGES_DIR, NEW_NOTE_LABEL,
-    PROJECT_DIR, UNTITLED_LABEL, display_path,
+    PROJECT_DIR, TABLE_MARKER, UNTITLED_LABEL, display_path,
 )
 from .help import show_help
 from .images import image_files_from_metadata, image_path, normalize_image_meta
@@ -26,15 +30,111 @@ from .links import find_links
 from .markdown import fit_between, from_markdown, is_all_code, to_markdown
 from .models import MAX_OPACITY, MIN_OPACITY, normalize_note_data
 from .search import find_matches
+from .sections import find_sections, hidden_lines, section_at
+from .sections import is_title as is_section_title
 from .snap import snap_rect
 from .styles import (
     BODY_FONT, BULLET_SIZE, CHECKBOX_SIZE, CODE_BLOCK_MARGIN, CODE_FONT,
-    CODE_OUTLINE, MARKER_GAP,
+    CODE_OUTLINE, EXPAND_BUTTON_PAD, EXPAND_GAP, EXPAND_MARGIN, EXPAND_PAD,
+    EXPAND_TITLE_SCALE,
+    MARKER_GAP,
+    QUOTE_BAR,
     CODE_GAP, CODE_PAD, CODE_PAD_Y, CODE_RADIUS, CODE_TEXT_COLOR, HEADING_FONT,
     HEADING_SCALE, INLINE_CODE_RISE,
-    LINE_SPACING, PALETTE, code_background, inline_code_background, note_css,
+    LINE_SPACING, PALETTE, TABLE_MARGIN, TABLE_MIN_COLUMN, TABLE_PAD,
+    TABLE_PAD_Y, code_background, inline_code_background, note_css,
 )
 
+
+
+# The size of the icons of the title bar and bottom bar buttons, in pixels:
+# most of a button, so an icon is not lost in it.
+BAR_ICON_SIZE = 16
+
+
+class StrokeIcon(Gtk.DrawingArea):
+    """A plus, a cross, an arrowhead pointing down or right, or an eye
+    struck through, for what is hidden, drawn in lines as thick as bold
+    text, in the color of the button's text. The theme's symbolic ones are
+    drawn in a line one pixel wide, too thin to see beside the bold labels of
+    the bars."""
+    STROKE = 2
+
+    def __init__(self, kind, size=BAR_ICON_SIZE):
+        super().__init__()
+        self._kind = kind
+        self.set_size_request(size, size)
+        self.set_valign(Gtk.Align.CENTER)
+        self.connect('draw', self._draw)
+
+    def _draw(self, widget, cr):
+        size = min(widget.get_allocated_width(),
+                   widget.get_allocated_height())
+        color = widget.get_style_context().get_color(widget.get_state_flags())
+        cr.set_source_rgba(color.red, color.green, color.blue, color.alpha)
+        cr.set_line_width(self.STROKE)
+        if self._kind == 'plus':
+            # On whole pixels, so the lines are sharp.
+            middle, reach = size / 2, round(size * 0.4)
+            cr.move_to(middle - reach, middle)
+            cr.line_to(middle + reach, middle)
+            cr.move_to(middle, middle - reach)
+            cr.line_to(middle, middle + reach)
+        elif self._kind == 'hidden':
+            cr.set_line_cap(cairo.LINE_CAP_ROUND)
+            # An eye: two arcs meeting at its corners, around a pupil.
+            middle = size / 2
+            left, right = size * 0.08, size * 0.92
+            lid = size * 0.36
+            cr.move_to(left, middle)
+            cr.curve_to(size * 0.3, middle - lid, size * 0.7, middle - lid,
+                        right, middle)
+            cr.curve_to(size * 0.7, middle + lid, size * 0.3, middle + lid,
+                        left, middle)
+            cr.close_path()
+            cr.stroke()
+            cr.arc(middle, middle, size * 0.13, 0, 2 * math.pi)
+            cr.fill()
+            # Struck through, corner to corner.
+            cr.move_to(size * 0.15, size * 0.12)
+            cr.line_to(size * 0.85, size * 0.88)
+        elif self._kind == 'cross':
+            cr.set_line_cap(cairo.LINE_CAP_ROUND)
+            low, high = size * 0.2, size * 0.8
+            cr.move_to(low, low)
+            cr.line_to(high, high)
+            cr.move_to(high, low)
+            cr.line_to(low, high)
+        else:
+            cr.set_line_cap(cairo.LINE_CAP_ROUND)
+            cr.set_line_join(cairo.LINE_JOIN_ROUND)
+            # A chevron half as deep as it is wide, centered.
+            wide, deep = size * 0.6, size * 0.3
+            if self._kind == 'down':
+                left, top = (size - wide) / 2, (size - deep) / 2
+                cr.move_to(left, top)
+                cr.line_to(left + wide / 2, top + deep)
+                cr.line_to(left + wide, top)
+            else:
+                left, top = (size - deep) / 2, (size - wide) / 2
+                cr.move_to(left, top)
+                cr.line_to(left + deep, top + wide / 2)
+                cr.line_to(left, top + wide)
+        cr.stroke()
+        return False
+
+
+def set_button_content(button, *children):
+    """Show children side by side in a button, in place of what it had."""
+    old = button.get_child()
+    if old is not None:
+        button.remove(old)
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=3)
+    box.set_halign(Gtk.Align.CENTER)
+    for child in children:
+        box.pack_start(child, False, False, 0)
+    box.show_all()
+    button.add(box)
 
 
 def outlined_box(cr, fill, x, y, width, height):
@@ -54,8 +154,8 @@ def outlined_box(cr, fill, x, y, width, height):
     cr.stroke()
 
 
-# Space between the note's edge and its text.
-TEXT_MARGIN = 6
+# Space between the note's edge and its text, the same on all four sides.
+TEXT_MARGIN = 8
 
 # Characters below this are Latin, which the note's font has, so they never
 # need another font. Everything from here on is looked up.
@@ -102,7 +202,14 @@ def changed_end(old, new):
         end += 1
     return len(new) - end
 
-LIST_MARKERS = (BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER)
+LIST_MARKERS = (BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, QUOTE_MARKER)
+
+# An item of the Format or Insert menu: its icon as Pango markup, its name,
+# the Markdown typed for it, its shortcut, what it does, whether it is on, or
+# None when it is not a format, and whether it can be chosen. A boxed icon is
+# drawn inside a box, as the code block one is.
+BarItem = namedtuple('BarItem', 'icon label hint keys action active sensitive '
+                                'boxed', defaults=(False,))
 CHECK_MARKERS = (CHECKBOX_MARKER, CHECKED_MARKER)
 
 # Room a popover's arrow and border take around its content.
@@ -115,6 +222,7 @@ CHECKBOX_HIT_MARGIN = 6
 # like Markdown. "• [ ]" is "- [ ]" after "- " has already become a bullet.
 TYPED_MARKERS = {
     '-': BULLET_MARKER,
+    '>': QUOTE_MARKER,
     '[]': CHECKBOX_MARKER, '[ ]': CHECKBOX_MARKER,
     '[x]': CHECKED_MARKER, '[X]': CHECKED_MARKER,
     '• []': CHECKBOX_MARKER, '• [ ]': CHECKBOX_MARKER,
@@ -124,6 +232,11 @@ TYPED_MARKERS = {
 # How many spaces of the note's font a tab is as wide as: one level of a list.
 # Items were indented by this many spaces before a tab took one level.
 INDENT_SPACES = 4
+
+# "**text**" just typed at the end of the text before the cursor: the text is
+# not empty, does not start or end with a space, and has no asterisk, as in
+# Markdown. An asterisk or a backslash right before it keeps it as it is.
+TYPED_BOLD_RE = re.compile(r'(?<![*\\])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$')
 
 
 def tabbed_indent(indent):
@@ -145,6 +258,12 @@ def cell_width(line):
 class NoteWindow(Gtk.ApplicationWindow):
     # Set while Ctrl+Shift+V pastes text as it is.
     _paste_plain = False
+    # The expands found when the note was last styled, and the lines they
+    # hide; replaced, never changed in place. See _apply_sections().
+    _sections = ()
+    _hidden_lines = frozenset()
+    # The title line of the expand whose button is under the pointer.
+    _expand_hover = None
 
     def __init__(self, app, data: dict):
         super().__init__(application=app)
@@ -276,18 +395,24 @@ class NoteWindow(Gtk.ApplicationWindow):
         note_group.get_style_context().add_class('tool-group')
         btn_row.pack_start(note_group, False, False, 0)
 
-        new_btn = Gtk.Button(label='+')
+        new_btn = Gtk.Button()
+        set_button_content(new_btn, StrokeIcon('plus'))
         new_btn.set_tooltip_text(NEW_NOTE_LABEL)
         new_btn.connect('clicked', lambda _: self.app.new_note(near=self))
         note_group.pack_start(new_btn, False, False, 0)
 
-        close_btn = Gtk.Button(label='✕')
+        close_btn = Gtk.Button()
+        set_button_content(close_btn, StrokeIcon('cross'))
         close_btn.set_tooltip_text('Hide Note')
         close_btn.connect('clicked', lambda _: self._hide_note())
         note_group.pack_start(close_btn, False, False, 0)
 
-        hidden_btn = Gtk.Button(label='▤')
-        hidden_btn.set_tooltip_text('Hidden Notes')
+        # An eye struck through, for the notes that are hidden. How many
+        # there are is in its tooltip, which shows at once.
+        hidden_btn = Gtk.Button()
+        self._hidden_btn = hidden_btn
+        set_button_content(hidden_btn, StrokeIcon('hidden', BAR_ICON_SIZE + 2))
+        self.set_hidden_count(0)
         hidden_btn.connect('clicked',
                            lambda _: self.app.show_hidden_notes_manager(self))
         note_group.pack_start(hidden_btn, False, False, 0)
@@ -302,49 +427,26 @@ class NoteWindow(Gtk.ApplicationWindow):
         text_group.get_style_context().add_class('tool-group')
         btn_row.pack_start(text_group, False, False, 0)
 
-        self._bold_btn = Gtk.Button(label='B')
-        self._bold_btn.set_tooltip_text('Bold  (Ctrl+B)')
-        self._bold_btn.set_can_focus(False)
-        self._bold_btn.connect('clicked', lambda _: self._toggle_bold())
-        text_group.pack_start(self._bold_btn, False, False, 0)
+        # Formats of the text, and elements to insert, each in a menu that
+        # lists what it holds with the Markdown typed for it and its shortcut,
+        # so the bar stays short as elements are added.
+        self._format_btn = Gtk.Button()
+        set_button_content(self._format_btn, Gtk.Label(label='Format'),
+                           StrokeIcon('down', 12))
+        self._format_btn.set_tooltip_text('Format text')
+        self._format_btn.set_can_focus(False)
+        self._format_btn.connect(
+            'clicked', lambda b: self._popup_bar_menu(b, self._format_items()))
+        text_group.pack_start(self._format_btn, False, False, 0)
 
-        self._heading_btn = Gtk.Button(label='H')
-        self._heading_btn.set_tooltip_text('Heading  (Ctrl+H)')
-        self._heading_btn.set_can_focus(False)
-        self._heading_btn.connect('clicked', lambda _: self._toggle_heading())
-        text_group.pack_start(self._heading_btn, False, False, 0)
-
-        self._inline_code_btn = Gtk.Button(label='</>')
-        self._inline_code_btn.set_tooltip_text('Inline code  (Ctrl+E)')
-        self._inline_code_btn.set_can_focus(False)
-        self._inline_code_btn.connect(
-            'clicked', lambda _: self._toggle_inline_code())
-        text_group.pack_start(self._inline_code_btn, False, False, 0)
-
-        bullet_btn = Gtk.Button(label='•')
-        bullet_btn.set_tooltip_text('Bullet list  (Ctrl+8)')
-        bullet_btn.set_can_focus(False)
-        bullet_btn.connect('clicked', lambda _: self._toggle_bullet())
-        text_group.pack_start(bullet_btn, False, False, 0)
-
-        check_btn = Gtk.Button(label=CHECKBOX_MARKER.strip())
-        check_btn.set_tooltip_text('Checklist  (Ctrl+9)')
-        check_btn.set_can_focus(False)
-        check_btn.connect('clicked', lambda _: self._toggle_checklist())
-        text_group.pack_start(check_btn, False, False, 0)
-
-        # The inline code icon inside a box, as Slack draws a code block.
-        code_btn = Gtk.Button()
-        code_icon = Gtk.Label(label='</>')
-        # Hug the text, so the box stays inside the button's rounded ends.
-        code_icon.set_halign(Gtk.Align.CENTER)
-        code_icon.set_valign(Gtk.Align.CENTER)
-        code_icon.get_style_context().add_class('boxed')
-        code_btn.add(code_icon)
-        code_btn.set_tooltip_text('Code block  (Ctrl+Shift+C)')
-        code_btn.set_can_focus(False)
-        code_btn.connect('clicked', lambda _: self._toggle_code_block())
-        text_group.pack_start(code_btn, False, False, 0)
+        insert_btn = Gtk.Button()
+        set_button_content(insert_btn, Gtk.Label(label='Insert'),
+                           StrokeIcon('down', 12))
+        insert_btn.set_tooltip_text('Insert an element')
+        insert_btn.set_can_focus(False)
+        insert_btn.connect(
+            'clicked', lambda b: self._popup_bar_menu(b, self._insert_items()))
+        text_group.pack_start(insert_btn, False, False, 0)
 
         row_spacer = Gtk.Box()
         row_spacer.set_hexpand(True)
@@ -354,8 +456,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # title bar. Left-click behavior is unchanged because _on_bottom_bar_click()
         # returns False for non-right-clicks.
         for btn in (self._pin_btn, new_btn, close_btn, hidden_btn,
-                    self._bold_btn, self._heading_btn, self._inline_code_btn,
-                    bullet_btn, check_btn, code_btn):
+                    self._format_btn, insert_btn):
             btn.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
             btn.connect('button-press-event', self._on_bottom_bar_click)
 
@@ -374,8 +475,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # The same room between every two lines, also the rows of a wrapped
         # line. A code block's lines set their own, inside its box.
         # Divided above and below by _refresh_code_spacing().
-        self.tv.set_top_margin(4)
-        self.tv.set_bottom_margin(4)
+        self.tv.set_top_margin(TEXT_MARGIN)
+        self.tv.set_bottom_margin(TEXT_MARGIN)
         sw.add(self.tv)
         self._font_prov = Gtk.CssProvider()
         self.tv.get_style_context().add_provider(
@@ -425,6 +526,44 @@ class NoteWindow(Gtk.ApplicationWindow):
         # but the cursor beside it would be as small. See _pad_kind().
         self._pad_tag = buf.create_tag('inline-pad', family=BODY_FONT,
                                        scale=1.0)
+        # Derived too: the rows of a table. A row stays on one line, its first
+        # cell starts inside the table's line and padding, and the room above
+        # and below it is set by _refresh_code_spacing(). The first and last
+        # row also keep the room around the table, so they are made after the
+        # row tag, to win over it. The tab stops that line up the columns
+        # differ from table to table: see _apply_tables().
+        self._table_row_tag = buf.create_tag(
+            'table-row', wrap_mode=Gtk.WrapMode.NONE,
+            left_margin=TEXT_MARGIN + 1 + TABLE_PAD)
+        self._table_top_tag = buf.create_tag('table-top')
+        self._table_bottom_tag = buf.create_tag('table-bottom')
+        self._table_head_tag = buf.create_tag('table-head',
+                                              weight=Pango.Weight.BOLD)
+        self._table_tab_tags = []
+        # (first line, last line, x of each column's left line and of the
+        # right edge) of each table, in buffer coordinates.
+        self._tables = []
+        # Derived too: an expand. What a folded one hides, and the mark that
+        # ends it, are invisible. Its triangle's characters are not seen, as
+        # _draw_sections() draws a chevron over them, and its title is small
+        # and gray. The end line of an open one is kept, set very small, as
+        # the room at the bottom of its box. The margins that put its title
+        # and content inside its box depend on how deep it is in other
+        # expands, so there is a tag for each depth. See _apply_sections().
+        self._fold_tag = buf.create_tag('fold', invisible=True)
+        self._expand_marker_tag = buf.create_tag(
+            'expand-marker', foreground_rgba=Gdk.RGBA(0, 0, 0, 0),
+            scale=EXPAND_TITLE_SCALE)
+        self._expand_title_tag = buf.create_tag(
+            'expand-title', foreground_rgba=Gdk.RGBA(0, 0, 0, 0.6),
+            scale=EXPAND_TITLE_SCALE)
+        self._expand_end_tag = buf.create_tag('expand-end', scale=0.1)
+        self._expand_depth_tags = {}
+        self._sections = []
+        self._hidden_lines = set()
+        self._line_depth = {}
+        self._expand_boxes = []
+        self._skip_lines = set()
         # Derived too: the spacing of a line, in a note whose lines differ in
         # height. One tag for each pair of spacings. See _even_lines().
         self._slot_tags = {}
@@ -450,10 +589,19 @@ class NoteWindow(Gtk.ApplicationWindow):
             pixels_above_lines=4,
             pixels_below_lines=4)
         self._divider_lines = []
-        # Derived from the text on every change, like dividers, so neither
-        # is saved: a checked item is grayed out, and URLs are links.
+        # Derived from the text on every change, like dividers, so none is
+        # saved: a checked item is grayed out, a quote is muted, and URLs are
+        # links.
         self._done_tag = buf.create_tag(
             'done', foreground='#77775A')
+        self._quote_tag = buf.create_tag(
+            'quote', foreground_rgba=Gdk.RGBA(0, 0, 0, 0.62))
+        # A quote's wrapped rows start where its text does, clear of the bar.
+        # Its margins are set from the marker's width by
+        # _refresh_code_spacing(). Only for a quote that is not indented:
+        # tab stops count from the margin, so an indented one would move.
+        self._quote_hang_tag = buf.create_tag('quote-hang')
+        self._refresh_quote_hang()
         self._link_tag = buf.create_tag(
             # Below the tails of the letters: the code font's own underline
             # runs through them.
@@ -485,6 +633,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         # Notes from before inline code had spaces for padding, and from
         # before list items were indented by tabs.
         pads_changed = self._normalize_code_pads()
+        pads_changed = self._normalize_tables() or pads_changed
+        pads_changed = self._normalize_sections() or pads_changed
         if self._tab_list_indents() or pads_changed:
             self._history[0] = self._current_state()
         self._refresh_line_styles()
@@ -492,11 +642,14 @@ class NoteWindow(Gtk.ApplicationWindow):
         self.tv.connect('draw', self._draw_code_blocks)
         self.tv.connect_after('draw', self._draw_dividers)
         self.tv.connect_after('draw', self._draw_list_markers)
+        self.tv.connect_after('draw', self._draw_sections)
         self.tv.connect('populate-popup', self._on_tv_popup)
         self.tv.connect('key-press-event', self._on_tv_key_press)
         self.tv.connect('button-press-event', self._on_tv_button_press)
         self.tv.add_events(Gdk.EventMask.POINTER_MOTION_MASK)
         self.tv.connect('motion-notify-event', self._on_tv_motion)
+        self.tv.add_events(Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self.tv.connect('leave-notify-event', self._on_tv_leave)
         self.tv.set_has_tooltip(True)
         self.tv.connect('query-tooltip', self._on_tv_query_tooltip)
         self.tv.connect('copy-clipboard', self._on_copy_clipboard)
@@ -1297,6 +1450,8 @@ class NoteWindow(Gtk.ApplicationWindow):
 
         self._strip_marker_formats()
         self._normalize_code_pads()
+        self._normalize_tables()
+        self._normalize_sections()
         self._refresh_line_styles()
         end_offset = insert_offset + len(text)
         buf.place_cursor(buf.get_iter_at_offset(end_offset))
@@ -1336,12 +1491,14 @@ class NoteWindow(Gtk.ApplicationWindow):
             # Copied from a note: the clipboard holds it as Markdown, so the
             # note's own text is pasted instead.
             text = state.get('text', '')
-            for char in (CODE_ANCHOR, CODE_PAD_CHAR, IMAGE_ANCHOR):
+            for char in (CODE_ANCHOR, CODE_PAD_CHAR, IMAGE_ANCHOR,
+                         TABLE_MARKER, EXPAND_END):
                 text = text.replace(char, '')
         else:
             text = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()
         if not text:
             return
+        text = self._fit_text_to_cell(text)
         buf = self.tv.get_buffer()
         self._flush_snapshot()
         self._paste_plain = True
@@ -1352,6 +1509,17 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._paste_plain = False
         self._flush_snapshot()
         self._queue_save()
+
+    def _fit_text_to_cell(self, text):
+        """Text pasted into a table cell, which holds one line: its lines
+        joined by spaces."""
+        buf = self.tv.get_buffer()
+        bounds = buf.get_selection_bounds()
+        at = bounds[0] if bounds else buf.get_iter_at_mark(buf.get_insert())
+        if '\n' not in text or not self._is_table_row(at.get_line()):
+            return text
+        return ' '.join(part.strip() for part in text.splitlines()
+                        if part.strip())
 
     def _paste_markdown_if_any(self):
         """Paste text from another app with the formats its Markdown gives,
@@ -1368,7 +1536,13 @@ class NoteWindow(Gtk.ApplicationWindow):
         if not text:
             return False
         state = from_markdown(text)
-        if state['text'] == text and not any(
+        fitted = (text if TABLE_MARKER in state['text']
+                  else self._fit_text_to_cell(text))
+        if fitted != text:
+            # Lines pasted into a cell become one line, which keeps its bold
+            # and inline code but is no heading or code block.
+            state = dict(from_markdown(fitted), heading=[], code=[])
+        elif state['text'] == text and not any(
                 state[key] for key in ('bold', 'heading', 'code', 'backtick')):
             return False
 
@@ -1428,8 +1602,15 @@ class NoteWindow(Gtk.ApplicationWindow):
             widget.set_visible(visible)
 
     def _refresh_collapse_state(self):
-        self._collapse_btn.set_label('▸' if self._collapsed else '▾')
+        set_button_content(self._collapse_btn,
+                           StrokeIcon('right' if self._collapsed else 'down'))
         self._refresh_collapse_button()
+
+    def set_hidden_count(self, count):
+        """Say how many notes are hidden in the Hidden Notes button's
+        tooltip."""
+        self._hidden_btn.set_tooltip_text(
+            f'Hidden Notes ({count})' if count else 'Hidden Notes')
 
     # The window manager owns the size of a maximized or tiled window and
     # ignores resizes, so such a note cannot be collapsed until it is restored.
@@ -1505,6 +1686,8 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._search_revealer.set_reveal_child(False)
         self._search_entry.set_text('')
         self._clear_highlights()
+        # The expands a match showed open fold again.
+        self._refresh_line_styles()
         self.tv.grab_focus()
 
     def _do_search(self):
@@ -1512,6 +1695,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         query = self._search_entry.get_text()
         if not query:
             self._refresh_results(query)
+            self._refresh_line_styles()
             return
         buf   = self.tv.get_buffer()
         start = buf.get_start_iter()
@@ -1525,6 +1709,8 @@ class NoteWindow(Gtk.ApplicationWindow):
             buf.apply_tag(self._hl_tag, m_start, m_end)
             start = m_end
         self._refresh_results(query)
+        # Matches in a folded expand show it open.
+        self._refresh_line_styles()
 
     def _refresh_results(self, query):
         for row in self._results.get_children():
@@ -1578,6 +1764,7 @@ class NoteWindow(Gtk.ApplicationWindow):
     def show_match(self, start, end):
         # Select the match and scroll to it once the window has its size.
         self._expand()
+        self._open_sections_around(start)
         buf = self.tv.get_buffer()
         buf.select_range(buf.get_iter_at_offset(start), buf.get_iter_at_offset(end))
         self.tv.grab_focus()
@@ -1640,6 +1827,10 @@ class NoteWindow(Gtk.ApplicationWindow):
             for line in range(start.get_line(), end.get_line() + 1):
                 self._tag_code_line(line)
             self._remove_redundant_code_anchors(start.get_line(), end.get_line())
+        if not self._paste_plain and (
+                (text == '`' and self._typed_code_fence(buf))
+                or (text == '*' and self._typed_bold(buf))):
+            return
         if '`' in text and not self._paste_plain:
             self._format_backtick_wrapped_text()
         self._refresh_emoji_tags()
@@ -1698,10 +1889,15 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _marker_end(self, line):
         """Offset where the list marker of `line` ends, or None.
 
-        A line of a code block has none: a bullet in code is code."""
+        A line of a code block has none: a bullet in code is code. A row of a
+        table has the invisible TABLE_MARKER, which is treated the same."""
         buf = self.tv.get_buffer()
         if line < 0 or line >= buf.get_line_count():
             return None
+        if self._is_table_row(line):
+            return buf.get_iter_at_line(line).get_offset() + len(TABLE_MARKER)
+        if self._is_section_title(line):
+            return buf.get_iter_at_line(line).get_offset() + len(EXPAND_OPEN)
         parts = self._line_list_parts(line)
         if parts is None or self._is_code_line(buf, line):
             return None
@@ -1992,7 +2188,12 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_tv_motion(self, tv, event):
         it = self._iter_at_pointer(event.x, event.y)
         ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
-        clickable = (self._checkbox_line_at(event.x, event.y) is not None
+        hover = self._expand_button_at(event.x, event.y)
+        if hover != self._expand_hover:
+            self._expand_hover = hover
+            tv.queue_draw()
+        clickable = (hover is not None
+                     or self._checkbox_line_at(event.x, event.y) is not None
                      or (ctrl and self._link_at(it) is not None))
         window = tv.get_window(Gtk.TextWindowType.TEXT)
         if window is not None:
@@ -2012,6 +2213,11 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _on_tv_button_press(self, tv, event):
         if event.type == Gdk.EventType.BUTTON_PRESS and event.button == 1:
             return self._on_tv_single_click(event)
+        if (event.type == Gdk.EventType.BUTTON_PRESS and event.button == 3
+                and not tv.get_buffer().get_has_selection()):
+            # The table items of the menu act on the cell right-clicked.
+            self._click_table_cell(event, move_only=True)
+            return False
         # In a code block, a double click selects the clicked line, which is
         # usually one command, and a triple click selects the whole block.
         multi = (Gdk.EventType.DOUBLE_BUTTON_PRESS, Gdk.EventType.TRIPLE_BUTTON_PRESS)
@@ -2047,9 +2253,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         state = event.state & Gtk.accelerator_get_default_mod_mask()
         it = self._iter_at_pointer(event.x, event.y)
         if state == 0:
+            if self._click_section_marker(event):
+                return True
             line = self._checkbox_line_at(event.x, event.y)
             if line is None:
-                return False
+                return self._click_table_cell(event)
             self._toggle_checked([line])
             return True
         if state == Gdk.ModifierType.CONTROL_MASK:
@@ -2061,6 +2269,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         return False
 
     def _on_tv_key_press(self, tv, event):
+        handled = self._handle_tv_key(tv, event)
+        if handled:
+            # GTK keeps the cursor in view after the keys it handles, not
+            # after the edits made here, such as Enter starting the next list
+            # item. The view follows once the new text is laid out.
+            tv.scroll_mark_onscreen(tv.get_buffer().get_insert())
+        return handled
+
+    def _handle_tv_key(self, tv, event):
         state = event.state & Gtk.accelerator_get_default_mod_mask()
         if (state == Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK
                 and Gdk.keyval_to_lower(event.keyval) == Gdk.KEY_v):
@@ -2075,6 +2292,10 @@ class NoteWindow(Gtk.ApplicationWindow):
             return False
 
         buf = tv.get_buffer()
+        if self._on_table_key(buf, event.keyval, state):
+            return True
+        if self._on_section_key(buf, event.keyval, state):
+            return True
         if (state == Gdk.ModifierType.CONTROL_MASK
                 and event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter)):
             # Ctrl+Enter checks or unchecks the to-dos on the selected lines.
@@ -2092,7 +2313,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                 and state in (0, Gdk.ModifierType.SHIFT_MASK)):
             first_line, last_line = self._selected_or_cursor_lines()
             lines = [ln for ln in range(first_line, last_line + 1)
-                     if self._marker_end(ln) is not None]
+                     if self._marker_end(ln) is not None
+                     and not self._is_table_row(ln)]
             if lines:
                 self._flush_snapshot()
                 for line in lines:
@@ -2120,6 +2342,12 @@ class NoteWindow(Gtk.ApplicationWindow):
                         cursor, self._heading_tag)):
                 self._start_list_from_typed(
                     cursor_line, indent_len, len(before) - indent_len, marker)
+                return True
+            if (before == '#'
+                    and not self._iter_has_tag_context(cursor, self._code_tag)
+                    and not self._iter_has_tag_context(
+                        cursor, self._backtick_tag)):
+                self._start_heading_from_typed(cursor_line)
                 return True
 
         if (state == 0 and event.keyval == Gdk.KEY_Tab
@@ -2244,11 +2472,12 @@ class NoteWindow(Gtk.ApplicationWindow):
                 and not start.has_tag(self._code_tag))
 
     def _refresh_line_styles(self):
-        # Styles that follow from the text alone: dividers, checked to-dos and
-        # links. They are worked out again after every change.
+        # Styles that follow from the text alone: dividers, checked to-dos,
+        # quotes and links. They are worked out again after every change.
         buf = self.tv.get_buffer()
         start, end = buf.get_start_iter(), buf.get_end_iter()
-        for tag in (self._divider_tag, self._done_tag, self._link_tag):
+        for tag in (self._divider_tag, self._done_tag, self._quote_tag,
+                    self._quote_hang_tag, self._link_tag):
             buf.remove_tag(tag, start, end)
         self._divider_lines = [line for line in range(buf.get_line_count())
                                if self._line_is_divider(line)]
@@ -2259,14 +2488,24 @@ class NoteWindow(Gtk.ApplicationWindow):
         offset = 0
         for line in text.split('\n'):
             parts = self._list_parts(line)
-            if parts is not None and parts[1] == CHECKED_MARKER:
+            muted = {CHECKED_MARKER: self._done_tag,
+                     QUOTE_MARKER: self._quote_tag}
+            if parts is not None and parts[1] in muted:
                 body = offset + len(parts[0]) + len(parts[1])
-                buf.apply_tag(self._done_tag, buf.get_iter_at_offset(body),
+                buf.apply_tag(muted[parts[1]], buf.get_iter_at_offset(body),
+                              buf.get_iter_at_offset(offset + len(line)))
+            if parts is not None and parts[1] == QUOTE_MARKER and not parts[0]:
+                buf.apply_tag(self._quote_hang_tag,
+                              buf.get_iter_at_offset(offset),
                               buf.get_iter_at_offset(offset + len(line)))
             offset += len(line) + 1
         for link_start, link_end, _ in find_links(text):
             buf.apply_tag(self._link_tag, buf.get_iter_at_offset(link_start),
                           buf.get_iter_at_offset(link_end))
+        self._apply_sections(buf)
+        # The cursor rests on neither a divider nor the end of an expand.
+        self._skip_lines = set(self._divider_lines) | {
+            end for _title, end, _level in self._expand_boxes}
         self._queue_code_margins()
         self.tv.queue_draw()
 
@@ -2286,7 +2525,9 @@ class NoteWindow(Gtk.ApplicationWindow):
         start, end = buf.get_start_iter(), buf.get_end_iter()
         for tag in (self._code_top_tag, self._code_bottom_tag,
                     self._pad_tag, *self._marker_tags.values(),
-                    *self._slot_tags.values()):
+                    *self._slot_tags.values(), self._table_row_tag,
+                    self._table_top_tag, self._table_bottom_tag,
+                    self._table_head_tag, *self._table_tab_tags):
             buf.remove_tag(tag, start, end)
         self._tag_list_markers(buf)
         self._even_lines(buf)
@@ -2313,6 +2554,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                     after = here.copy()
                     after.forward_char()
                     buf.apply_tag(self._pad_tag, here, after)
+        # After the padding of inline code, which a cell's width takes in.
+        self._apply_tables(buf)
         return False
 
     def _hide_code_anchors(self, buf):
@@ -2328,15 +2571,15 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _tag_list_markers(self, buf):
         for line in range(buf.get_line_count()):
             end = self._marker_end(line)
-            if end is not None:
+            parts = end is not None and self._line_list_parts(line)
+            if parts:
                 first = buf.get_iter_at_line(line)
-                parts = self._line_list_parts(line)
                 first.forward_chars(len(parts[0]))
                 buf.apply_tag(self._marker_tags[parts[1][0]], first,
                               buf.get_iter_at_offset(end))
 
     def _draw_list_markers(self, tv, cr):
-        """Draw the bullet or to-do box of each visible list item.
+        """Draw the bullet, to-do box, or quote bar of each visible item.
 
         The characters are not seen, only taking the room. Over the text, so a
         selection does not hide them."""
@@ -2347,15 +2590,28 @@ class NoteWindow(Gtk.ApplicationWindow):
         size = self._font_size
         text = tv.get_style_context().get_color(Gtk.StateFlags.NORMAL)
         for line in range(first, last + 1):
-            if self._marker_end(line) is None:
+            parts = (line not in self._hidden_lines
+                     and self._marker_end(line) is not None
+                     and self._line_list_parts(line))
+            if not parts:
                 continue
-            parts = self._line_list_parts(line)
             start = buf.get_iter_at_line(line)
             start.forward_chars(len(parts[0]))
             top = tv.get_line_yrange(buf.get_iter_at_line(line))[0]
             x, y = tv.buffer_to_window_coords(
                 Gtk.TextWindowType.WIDGET, tv.get_iter_location(start).x,
                 top + self._baseline_offset)
+            if parts[1] == QUOTE_MARKER:
+                # A bar down the whole line, wrapped rows too, which meets
+                # the bar of a quote line next to it.
+                height = tv.get_line_yrange(buf.get_iter_at_line(line))[1]
+                _, bar_top = tv.buffer_to_window_coords(
+                    Gtk.TextWindowType.WIDGET, 0, top)
+                cr.set_source_rgba(text.red, text.green, text.blue, 0.45)
+                cr.rectangle(x + 1, bar_top, max(2, round(QUOTE_BAR * size)),
+                             height)
+                cr.fill()
+                continue
             done = parts[1] == CHECKED_MARKER
             if done:
                 cr.set_source_rgb(0x77 / 255, 0x77 / 255, 0x5A / 255)
@@ -2398,15 +2654,19 @@ class NoteWindow(Gtk.ApplicationWindow):
         text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
         # Where the baseline is below the top of a line: the same in all.
         self._baseline_offset = self._body_metrics[0] + self._line_spacing[0]
-        markers = {marker[0] for marker in LIST_MARKERS}
+        markers = ({marker[0] for marker in LIST_MARKERS}
+                   | {TABLE_MARKER, EXPAND_OPEN[0], EXPAND_CLOSED[0], EXPAND_END})
         if text.isascii() or not any(
                 ord(c) >= FIRST_NON_LATIN for c in set(text) - markers):
             return
         numbers, metrics, offsets = [], [], []
         offset = 0
         for number, line_text in enumerate(text.split('\n')):
-            # Code, dividers and headings are spaced on their own.
+            # Code, dividers, headings and tables are spaced on their own.
             if (line_text and number not in self._divider_lines
+                    and not line_text.startswith(TABLE_MARKER)
+                    and not is_section_title(line_text)
+                    and line_text != EXPAND_END
                     and not self._is_code_line(buf, number)
                     and not buf.get_iter_at_offset(offset).has_tag(
                         self._heading_tag)):
@@ -2605,12 +2865,17 @@ class NoteWindow(Gtk.ApplicationWindow):
         pad = CODE_PAD
         if self._opacity < 1.0:
             self._draw_text_backing(tv, cr, buf, visible)
+        self._draw_tables(tv, cr, buf, first, last)
         line = first
         while line <= last:
-            if not self._is_code_line(buf, line):
+            # A folded section's code takes no room and has no box.
+            if (line in self._hidden_lines
+                    or not self._is_code_line(buf, line)):
                 line += 1
                 continue
             block_start, block_end, right = self._code_block(tv, buf, line)
+            # Further in inside an expand.
+            left = self._line_left(block_start)
             top, _ = tv.get_line_yrange(buf.get_iter_at_line(block_start))
             y, height = tv.get_line_yrange(buf.get_iter_at_line(block_end))
             wx, wy = tv.buffer_to_window_coords(
@@ -2644,6 +2909,8 @@ class NoteWindow(Gtk.ApplicationWindow):
                 break
 
     def _draw_inline_part(self, tv, cr, buf, start, stop, pad_y):
+        if start.get_line() in self._hidden_lines:
+            return
         row = start.copy()
         while row.compare(stop) < 0:
             # The start of the next display line. Its "line end" is the
@@ -2725,11 +2992,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         cr.set_source_rgba(0, 0, 0, 0.3)
         cr.set_line_width(2)
         for line in self._divider_lines:
+            if line in self._hidden_lines:
+                continue
             y, height = tv.get_line_yrange(buf.get_iter_at_line(line))
             _, wy = tv.buffer_to_window_coords(
                 Gtk.TextWindowType.WIDGET, 0, y + height // 2)
-            cr.move_to(left, wy)
-            cr.line_to(right, wy)
+            # Inside an expand, inside its box.
+            level = self._line_depth.get(line, 0)
+            cr.move_to(left + level * self._expand_unit, wy)
+            cr.line_to(right - level * EXPAND_PAD, wy)
         cr.stroke()
         return False
 
@@ -2756,7 +3027,7 @@ class NoteWindow(Gtk.ApplicationWindow):
                         and event.type == Gdk.EventType.KEY_PRESS)
             GLib.idle_add(self._keep_pads_out_of_selection, previous, keyboard,
                           priority=GLib.PRIORITY_HIGH_IDLE)
-        if not buf.get_has_selection() and it.get_line() in self._divider_lines:
+        if not buf.get_has_selection() and it.get_line() in self._skip_lines:
             GLib.idle_add(self._skip_divider, offset, offset >= previous,
                           priority=GLib.PRIORITY_HIGH_IDLE)
 
@@ -2764,7 +3035,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf = self.tv.get_buffer()
         it = buf.get_iter_at_mark(buf.get_insert())
         if (it.get_offset() != offset or buf.get_has_selection()
-                or it.get_line() not in self._divider_lines):
+                or it.get_line() not in self._skip_lines):
             return False
         line = it.get_line()
         start, end = self._line_bounds(line)
@@ -2803,6 +3074,988 @@ class NoteWindow(Gtk.ApplicationWindow):
         if end.is_end():
             buf.insert(end, '\n')
         buf.place_cursor(buf.get_iter_at_line(line + 1))
+
+    # ------------------------------------------------------------------ tables
+    # A row of a table is a line that starts with TABLE_MARKER, with its cells
+    # separated by tabs, and the rows next to each other are one table whose
+    # first row is its header. Like a list marker, the marker is text, so a
+    # table is saved, undone, searched, and copied between notes as text.
+    # Tab stops line up the columns and _draw_tables() draws the lines.
+
+    def _is_table_row(self, line):
+        buf = self.tv.get_buffer()
+        if line < 0 or line >= buf.get_line_count():
+            return False
+        return (buf.get_iter_at_line(line).get_char() == TABLE_MARKER
+                and not self._is_code_line(buf, line))
+
+    def _table_runs(self, buf, lines):
+        """[first, last] line of each table, given the note's lines."""
+        runs = []
+        for number, line in enumerate(lines):
+            if (line.startswith(TABLE_MARKER)
+                    and not self._is_code_line(buf, number)):
+                if runs and runs[-1][1] == number - 1:
+                    runs[-1][1] = number
+                else:
+                    runs.append([number, number])
+        return runs
+
+    def _table_bounds(self, line):
+        """The first and last line of the table that holds the row `line`."""
+        first = last = line
+        while self._is_table_row(first - 1):
+            first -= 1
+        while self._is_table_row(last + 1):
+            last += 1
+        return first, last
+
+    def _row_cells(self, line):
+        """(start, end) offsets of the text of each cell of the row `line`."""
+        buf = self.tv.get_buffer()
+        start, end = self._line_bounds(line)
+        text = buf.get_slice(start, end, True)
+        offset = start.get_offset() + len(TABLE_MARKER)
+        cells = []
+        for cell in text[len(TABLE_MARKER):].split('\t'):
+            cells.append((offset, offset + len(cell)))
+            offset += len(cell) + 1
+        return cells
+
+    @staticmethod
+    def _cell_index(cells, offset):
+        """Which of the cells the offset is in. A cell ends where the tab
+        after it is, which is still in it."""
+        index = 0
+        for number, (start, _end) in enumerate(cells):
+            if start <= offset:
+                index = number
+        return index
+
+    def _apply_tables(self, buf):
+        """Tag the rows of every table and line up its columns: each column is
+        as wide as its widest cell, and a tab stop starts each one."""
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        self._tables = []
+        if TABLE_MARKER not in text:
+            return
+        lines = text.split('\n')
+        min_width = TABLE_MIN_COLUMN * self._font_size
+        for index, (first, last) in enumerate(self._table_runs(buf, lines)):
+            left = self._line_left(first)
+            columns = max(lines[n].count('\t') for n in range(first, last + 1))
+            widths = [min_width] * (columns + 1)
+            for line in range(first, last + 1):
+                start, end = self._line_bounds(line)
+                buf.apply_tag(self._table_row_tag, start, end)
+                head = line == first
+                if head:
+                    after = start.copy()
+                    after.forward_chars(len(TABLE_MARKER))
+                    buf.apply_tag(self._table_head_tag, after, end)
+                for column, (low, high) in enumerate(self._row_cells(line)):
+                    widths[column] = max(widths[column],
+                                         self._cell_text_width(buf, low, high,
+                                                               head))
+            buf.apply_tag(self._table_top_tag, *self._line_bounds(first))
+            buf.apply_tag(self._table_bottom_tag, *self._line_bounds(last))
+            # Where each column's line is, from the table's left edge. Its
+            # text starts a pixel and the padding further in.
+            edges = [0]
+            for width in widths:
+                edges.append(edges[-1] + width + 2 * TABLE_PAD + 1)
+            tabs = self._table_tabs_tag(index, tuple(edges[1:-1]))
+            # In from the table's left line, which is further in inside an
+            # expand. The tag is made after the row tag, so it wins over it.
+            tabs.set_property('left-margin', left + 1 + TABLE_PAD)
+            buf.apply_tag(tabs, buf.get_iter_at_line(first),
+                          self._line_bounds(last)[1])
+            self._tables.append((first, last, [left + x for x in edges]))
+
+    def _table_tabs_tag(self, index, stops):
+        """The tag with the tab stops of the index-th table. Tab stops are
+        relative to where a row's text starts."""
+        buf = self.tv.get_buffer()
+        while len(self._table_tab_tags) <= index:
+            tag = buf.create_tag(f'table-tabs-{len(self._table_tab_tags)}')
+            tag.ynote_stops = None
+            self._table_tab_tags.append(tag)
+        tag = self._table_tab_tags[index]
+        if stops and tag.ynote_stops != stops:
+            tabs = Pango.TabArray.new(len(stops), True)
+            for number, stop in enumerate(stops):
+                tabs.set_tab(number, Pango.TabAlign.LEFT, stop)
+            tag.set_property('tabs', tabs)
+            tag.ynote_stops = stops
+        return tag
+
+    def _cell_text_width(self, buf, start, end, head):
+        """Width in pixels of the text from start to end, in the fonts its
+        formats give it, and of the images in it, as they are shown."""
+        if start >= end:
+            return 0
+        text = buf.get_slice(buf.get_iter_at_offset(start),
+                             buf.get_iter_at_offset(end), True)
+        attributes = Pango.AttrList()
+        code_scale = self._code_tag.get_property('scale')
+        emoji_scale = self._emoji_tag.get_property('scale')
+        it = buf.get_iter_at_offset(start)
+        index = 0
+        measured = []
+        images = 0
+        for char in text:
+            anchor = it.get_child_anchor()
+            if anchor is not None:
+                # An image is a widget in the text, as wide as it is drawn.
+                images += max((widget.get_preferred_width()[1]
+                               for widget in anchor.get_widgets()), default=0)
+                it.forward_char()
+                continue
+            measured.append(char)
+            size = len(char.encode())
+            found = []
+            if head or it.has_tag(self._bold_tag):
+                found.append(Pango.attr_weight_new(Pango.Weight.BOLD))
+            if it.has_tag(self._backtick_tag) and not it.has_tag(self._pad_tag):
+                found += [Pango.attr_family_new(CODE_FONT),
+                          Pango.attr_scale_new(code_scale)]
+            elif self._is_emoji_char(char):
+                found.append(Pango.attr_scale_new(emoji_scale))
+            for attribute in found:
+                attribute.start_index = index
+                attribute.end_index = index + size
+                attributes.insert(attribute)
+            index += size
+            it.forward_char()
+        width = images
+        if measured:
+            layout = self.tv.create_pango_layout(''.join(measured))
+            layout.set_font_description(self._body_font)
+            layout.set_attributes(attributes)
+            width += layout.get_extents()[1].width / Pango.SCALE
+        return math.ceil(width)
+
+    def _draw_tables(self, tv, cr, buf, first, last):
+        """Draw the lines of each visible table, with its header shaded."""
+        count = buf.get_line_count()
+        dx, dy = tv.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, 0, 0)
+        for table_first, table_last, edges in self._tables:
+            if (table_last < first or table_first > last or table_last >= count
+                    or table_first in self._hidden_lines):
+                continue
+            rows = [tv.get_line_yrange(buf.get_iter_at_line(line))
+                    for line in range(table_first, table_last + 1)]
+            ys = [y for y, _ in rows]
+            ys[0] += TABLE_MARGIN
+            ys.append(rows[-1][0] + rows[-1][1] - TABLE_MARGIN)
+            ys = [y + dy for y in ys]
+            xs = [x + dx for x in edges]
+            width = xs[-1] - xs[0] + 1
+            if self._opacity < 1.0:
+                body = self._body_rgba
+                cr.set_source_rgba(body.red, body.green, body.blue, 1.0)
+                cr.rectangle(xs[0], ys[0], width, ys[-1] - ys[0])
+                cr.fill()
+            head = self._code_rgba
+            cr.set_source_rgba(head.red, head.green, head.blue, 1.0)
+            cr.rectangle(xs[0], ys[0], width, ys[1] - ys[0])
+            cr.fill()
+            cr.set_source_rgba(*CODE_OUTLINE)
+            cr.set_line_width(1)
+            for y in ys[:-1]:
+                cr.move_to(xs[0], y + 0.5)
+                cr.line_to(xs[-1] + 1, y + 0.5)
+            cr.move_to(xs[0], ys[-1] - 0.5)
+            cr.line_to(xs[-1] + 1, ys[-1] - 0.5)
+            for x in xs:
+                cr.move_to(x + 0.5, ys[0])
+                cr.line_to(x + 0.5, ys[-1])
+            cr.stroke()
+
+    def _normalize_tables(self):
+        """Give every row of a table as many cells as its widest row has, and
+        take out a TABLE_MARKER that is not at the start of a line, as one
+        left by joining a row to the line before it. Returns whether the text
+        changed. The cursor stays at the characters it was at."""
+        if self._normalizing:
+            return False
+        buf = self.tv.get_buffer()
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        if TABLE_MARKER not in text:
+            return False
+        lines = text.split('\n')
+        starts, offset = [], 0
+        for line in lines:
+            starts.append(offset)
+            offset += len(line) + 1
+        edits = []   # (offset, text to insert, or None to delete one char)
+        for number, line in enumerate(lines):
+            index = line.find(TABLE_MARKER, 1)
+            if index >= 0 and not self._is_code_line(buf, number):
+                while index >= 0:
+                    edits.append((starts[number] + index, None))
+                    index = line.find(TABLE_MARKER, index + 1)
+        for first, last in self._table_runs(buf, lines):
+            columns = max(lines[n].count('\t') for n in range(first, last + 1))
+            for number in range(first, last + 1):
+                missing = columns - lines[number].count('\t')
+                if missing:
+                    edits.append((starts[number] + len(lines[number]),
+                                  '\t' * missing))
+        if not edits:
+            return False
+
+        marks = [buf.get_iter_at_mark(buf.get_insert()).get_offset(),
+                 buf.get_iter_at_mark(buf.get_selection_bound()).get_offset()]
+        self._normalizing = True
+        try:
+            for offset, insert in sorted(edits, key=lambda e: -e[0]):
+                if insert is None:
+                    buf.delete(buf.get_iter_at_offset(offset),
+                               buf.get_iter_at_offset(offset + 1))
+                    marks = [m - 1 if m > offset else m for m in marks]
+                else:
+                    self._insert_plain(offset, insert)
+                    marks = [m + len(insert) if m > offset else m
+                             for m in marks]
+            insert, bound = (buf.get_iter_at_offset(m) for m in marks)
+            buf.select_range(insert, bound)
+        finally:
+            self._normalizing = False
+        self._queue_code_margins()
+        return True
+
+    def _insert_plain(self, offset, text):
+        """Insert text at offset without the formats of the text before it."""
+        buf = self.tv.get_buffer()
+        buf.insert(buf.get_iter_at_offset(offset), text)
+        start = buf.get_iter_at_offset(offset)
+        end = buf.get_iter_at_offset(offset + len(text))
+        for tag in (self._bold_tag, self._backtick_tag, self._heading_tag,
+                    self._code_tag):
+            buf.remove_tag(tag, start, end)
+
+    def _edit_lines(self, edit):
+        """Run edit, a change to the lines of a table or a section, as one
+        undo step, without the formats typing would give the text it
+        inserts."""
+        self._flush_snapshot()
+        self._restoring = True
+        try:
+            edit(self.tv.get_buffer())
+        finally:
+            self._restoring = False
+        self._normalize_tables()
+        self._normalize_sections()
+        self._refresh_line_styles()
+        self._sync_format_state()
+        self.tv.scroll_mark_onscreen(self.tv.get_buffer().get_insert())
+        self._flush_snapshot()
+        self._queue_save()
+
+    def _insert_table(self, columns=3, rows=3):
+        """Insert an empty table with a header row, on the cursor's line when
+        it is empty, else on a line after it."""
+        def edit(buf):
+            line = buf.get_iter_at_mark(buf.get_insert()).get_line()
+            start, end = self._line_bounds(line)
+            table = '\n'.join([TABLE_MARKER + '\t' * (columns - 1)] * rows)
+            if buf.get_slice(start, end, True).strip(CODE_ANCHOR + ' \t'):
+                self._insert_plain(end.get_offset(), '\n' + table)
+                line += 1
+            else:
+                buf.delete(start, end)
+                self._insert_plain(start.get_offset(), table)
+            # A line to go on writing after the table.
+            _, end = self._line_bounds(line + rows - 1)
+            if end.is_end():
+                buf.insert(end, '\n')
+            buf.place_cursor(buf.get_iter_at_offset(
+                buf.get_iter_at_line(line).get_offset() + len(TABLE_MARKER)))
+        self._edit_lines(edit)
+
+    def _add_table_row(self, line):
+        """Add an empty row after the row `line` and put the cursor in it."""
+        def edit(buf):
+            columns = len(self._row_cells(line))
+            offset = self._line_bounds(line)[1].get_offset()
+            self._insert_plain(offset, '\n' + TABLE_MARKER + '\t' * (columns - 1))
+            buf.place_cursor(buf.get_iter_at_offset(
+                offset + 1 + len(TABLE_MARKER)))
+        self._edit_lines(edit)
+
+    def _delete_table_rows(self, first, last):
+        """Delete the lines from first to last, with the line break before
+        them, or after them at the start of the note, and put the cursor at
+        the end of the line before, or at the start of the text after."""
+        def edit(buf):
+            start = buf.get_iter_at_line(first)
+            _, end = self._line_bounds(last, include_newline=first == 0)
+            if first > 0:
+                start.backward_char()
+            offset = start.get_offset()
+            buf.delete(start, end)
+            target = buf.get_iter_at_offset(offset)
+            if first == 0 and self._is_table_row(0):
+                target.forward_chars(len(TABLE_MARKER))
+            buf.place_cursor(target)
+        self._edit_lines(edit)
+
+    def _cursor_table_cell(self):
+        """(line, column) of the cell the cursor is in, or None."""
+        buf = self.tv.get_buffer()
+        cursor = buf.get_iter_at_mark(buf.get_insert())
+        line = cursor.get_line()
+        if not self._is_table_row(line):
+            return None
+        return line, self._cell_index(self._row_cells(line),
+                                      cursor.get_offset())
+
+    def _add_table_column(self):
+        """Add an empty column after the cursor's."""
+        here = self._cursor_table_cell()
+        if here is None:
+            return
+        line, column = here
+        first, last = self._table_bounds(line)
+
+        def edit(buf):
+            for row in range(last, first - 1, -1):
+                cells = self._row_cells(row)
+                self._insert_plain(cells[min(column, len(cells) - 1)][1], '\t')
+            buf.place_cursor(buf.get_iter_at_offset(
+                self._row_cells(line)[column + 1][0]))
+        self._edit_lines(edit)
+
+    def _delete_table_column(self):
+        """Delete the cursor's column, or the whole table when it has no
+        other."""
+        here = self._cursor_table_cell()
+        if here is None:
+            return
+        line, column = here
+        first, last = self._table_bounds(line)
+        if len(self._row_cells(line)) == 1:
+            self._delete_table_rows(first, last)
+            return
+
+        def edit(buf):
+            for row in range(last, first - 1, -1):
+                cells = self._row_cells(row)
+                if column >= len(cells):
+                    continue
+                start, end = cells[column]
+                # The cell and the tab after it, or before the last one.
+                if column + 1 < len(cells):
+                    end += 1
+                else:
+                    start -= 1
+                buf.delete(buf.get_iter_at_offset(start),
+                           buf.get_iter_at_offset(end))
+            cells = self._row_cells(line)
+            buf.place_cursor(buf.get_iter_at_offset(
+                cells[min(column, len(cells) - 1)][1]))
+        self._edit_lines(edit)
+
+    def _step_cell(self, forward):
+        """Tab: the cursor goes to the end of the next cell, or of the one
+        before. Past the last cell a new row is added."""
+        buf = self.tv.get_buffer()
+        line, column = self._cursor_table_cell()
+        cells = self._row_cells(line)
+        first, last = self._table_bounds(line)
+        if forward:
+            if column + 1 < len(cells):
+                target = cells[column + 1][1]
+            elif line < last:
+                target = self._row_cells(line + 1)[0][1]
+            else:
+                self._add_table_row(line)
+                return
+        elif column > 0:
+            target = cells[column - 1][1]
+        elif line > first:
+            target = self._row_cells(line - 1)[-1][1]
+        else:
+            target = cells[0][1]
+        buf.place_cursor(buf.get_iter_at_offset(target))
+        self.tv.scroll_mark_onscreen(buf.get_insert())
+
+    def _on_table_key(self, buf, keyval, state):
+        """Keys that act on a table. A cell holds one line of text, so Enter
+        adds a row, and a tab is what separates cells, so Tab moves between
+        them, and Backspace or Delete never take one."""
+        cursor = buf.get_iter_at_mark(buf.get_insert())
+        line = cursor.get_line()
+        if not self._is_table_row(line):
+            # Delete at the end of a line would join the table's first row to
+            # it, and take that row out of the table.
+            return (state == 0 and keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete)
+                    and not buf.get_has_selection() and cursor.ends_line()
+                    and not cursor.starts_line()
+                    and self._is_table_row(line + 1))
+        if (keyval in (Gdk.KEY_Tab, Gdk.KEY_KP_Tab, Gdk.KEY_ISO_Left_Tab)
+                and state in (0, Gdk.ModifierType.SHIFT_MASK)):
+            self._step_cell(state == 0 and keyval != Gdk.KEY_ISO_Left_Tab)
+            return True
+        if buf.get_has_selection() or state != 0:
+            return False
+        offset = cursor.get_offset()
+        cells = self._row_cells(line)
+        empty = all(start == end for start, end in cells)
+        first, last = self._table_bounds(line)
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            if empty and line == last:
+                # Enter on an empty last row ends the table, as on an empty
+                # list item: the row becomes an empty line.
+                def edit(buf):
+                    buf.delete(*self._line_bounds(line))
+                self._edit_lines(edit)
+            elif line == first and offset == cells[0][0]:
+                # At the very start of the table, a line before it.
+                def edit(buf):
+                    buf.insert(buf.get_iter_at_line(line), '\n')
+                    buf.place_cursor(buf.get_iter_at_line(line))
+                self._edit_lines(edit)
+            else:
+                self._add_table_row(line)
+            return True
+        if keyval == Gdk.KEY_BackSpace:
+            if offset == cells[0][0]:
+                if empty:
+                    self._delete_table_rows(line, line)
+                return True
+            return any(offset == start for start, _ in cells[1:])
+        if keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete):
+            return any(offset == end for _, end in cells)
+        return False
+
+    def _table_cell_at_pointer(self, x, y):
+        """(iter under the pointer, (start, end) of the cell whose column the
+        pointer is in), or None outside a table. The space a cell's text does
+        not fill is the tab after it, which GTK counts as the next cell's."""
+        bx, by = self.tv.window_to_buffer_coords(
+            Gtk.TextWindowType.TEXT, int(x), int(y))
+        _, it = self.tv.get_iter_at_location(bx, by)
+        line = it.get_line()
+        for first, last, edges in self._tables:
+            if first <= line <= last and self._is_table_row(line):
+                cells = self._row_cells(line)
+                column = bisect.bisect_right(edges, bx) - 1
+                return it, cells[max(0, min(len(cells) - 1, column))]
+        return None
+
+    def _click_table_cell(self, event, move_only=False):
+        """Put the cursor in the cell clicked. Returns whether the click is
+        handled; GTK places the cursor itself when it is in that cell."""
+        hit = self._table_cell_at_pointer(event.x, event.y)
+        if hit is None:
+            return False
+        it, (start, end) = hit
+        offset = it.get_offset()
+        if start <= offset <= end and not move_only:
+            return False
+        buf = self.tv.get_buffer()
+        buf.place_cursor(buf.get_iter_at_offset(min(end, max(start, offset))))
+        self.tv.grab_focus()
+        return True
+
+    # ------------------------------------------------------------------ sections
+    # A section folds away what a note does not need now. Its title line
+    # starts with ▾ or ▸, open or folded, and an invisible end line closes
+    # it, so it is text like a list or a table: saved, undone, searched, and
+    # copied as text. Folded content is hidden by a derived invisible tag.
+    # See sections.py.
+
+    def _is_section_title(self, line):
+        buf = self.tv.get_buffer()
+        if line < 0 or line >= buf.get_line_count():
+            return False
+        start = buf.get_iter_at_line(line)
+        end = start.copy()
+        end.forward_chars(len(EXPAND_OPEN))
+        return (is_section_title(buf.get_slice(start, end, True))
+                and not self._is_code_line(buf, line))
+
+    def _find_sections(self):
+        buf = self.tv.get_buffer()
+        lines = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(),
+                              True).split('\n')
+        code = {n for n, line in enumerate(lines)
+                if (is_section_title(line) or line == EXPAND_END)
+                and self._is_code_line(buf, n)}
+        return find_sections(lines, code)
+
+    def _apply_sections(self, buf):
+        """Hide what folded expands hold, and put what open ones hold in
+        their boxes: margins for each line by how deep it is, the small gray
+        title, and the end line that is the room at the bottom of a box."""
+        start, end = buf.get_start_iter(), buf.get_end_iter()
+        for tag in (self._fold_tag, self._expand_marker_tag,
+                    self._expand_title_tag, self._expand_end_tag,
+                    *self._expand_depth_tags.values()):
+            buf.remove_tag(tag, start, end)
+        sections, _orphans = self._find_sections()
+        # A folded expand that holds a search match is shown open while it is
+        # highlighted, as a browser opens <details> to show what it finds,
+        # without changing the note. It folds again when the search closes.
+        found = {buf.get_iter_at_offset(low).get_line()
+                 for low, _high in self._get_tag_ranges(self._hl_tag)}
+        self._sections = [
+            s._replace(open=True) if not s.open and any(
+                s.title < line and (s.end is None or line <= s.end)
+                for line in found) else s
+            for s in sections]
+        count = buf.get_line_count()
+        hidden = self._hidden_lines = hidden_lines(self._sections, count)
+
+        def whole_line(line):
+            # With its line break, which holds the margins of an empty line,
+            # and which a hidden line hides so that it takes no room.
+            low = buf.get_iter_at_line(line)
+            high = (buf.get_iter_at_line(line + 1) if line + 1 < count
+                    else buf.get_end_iter())
+            return low, high
+
+        for line in sorted(hidden):
+            buf.apply_tag(self._fold_tag, *whole_line(line))
+
+        # How many open expands each line is inside of.
+        depth = {}
+        for section in self._sections:
+            if not section.open or section.title in hidden:
+                continue
+            last = count - 1 if section.end is None else section.end - 1
+            for line in range(section.title + 1, last + 1):
+                depth[line] = depth.get(line, 0) + 1
+        self._line_depth = depth
+
+        self._expand_boxes = []
+        titles, ends = set(), set()
+        for section in self._sections:
+            if section.title in hidden:
+                continue
+            level = depth.get(section.title, 0)
+            titles.add(section.title)
+            line_start, line_end = self._line_bounds(section.title)
+            marker_end = line_start.copy()
+            marker_end.forward_chars(len(EXPAND_OPEN))
+            buf.apply_tag(self._expand_marker_tag, line_start, marker_end)
+            buf.apply_tag(self._expand_title_tag, marker_end, line_end)
+            buf.apply_tag(self._expand_tag('title', level),
+                          *whole_line(section.title))
+            if section.open and section.end is not None:
+                ends.add(section.end)
+                low, high = whole_line(section.end)
+                mark_end = low.copy()
+                mark_end.forward_char()
+                buf.apply_tag(self._fold_tag, low, mark_end)
+                buf.apply_tag(self._expand_end_tag, low, high)
+                self._expand_boxes.append((section.title, section.end, level))
+
+        for line, level in depth.items():
+            if line in hidden or line in titles or line in ends:
+                continue
+            if self._is_code_line(buf, line):
+                kind = 'code'
+            elif self._is_table_row(line):
+                # Its tab stops tag sets its margin: see _apply_tables().
+                continue
+            else:
+                kind = 'body'
+            buf.apply_tag(self._expand_tag(kind, level), *whole_line(line))
+
+    def _line_left(self, line):
+        """Where the text of a line starts, in buffer coordinates, before a
+        format of its own moves it: further in for each expand it is in."""
+        return TEXT_MARGIN + self._line_depth.get(line, 0) * self._expand_unit
+
+    def _expand_tag(self, kind, level):
+        """The tag with the margins of a title, a line of content, or a line
+        of code, `level` expands deep."""
+        tag = self._expand_depth_tags.get((kind, level))
+        if tag is None:
+            tag = self.tv.get_buffer().create_tag(f'expand-{kind}-{level}')
+            self._expand_depth_tags[(kind, level)] = tag
+            self._set_expand_tag(kind, level, tag)
+        return tag
+
+    def _set_expand_tag(self, kind, level, tag):
+        unit = self._expand_unit
+        if kind == 'title':
+            above, below = self._line_spacing
+            tag.set_property('left-margin',
+                             TEXT_MARGIN + level * unit + EXPAND_PAD)
+            tag.set_property('right-margin',
+                             TEXT_MARGIN + (level + 1) * EXPAND_PAD)
+            tag.set_property('pixels-above-lines',
+                             above + EXPAND_MARGIN + EXPAND_PAD)
+            tag.set_property('pixels-below-lines', below + 2)
+        elif kind == 'body':
+            tag.set_property('left-margin', TEXT_MARGIN + level * unit)
+            tag.set_property('right-margin', TEXT_MARGIN + level * EXPAND_PAD)
+        else:
+            tag.set_property('left-margin',
+                             TEXT_MARGIN + level * unit + CODE_PAD)
+
+    def _refresh_expand_tags(self):
+        # The title's mark is as wide as the button drawn over it and a gap
+        # after it, which takes the letter spacing Pango is asked for, made
+        # up until it is as wide as that, as for list markers. The content is
+        # as far in as the title's text.
+        font, mark = self._body_font, EXPAND_OPEN
+        wanted = self._expand_button_side() + EXPAND_GAP * self._font_size
+        spread = 0
+        for _ in range(4):
+            spread = max(0, spread + (wanted - self._text_width(
+                font, mark, EXPAND_TITLE_SCALE, spread)) / len(mark))
+        self._expand_marker_tag.set_property(
+            'letter-spacing', round(spread * Pango.SCALE))
+        self._expand_unit = EXPAND_PAD + round(self._text_width(
+            font, mark, EXPAND_TITLE_SCALE, spread))
+        for (kind, level), tag in self._expand_depth_tags.items():
+            self._set_expand_tag(kind, level, tag)
+        # The end line's own text is a few pixels tall, which is part of
+        # the room at the bottom of the box.
+        self._expand_end_tag.set_property('pixels-above-lines',
+                                          max(0, EXPAND_PAD - 3))
+        self._expand_end_tag.set_property('pixels-below-lines',
+                                          EXPAND_MARGIN)
+
+    def _expand_chevron(self):
+        """How wide the chevron of an expand's title is, in pixels."""
+        return self._font_size * EXPAND_TITLE_SCALE * 0.5
+
+    def _expand_button_side(self):
+        """The chevron's button, square, with padding around the chevron so
+        it is easy to hit."""
+        return round(self._expand_chevron() + 2 * EXPAND_BUTTON_PAD)
+
+    def _expand_button_rect(self, line):
+        """(x, y, side) of the button of the expand titled on line, in
+        buffer coordinates: over the title's mark, centered on the line."""
+        buf = self.tv.get_buffer()
+        loc = self.tv.get_iter_location(buf.get_iter_at_line(line))
+        side = self._expand_button_side()
+        return loc.x, loc.y + (loc.height - side) / 2, side
+
+    def _expand_button_at(self, x, y):
+        """The title line of the expand whose button is at x, y in the text
+        window, or None."""
+        bx, by = self.tv.window_to_buffer_coords(
+            Gtk.TextWindowType.TEXT, int(x), int(y))
+        count = self.tv.get_buffer().get_line_count()
+        for section in self._sections:
+            if section.title in self._hidden_lines or section.title >= count:
+                continue
+            left, top, side = self._expand_button_rect(section.title)
+            if left <= bx < left + side and top <= by < top + side:
+                return section.title
+        return None
+
+    def _on_tv_leave(self, tv, _event):
+        if self._expand_hover is not None:
+            self._expand_hover = None
+            tv.queue_draw()
+        return False
+
+    def _draw_sections(self, tv, cr):
+        """The box around each open expand, the chevron of each title, and a
+        gray Title for a title not yet written."""
+        buf = tv.get_buffer()
+        count = buf.get_line_count()
+        width = tv.get_allocated_width()
+        cr.set_line_width(1)
+        for title, end, level in self._expand_boxes:
+            if end >= count:
+                continue
+            top = tv.get_line_yrange(buf.get_iter_at_line(title))[0]
+            y, height = tv.get_line_yrange(buf.get_iter_at_line(end))
+            left, wy = tv.buffer_to_window_coords(
+                Gtk.TextWindowType.WIDGET,
+                TEXT_MARGIN + level * self._expand_unit, top + EXPAND_MARGIN)
+            right = width - TEXT_MARGIN - level * EXPAND_PAD
+            box_height = y + height - EXPAND_MARGIN - top - EXPAND_MARGIN
+            x0, y0 = left + 0.5, wy + 0.5
+            w, h = right - left - 1, box_height - 1
+            r = min(4, w / 2, h / 2)
+            cr.new_sub_path()
+            cr.arc(x0 + w - r, y0 + r, r, -math.pi / 2, 0)
+            cr.arc(x0 + w - r, y0 + h - r, r, 0, math.pi / 2)
+            cr.arc(x0 + r, y0 + h - r, r, math.pi / 2, math.pi)
+            cr.arc(x0 + r, y0 + r, r, math.pi, 3 * math.pi / 2)
+            cr.close_path()
+            cr.set_source_rgba(0, 0, 0, 0.2)
+            cr.stroke()
+
+        size = self._expand_chevron()
+        for section in self._sections:
+            if section.title in self._hidden_lines or section.title >= count:
+                continue
+            start = buf.get_iter_at_line(section.title)
+            bx, by, side = self._expand_button_rect(section.title)
+            x, y = tv.buffer_to_window_coords(
+                Gtk.TextWindowType.WIDGET, bx, round(by))
+            if section.title == self._expand_hover:
+                # Under the pointer, as a button is.
+                r = 4
+                cr.new_sub_path()
+                cr.arc(x + side - r, y + r, r, -math.pi / 2, 0)
+                cr.arc(x + side - r, y + side - r, r, 0, math.pi / 2)
+                cr.arc(x + r, y + side - r, r, math.pi / 2, math.pi)
+                cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+                cr.close_path()
+                cr.set_source_rgba(0, 0, 0, 0.1)
+                cr.fill()
+            cx, cy = x + side / 2, y + side / 2
+            cr.set_source_rgba(0, 0, 0, 0.55)
+            cr.set_line_width(1.6)
+            cr.set_line_cap(cairo.LINE_CAP_ROUND)
+            cr.set_line_join(cairo.LINE_JOIN_ROUND)
+            half = size / 2
+            if section.open:
+                cr.move_to(cx - half, cy - half / 2)
+                cr.line_to(cx, cy + half / 2)
+                cr.line_to(cx + half, cy - half / 2)
+            else:
+                cr.move_to(cx - half / 2, cy - half)
+                cr.line_to(cx + half / 2, cy)
+                cr.line_to(cx - half / 2, cy + half)
+            cr.stroke()
+            # A title not yet written shows what goes there.
+            line_end = self._line_bounds(section.title)[1]
+            if line_end.get_offset() - start.get_offset() == len(EXPAND_OPEN):
+                after = start.copy()
+                after.forward_chars(len(EXPAND_OPEN))
+                aloc = tv.get_iter_location(after)
+                ax, ay = tv.buffer_to_window_coords(
+                    Gtk.TextWindowType.WIDGET, aloc.x, aloc.y)
+                layout = tv.create_pango_layout('Title')
+                font = self._body_font.copy()
+                font.set_size(round(font.get_size() * EXPAND_TITLE_SCALE))
+                layout.set_font_description(font)
+                cr.set_source_rgba(0, 0, 0, 0.35)
+                cr.move_to(ax, ay + (aloc.height - layout.get_pixel_size()[1]) / 2)
+                PangoCairo.show_layout(cr, layout)
+        return False
+
+    def _toggle_sections(self, lines):
+        """Fold the open sections titled on these lines and open the folded
+        ones. A cursor in what folds goes to the end of the title."""
+        def edit(buf):
+            insert = buf.get_iter_at_mark(buf.get_insert()).get_offset()
+            for line in lines:
+                start = buf.get_iter_at_line(line)
+                after = start.copy()
+                after.forward_chars(len(EXPAND_OPEN))
+                folded = buf.get_slice(start, after, True) == EXPAND_CLOSED
+                buf.delete(start, after)
+                self._insert_plain(buf.get_iter_at_line(line).get_offset(),
+                                   EXPAND_OPEN if folded else EXPAND_CLOSED)
+                section = next((s for s in self._sections if s.title == line),
+                               None)
+                if not folded and section is not None:
+                    first = buf.get_iter_at_line(line + 1).get_offset() if (
+                        line + 1 < buf.get_line_count()) else None
+                    end = (buf.get_char_count() if section.end is None
+                           else self._line_bounds(section.end)[1].get_offset())
+                    if first is not None and first <= insert <= end:
+                        insert = self._line_bounds(line)[1].get_offset()
+            buf.place_cursor(buf.get_iter_at_offset(insert))
+        self._edit_lines(edit)
+
+    def _open_sections_around(self, offset):
+        """Open the folded sections that hide the text at offset, as a search
+        match there."""
+        buf = self.tv.get_buffer()
+        line = buf.get_iter_at_offset(offset).get_line()
+        # Folded in the note, even when a search shows it open for now.
+        folded = [s.title for s in self._find_sections()[0]
+                  if not s.open and s.title < line
+                  and (s.end is None or line <= s.end)]
+        if folded:
+            self._toggle_sections(folded)
+
+    def _insert_section(self):
+        """Insert an open section with an empty title for the cursor. With a
+        selection, its lines become the section's content."""
+        def edit(buf):
+            bounds = buf.get_selection_bounds()
+            if bounds:
+                first, last = self._selected_or_cursor_lines()
+                _, end = self._line_bounds(last)
+                self._insert_plain(end.get_offset(), '\n' + EXPAND_END)
+                start = buf.get_iter_at_line(first).get_offset()
+                self._insert_plain(start, EXPAND_OPEN + '\n')
+                title = first
+            else:
+                line = buf.get_iter_at_mark(buf.get_insert()).get_line()
+                start, end = self._line_bounds(line)
+                block = EXPAND_OPEN + '\n\n' + EXPAND_END
+                if buf.get_slice(start, end, True).strip():
+                    self._insert_plain(end.get_offset(), '\n' + block)
+                    title = line + 1
+                else:
+                    buf.delete(start, end)
+                    self._insert_plain(start.get_offset(), block)
+                    title = line
+            # A line after the section to go on writing outside it.
+            end_line = next(s.end for s in self._find_sections()[0]
+                            if s.title == title)
+            _, end = self._line_bounds(end_line)
+            if end.is_end():
+                buf.insert(end, '\n')
+            buf.place_cursor(self._line_bounds(title)[1])
+        self._edit_lines(edit)
+
+    def _unwrap_section(self, title):
+        """Take away a section's title marker and end, and keep its content
+        where it is."""
+        section = next((s for s in self._find_sections()[0]
+                        if s.title == title), None)
+
+        def edit(buf):
+            if section is not None and section.end is not None:
+                start, end = self._line_bounds(section.end,
+                                               include_newline=True)
+                if end.is_end():
+                    start.backward_char()
+                buf.delete(start, end)
+            start = buf.get_iter_at_line(title)
+            after = start.copy()
+            after.forward_chars(len(EXPAND_OPEN))
+            buf.delete(start, after)
+            buf.place_cursor(buf.get_iter_at_line(title))
+        self._edit_lines(edit)
+
+    def _on_section_key(self, buf, keyval, state):
+        """Keys that act on a section: Ctrl+Enter on its title folds or opens
+        it, Backspace at the start of the title takes the section away and
+        keeps its content, and Enter on an empty last line of an open section
+        goes on below it."""
+        enter = keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter)
+        if state == Gdk.ModifierType.CONTROL_MASK and enter:
+            first, last = self._selected_or_cursor_lines()
+            titles = [n for n in range(first, last + 1)
+                      if self._is_section_title(n)]
+            if titles:
+                self._toggle_sections(titles)
+                return True
+            return False
+        if state != 0 or buf.get_has_selection():
+            return False
+        cursor = buf.get_iter_at_mark(buf.get_insert())
+        line = cursor.get_line()
+        if (keyval == Gdk.KEY_BackSpace and self._is_section_title(line)
+                and cursor.get_offset() == self._marker_end(line)):
+            self._unwrap_section(line)
+            return True
+        # Joining a line to an expand's end would take the end away. Backspace
+        # just after an expand goes into it instead, taking an empty line
+        # with it, and Delete before an end, or after a folded title, does
+        # nothing.
+        if keyval == Gdk.KEY_BackSpace and cursor.starts_line() and line > 0:
+            before = next((s for s in self._sections if s.end == line - 1),
+                          None)
+            if before is not None:
+                into = before.end - 1 if before.open else before.title
+                empty = cursor.ends_line()
+
+                def edit(buf):
+                    if empty:
+                        low = buf.get_iter_at_line(line)
+                        high = low.copy()
+                        low.backward_char()
+                        buf.delete(low, high)
+                    buf.place_cursor(self._line_bounds(into)[1])
+                self._edit_lines(edit)
+                return True
+        if (keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete) and cursor.ends_line()
+                and any(s.end == line + 1 or (s.title == line and not s.open)
+                        for s in self._sections)):
+            return True
+        if enter and cursor.starts_line() and cursor.ends_line():
+            section = section_at(self._sections, line)
+            if (section is not None and section.open
+                    and section.end == line + 1):
+                def edit(buf):
+                    start, end = self._line_bounds(line, include_newline=True)
+                    buf.delete(start, end)
+                    # The end line is now `line`: a new line after it.
+                    _, after = self._line_bounds(line, include_newline=True)
+                    offset = after.get_offset()
+                    if not after.is_end() or after.starts_line():
+                        buf.insert(after, '\n')
+                    buf.place_cursor(buf.get_iter_at_offset(offset))
+                self._edit_lines(edit)
+                return True
+        return False
+
+    def _click_section_marker(self, event):
+        """A click on an expand's button folds or opens it."""
+        line = self._expand_button_at(event.x, event.y)
+        if line is None:
+            return False
+        self._toggle_sections([line])
+        return True
+
+    def _normalize_sections(self):
+        """Take away an end line that ends no section, and an end mark that
+        is not a line of its own, end a section never ended at the end of the
+        note, and keep a line after the last end so the cursor can go there.
+        Returns whether the text changed."""
+        if self._normalizing:
+            return False
+        buf = self.tv.get_buffer()
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        if EXPAND_END not in text and not any(
+                is_section_title(line) for line in text.split('\n')):
+            return False
+        sections, orphans = self._find_sections()
+        lines = text.split('\n')
+        starts, offset = [], 0
+        for line in lines:
+            starts.append(offset)
+            offset += len(line) + 1
+        edits = []   # (offset, characters to delete, text to insert)
+        for number in orphans:
+            if number > 0:
+                edits.append((starts[number] - 1, len(lines[number]) + 1, ''))
+            else:
+                edits.append((0, len(lines[0]) + (len(lines) > 1), ''))
+        for number, line in enumerate(lines):
+            if EXPAND_END in line and line != EXPAND_END:
+                index = line.find(EXPAND_END)
+                while index >= 0:
+                    edits.append((starts[number] + index, 1, ''))
+                    index = line.find(EXPAND_END, index + 1)
+        unended = sum(1 for s in sections if s.end is None)
+        tail = '\n' + '\n'.join([EXPAND_END] * unended) if unended else ''
+        ends = [s.end for s in sections if s.end is not None]
+        if unended or (ends and max(ends) == len(lines) - 1):
+            tail += '\n'
+        if tail:
+            edits.append((len(text), 0, tail))
+        if not edits:
+            return False
+        marks = [buf.get_iter_at_mark(buf.get_insert()).get_offset(),
+                 buf.get_iter_at_mark(buf.get_selection_bound()).get_offset()]
+        self._normalizing = True
+        try:
+            for offset, length, insert in sorted(edits, key=lambda e: -e[0]):
+                if length:
+                    buf.delete(buf.get_iter_at_offset(offset),
+                               buf.get_iter_at_offset(offset + length))
+                    marks = [offset if offset < m < offset + length
+                             else m - length if m >= offset + length else m
+                             for m in marks]
+                if insert:
+                    self._insert_plain(offset, insert)
+            buf.select_range(*(buf.get_iter_at_offset(m) for m in marks))
+        finally:
+            self._normalizing = False
+        self._refresh_line_styles()
+        return True
 
     # ------------------------------------------------------------------ formatting
 
@@ -2870,6 +4123,76 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._tab_list_indents([line])
         self._flush_snapshot()
 
+    def _start_heading_from_typed(self, line):
+        # Typing "# " at the start of a line makes it a heading, like
+        # Markdown, and the typed text is its own undo step. On an empty
+        # line, the text typed next is the heading.
+        buf = self.tv.get_buffer()
+        buf.insert_at_cursor(' ')
+        self._flush_snapshot()
+        start = buf.get_iter_at_line(line)
+        end = start.copy()
+        end.forward_chars(2)
+        buf.delete(start, end)
+        start, end = self._line_bounds(line)
+        if start.equal(end):
+            self._heading_active = True
+            self._bold_active = False
+            self._refresh_format_buttons()
+        else:
+            buf.remove_tag(self._bold_tag, start, end)
+            buf.apply_tag(self._heading_tag, start, end)
+            self._sync_format_state()
+        self._flush_snapshot()
+        self._queue_save()
+
+    def _typed_code_fence(self, buf):
+        """Typing ``` alone on a line makes it a line of a code block, like
+        Markdown. Returns whether it did."""
+        cursor = buf.get_iter_at_mark(buf.get_insert())
+        line = cursor.get_line()
+        start, end = self._line_bounds(line)
+        if (not cursor.equal(end) or self._is_code_line(buf, line)
+                or buf.get_slice(start, end, True) != '```'):
+            return False
+        self._flush_snapshot()
+        buf.delete(start, end)
+        self._tag_code_line(line, keep_cursor=True)
+        self._code_active = False
+        self._refresh_format_buttons()
+        self._flush_snapshot()
+        self._queue_save()
+        return True
+
+    def _typed_bold(self, buf):
+        """Typing the closing ** of **text** makes the text bold, like
+        Markdown, and the asterisks go. Returns whether it did."""
+        cursor = buf.get_iter_at_mark(buf.get_insert())
+        line = cursor.get_line()
+        start = buf.get_iter_at_line(line)
+        if (self._is_code_line(buf, line) or start.has_tag(self._heading_tag)
+                or self._iter_has_tag_context(cursor, self._backtick_tag)):
+            return False
+        m = TYPED_BOLD_RE.search(buf.get_slice(start, cursor, True))
+        if m is None:
+            return False
+        first = start.get_offset() + m.start()
+        length = len(m.group(1))
+        self._flush_snapshot()
+        closing = first + 2 + length
+        buf.delete(buf.get_iter_at_offset(closing),
+                   buf.get_iter_at_offset(closing + 2))
+        buf.delete(buf.get_iter_at_offset(first),
+                   buf.get_iter_at_offset(first + 2))
+        self._tag_text(self._bold_tag, buf.get_iter_at_offset(first),
+                       buf.get_iter_at_offset(first + length))
+        # As with the closing backtick, the text typed next is not bold.
+        self._bold_active = False
+        self._refresh_format_buttons()
+        self._flush_snapshot()
+        self._queue_save()
+        return True
+
     def _set_line_marker(self, line, marker):
         """Replace the line's list marker, or add one after its indent."""
         buf = self.tv.get_buffer()
@@ -2908,9 +4231,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         buf = self.tv.get_buffer()
         changed = False
         for line in (range(buf.get_line_count()) if lines is None else lines):
-            if self._marker_end(line) is None:
+            parts = (self._marker_end(line) is not None
+                     and self._line_list_parts(line))
+            if not parts:
                 continue
-            indent = self._line_list_parts(line)[0]
+            indent = parts[0]
             tabbed = tabbed_indent(indent)
             if tabbed == indent:
                 continue
@@ -3212,6 +4537,8 @@ class NoteWindow(Gtk.ApplicationWindow):
     def _run_pad_normalization(self):
         self._pads_sid = None
         self._normalize_code_pads()
+        self._normalize_tables()
+        self._normalize_sections()
         return False
 
     def _normalize_code_pads(self):
@@ -3479,9 +4806,11 @@ class NoteWindow(Gtk.ApplicationWindow):
         # Otherwise every line becomes one, replacing any other list marker.
         buf = self.tv.get_buffer()
         first_line, last_line = self._selected_or_cursor_lines()
-        # A line of code or a heading is not a list item.
+        # A line of code, a heading, or a row of a table is not a list item.
         lines = [ln for ln in range(first_line, last_line + 1)
                  if not self._is_code_line(buf, ln)
+                 and not self._is_table_row(ln)
+                 and not self._is_section_title(ln)
                  and not (not self._line_bounds(ln)[0].ends_line()
                           and buf.get_iter_at_line(ln).has_tag(
                               self._heading_tag))]
@@ -3527,15 +4856,96 @@ class NoteWindow(Gtk.ApplicationWindow):
         self._queue_save()
 
     def _refresh_format_buttons(self):
-        for button, active in ((self._bold_btn, self._bold_active),
-                               (self._heading_btn, self._heading_active),
-                               (self._inline_code_btn, self._code_active)):
-            ctx = button.get_style_context()
-            if active:
-                ctx.add_class('pinned')
-            else:
-                ctx.remove_class('pinned')
-        self._bold_btn.set_sensitive(not self._heading_active)
+        # The Format button is lit while a format is on at the cursor, so
+        # that what is typed next gets it. Its menu checks which ones are.
+        ctx = self._format_btn.get_style_context()
+        if self._bold_active or self._heading_active or self._code_active:
+            ctx.add_class('pinned')
+        else:
+            ctx.remove_class('pinned')
+
+    def _format_items(self):
+        return [
+            BarItem('<b>B</b>', 'Bold', '**text**', 'Ctrl+B', self._toggle_bold,
+                    self._bold_active, not self._heading_active),
+            BarItem('<b>H</b>', 'Heading', '# text', 'Ctrl+H',
+                    self._toggle_heading, self._heading_active, True),
+            BarItem('&lt;/&gt;', 'Inline code', '`text`', 'Ctrl+E',
+                    self._toggle_inline_code, self._code_active, True),
+        ]
+
+    def _insert_items(self):
+        return [
+            # A bullet is small in any font, so it is drawn a size up.
+            BarItem('<span size="x-large">•</span>', 'Bullet list', '- item', 'Ctrl+8',
+                    self._toggle_bullet, None, True),
+            BarItem(CHECKBOX_MARKER.strip(), 'Checklist', '[ ] item', 'Ctrl+9',
+                    self._toggle_checklist, None, True),
+            BarItem('❝', 'Quote', '> text', '',
+                    lambda: self._toggle_list((QUOTE_MARKER,)), None, True),
+            BarItem('&lt;/&gt;', 'Code block', '```', 'Ctrl+Shift+C',
+                    self._toggle_code_block, None, True, boxed=True),
+            BarItem('—', 'Divider', '---', '', self._insert_divider,
+                    None, True),
+            BarItem('▸', 'Expand', '', '', self._insert_section, None, True),
+            # Not inside a table: it would join that table.
+            BarItem('⊞', 'Table', '', '', self._insert_table, None,
+                    self._cursor_table_cell() is None),
+            BarItem('🖼', 'Image…', '', 'Ctrl+V',
+                    self._choose_and_insert_image, None, True),
+        ]
+
+    def _popup_bar_menu(self, button, items):
+        """Open a menu of items above a button of the bottom bar. Each row
+        shows the item's icon and name, the Markdown that typing makes it
+        from, and its shortcut, in columns. A menu is a window of its own, so
+        it may be larger than the note."""
+        menu = Gtk.Menu()
+        # A format that is on has its icon lit, as the bar buttons are, not a
+        # check mark, whose column would push every row of the menu right.
+        menu.set_reserve_toggle_size(False)
+        icons = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+        names = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+        hints = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+        for entry in items:
+            label, hint, keys = entry.label, entry.hint, entry.keys
+            item = Gtk.MenuItem()
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+            icon = Gtk.Label()
+            icon.set_markup(entry.icon)
+            icon.get_style_context().add_class('menu-icon')
+            # The icon hugs its text, so a box drawn around it fits it, and
+            # its column is as wide as the widest icon.
+            icon.set_halign(Gtk.Align.CENTER)
+            icon_cell = Gtk.Box()
+            icon_cell.set_center_widget(icon)
+            icons.add_widget(icon_cell)
+            if entry.boxed:
+                icon.get_style_context().add_class('boxed')
+            if entry.active:
+                icon.get_style_context().add_class('on')
+            row.pack_start(icon_cell, False, False, 0)
+            name = Gtk.Label(label=label, xalign=0)
+            names.add_widget(name)
+            row.pack_start(name, False, False, 0)
+            typed = Gtk.Label(xalign=0)
+            # What is typed as it is, in <tt>: the note's font joins dashes.
+            typed.set_markup(f'<tt>{GLib.markup_escape_text(hint)}</tt>')
+            hints.add_widget(typed)
+            row.pack_start(typed, False, False, 0)
+            shortcut = Gtk.Label(label=keys, xalign=1)
+            row.pack_end(shortcut, False, False, 0)
+            for dim in (typed, shortcut):
+                dim.get_style_context().add_class('dim-label')
+            item.add(row)
+            item.set_sensitive(entry.sensitive)
+            item.connect('activate', lambda _, act=entry.action: act())
+            menu.append(item)
+        menu.show_all()
+        # Kept until the next one opens, so it is not freed while shown.
+        self._bar_menu = menu
+        menu.popup_at_widget(button, Gdk.Gravity.NORTH_WEST,
+                             Gdk.Gravity.SOUTH_WEST, None)
 
     @staticmethod
     def _drop_extra_separators(menu):
@@ -3559,7 +4969,7 @@ class NoteWindow(Gtk.ApplicationWindow):
 
     def _on_tv_popup(self, _, menu):
         # Select All is not worth a place in the menu (Ctrl+A does it), and
-        # Insert Emoji moves to the top, above the other Insert items.
+        # Insert Emoji moves to the top, above Undo.
         emoji_item = None
         for item in menu.get_children():
             if not isinstance(item, Gtk.MenuItem):
@@ -3582,25 +4992,38 @@ class NoteWindow(Gtk.ApplicationWindow):
         search_item = Gtk.MenuItem(label='Search  (Ctrl+F)')
         search_item.connect('activate', lambda _: self._toggle_search())
 
-        image_item = Gtk.MenuItem(label='Insert Image')
-        image_item.connect('activate', lambda _: self._choose_and_insert_image())
+        # Elements are inserted from the Insert button. A table's own items
+        # act on the cell clicked, so they are here.
+        table_items = []
+        if self._cursor_table_cell() is not None:
+            line = self.tv.get_buffer().get_iter_at_mark(
+                self.tv.get_buffer().get_insert()).get_line()
+            for label, callback in (
+                    ('Add Row  (Enter)', lambda: self._add_table_row(line)),
+                    ('Add Column', self._add_table_column),
+                    ('Delete Row', lambda: self._delete_table_rows(line, line)),
+                    ('Delete Column', self._delete_table_column),
+                    ('Delete Table',
+                     lambda: self._delete_table_rows(*self._table_bounds(line)))):
+                item = Gtk.MenuItem(label=label)
+                item.connect('activate', lambda _, cb=callback: cb())
+                table_items.append(item)
 
-        divider_item = Gtk.MenuItem(label='Insert Divider  (---)')
-        divider_item.connect('activate', lambda _: self._insert_divider())
-
-        # Each prepend goes above the last, so this reads bottom to top: the
-        # Insert items first, Insert Emoji at the very top, then Undo and
-        # Redo, then Search.
+        # Each prepend goes above the last, so this reads bottom to top:
+        # Insert Emoji first, then Undo and Redo, then Search. In a table,
+        # its items go above them all.
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(search_item)
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(redo_item)
         menu.prepend(undo_item)
-        menu.prepend(Gtk.SeparatorMenuItem())
-        menu.prepend(divider_item)
-        menu.prepend(image_item)
         if emoji_item is not None:
+            menu.prepend(Gtk.SeparatorMenuItem())
             menu.prepend(emoji_item)
+        if table_items:
+            menu.prepend(Gtk.SeparatorMenuItem())
+            for item in reversed(table_items):
+                menu.prepend(item)
 
         menu.show_all()
 
@@ -3928,6 +5351,8 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._emoji_tag.set_property('scale', self._emoji_scale())
         if hasattr(self, '_code_tag'):
             self._refresh_code_spacing()
+            # Columns are as wide as their text in the new size.
+            self._queue_code_margins()
 
     def _refresh_code_spacing(self):
         """Size the boxes around code and the room around them from the font.
@@ -4004,6 +5429,15 @@ class NoteWindow(Gtk.ApplicationWindow):
         tv.set_pixels_above_lines(above)
         tv.set_pixels_below_lines(total - above)
         tv.set_pixels_inside_wrap(total)
+        below = total - above
+        self._table_row_tag.set_property('pixels-above-lines',
+                                         above + TABLE_PAD_Y)
+        self._table_row_tag.set_property('pixels-below-lines',
+                                         below + TABLE_PAD_Y)
+        self._table_top_tag.set_property(
+            'pixels-above-lines', above + TABLE_PAD_Y + TABLE_MARGIN)
+        self._table_bottom_tag.set_property(
+            'pixels-below-lines', below + TABLE_PAD_Y + TABLE_MARGIN)
 
         # What _even_lines() works from. The fonts are measured again when the
         # size changes, so what was measured is forgotten.
@@ -4024,6 +5458,7 @@ class NoteWindow(Gtk.ApplicationWindow):
         # them is where it was.
         size = self._font_size
         self._marker_metrics = {}
+        self._marker_widths = {}
         for marker in LIST_MARKERS:
             ascent, descent = self._line_extent(body, marker[0])
             scale = max(0.4, min(
@@ -4034,8 +5469,8 @@ class NoteWindow(Gtk.ApplicationWindow):
             # What it adds to a line, whatever else is in it.
             self._marker_metrics[marker[0]] = self._line_extent(
                 fitted, marker[0])
-            drawn = (BULLET_SIZE if marker == BULLET_MARKER
-                     else CHECKBOX_SIZE) * size
+            drawn = {BULLET_MARKER: BULLET_SIZE, QUOTE_MARKER: QUOTE_BAR}.get(
+                marker, CHECKBOX_SIZE) * size
             width = max(self._text_width(body, marker),
                         drawn + 1 + MARKER_GAP * size)
             # Pango does not add all the spacing it is asked for, so it is
@@ -4049,6 +5484,10 @@ class NoteWindow(Gtk.ApplicationWindow):
             tag = self._marker_tags[marker[0]]
             tag.set_property('scale', scale)
             tag.set_property('letter-spacing', round(spread * Pango.SCALE))
+            self._marker_widths[marker[0]] = width
+        if hasattr(self, '_quote_hang_tag'):
+            self._refresh_quote_hang()
+        self._refresh_expand_tags()
 
         # A tab indents a list item by INDENT_SPACES spaces of the note's
         # font, and in code runs to the next stop of 8 characters, as
@@ -4057,6 +5496,13 @@ class NoteWindow(Gtk.ApplicationWindow):
             self._text_width(body, ' ' * INDENT_SPACES)))
         self._code_tag.set_property('tabs', self._tab_stops(
             self._text_width(code, ' ' * 8)))
+
+    def _refresh_quote_hang(self):
+        # The first row starts at the margin, where the bar is, and the rows
+        # after it as far in as the marker is wide: Pango indents every row
+        # but the first by a negative indent.
+        width = round(self._marker_widths[QUOTE_MARKER[0]])
+        self._quote_hang_tag.set_property('indent', -width)
 
     @staticmethod
     def _tab_stops(width):

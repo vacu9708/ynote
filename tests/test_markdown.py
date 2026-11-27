@@ -115,3 +115,69 @@ def test_a_list_or_code_pasted_after_text_starts_a_line_of_its_own():
     fitted = fit_between(code, 'x', 'y')
     assert fitted['text'] == '\nls\n'
     assert spans(fitted, 'code') == ['ls']
+
+
+TABLE_MARKER = '⁣'
+
+
+def test_a_table_becomes_a_markdown_table_with_its_header():
+    st = state(f'{TABLE_MARKER}Name\tAge\n{TABLE_MARKER}a|b\t3',
+               bold=[[1, 5]])
+
+    assert to_markdown(st) == ('| **Name** | Age |\n| --- | --- |\n'
+                               '| a\\|b | 3 |')
+
+
+def test_text_right_under_a_table_gets_a_blank_line():
+    st = state(f'{TABLE_MARKER}a\tb\nafter')
+
+    assert to_markdown(st) == '| a | b |\n| --- | --- |\n\nafter'
+
+
+def test_a_markdown_table_becomes_rows_of_tab_separated_cells():
+    st = from_markdown('| a | b |\n|:--|--:|\n| `x\\|y` | **z** |\n| only |')
+
+    assert st['text'] == (f'{TABLE_MARKER}a\tb\n'
+                          f'{TABLE_MARKER}{PAD}x|y{PAD}\tz\n'
+                          f'{TABLE_MARKER}only\t')
+    assert spans(st, 'bold') == ['z']
+    assert spans(st, 'backtick') == [f'{PAD}x|y{PAD}']
+
+
+def test_pipes_without_a_delimiter_row_are_not_a_table():
+    assert from_markdown('a | b\nc | d')['text'] == 'a | b\nc | d'
+
+
+def test_a_table_ends_at_a_line_without_a_pipe():
+    st = from_markdown('a | b\n--- | ---\n1 | 2\n\ntext')
+
+    assert st['text'] == f'{TABLE_MARKER}a\tb\n{TABLE_MARKER}1\t2\n\ntext'
+
+
+def test_a_pasted_table_starts_and_ends_a_line_of_its_own():
+    st = fit_between(from_markdown('| a |\n| - |'), 'text ', ' more')
+
+    assert st['text'] == f'\n{TABLE_MARKER}a\n'
+
+
+QUOTE = '\u258d '
+
+
+def test_a_quote_becomes_a_markdown_quote_and_back():
+    st = state(f'{QUOTE}stay calm\nthen')
+
+    assert to_markdown(st) == '> stay calm\nthen'
+    assert from_markdown('> stay **calm**\n>\nthen')['text'] == (
+        f'{QUOTE}stay calm\n{QUOTE}\nthen')
+
+
+OPEN, END = '▾ ', '⁤'
+
+
+def test_a_section_becomes_details_and_back_without_extra_lines():
+    text = f'{OPEN}Test info\nrun it\n{END}\nafter'
+    md = to_markdown(state(text))
+
+    assert md == ('<details open>\n<summary>Test info</summary>\n\nrun it\n\n'
+                  '</details>\nafter')
+    assert from_markdown(md)['text'] == text

@@ -40,6 +40,18 @@ LINE_SPACING = 3
 BULLET_SIZE = 0.42
 CHECKBOX_SIZE = 0.86
 MARKER_GAP = 0.30
+# A quote's bar, as wide as this many em, runs down the whole line.
+QUOTE_BAR = 0.2
+# An open expand is a box with rounded corners around its title and content,
+# with this room in pixels inside it and outside above and below it. Its title
+# is set smaller than the text, at this scale.
+EXPAND_PAD = 6
+EXPAND_MARGIN = 4
+EXPAND_TITLE_SCALE = 0.9
+# The chevron of an expand's title is a button, with this room in pixels
+# around the chevron, and this room in em between the button and the title.
+EXPAND_BUTTON_PAD = 7
+EXPAND_GAP = 0.3
 
 # Inline code and code blocks share a monospace font, a filled box, and a thin
 # outline, so each reads as a unit on every note color.
@@ -67,6 +79,14 @@ CODE_BLOCK_MARGIN = 4
 # it, since monospace fonts differ in how large they look at the same size.
 # Inline code is raised a little to sit centered in its box.
 INLINE_CODE_RISE = 1
+
+# A table cell keeps this room in pixels between its text and its lines, on
+# the sides and above and below, and the table this room from the lines
+# around it. An empty column is this many em wide, so it can be clicked.
+TABLE_PAD = 6
+TABLE_PAD_Y = 3
+TABLE_MARGIN = 4
+TABLE_MIN_COLUMN = 2
 
 # A heading is told from body text by its size, its weight, and a serif face,
 # which sets it apart from the sans body font even at the same size.
@@ -170,8 +190,21 @@ box.hdr button.pin-top {
     border-radius: 14px;
     font-size: 18px;
 }
-/* The code block button is the inline code icon inside a box. */
-box.btmbar button label.boxed {
+/* The icons of the Format and Insert menus, as large as the menu's text. */
+menuitem label.menu-icon {
+    font-size: 15px;
+    min-width: 20px;
+    padding: 0 2px;
+    border-radius: 4px;
+    color: #333;
+}
+/* A format that is on at the cursor. */
+menuitem label.menu-icon.on {
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+}
+/* The code block icon is the inline code icon inside a box. */
+box.btmbar button label.boxed, menuitem label.boxed {
     border: 1px solid #333;
     border-radius: 3px;
     padding: 1px 2px;

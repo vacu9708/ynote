@@ -34,11 +34,31 @@ DIVIDER_TEXT = '---'
 BULLET_MARKER = '• '
 CHECKBOX_MARKER = '\u2610 '        # ☐, an open to-do
 CHECKED_MARKER = '\u2611 '         # ☑, a done to-do
+# A quote is a marker too, so it works like a list item: Enter continues it
+# and an empty one ends it. As text, a bar before the line reads as a quote.
+QUOTE_MARKER = '\u258d '          # ▍
+
+# A section that folds away: its title line starts with one of these, open or
+# folded, and a line holding only EXPAND_END ends it. What is between them is
+# its content, of any kind. Sections can be inside sections.
+EXPAND_OPEN = '\u25be '           # ▾
+EXPAND_CLOSED = '\u25b8 '         # ▸
+EXPAND_END = '\u2064'
+
+# A line that starts with this invisible character is a row of a table, and
+# its cells are separated by tabs. Like a list marker it is text, so a table
+# is saved, undone, and copied between notes as its text. Consecutive rows are
+# one table, and the first of them is its header.
+TABLE_MARKER = '\u2063'
 
 # Shown for a note without a title. Kept apart from NEW_NOTE_LABEL, the action
 # that creates a note, so renaming one never changes the other.
 UNTITLED_LABEL = 'Untitled'
 NEW_NOTE_LABEL = 'New Note'
+
+# The width and height of a new note, which is square, unless its bottom bar
+# needs it wider.
+NEW_NOTE_SIDE = 260
 
 
 def display_path(path):

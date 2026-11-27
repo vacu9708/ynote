@@ -6,25 +6,30 @@ Markdown, so search, undo and the editor see the text as it is shown. These
 functions convert between that and Markdown at the clipboard only. They take
 and give a rich state as NoteWindow uses it for its own clipboard: 'text' and
 the 'bold', 'heading', 'code' (code block lines) and 'backtick' (inline code)
-ranges, as [start, end] offsets into the text.
+ranges, as [start, end] offsets into the text. A table is in the text itself:
+each row starts with TABLE_MARKER and has its cells separated by tabs. So is a
+section that folds away, which is HTML's <details> in Markdown.
 """
 import re
 
 from .config import (
     BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, CODE_ANCHOR, CODE_PAD_CHAR,
-    DIVIDER_TEXT, IMAGE_ANCHOR,
+    EXPAND_CLOSED, EXPAND_END, EXPAND_OPEN, QUOTE_MARKER,
+    DIVIDER_TEXT, IMAGE_ANCHOR, TABLE_MARKER,
 )
 
 MARKDOWN_MARKERS = {
     BULLET_MARKER: '- ',
     CHECKBOX_MARKER: '- [ ] ',
     CHECKED_MARKER: '- [x] ',
+    QUOTE_MARKER: '> ',
 }
 # A level of a nested list in Markdown, as GitHub writes it.
 MARKDOWN_INDENT = '  '
 FENCE = '```'
 
-_INVISIBLE = {CODE_ANCHOR: '', CODE_PAD_CHAR: '', IMAGE_ANCHOR: ''}
+_INVISIBLE = {CODE_ANCHOR: '', CODE_PAD_CHAR: '', IMAGE_ANCHOR: '',
+              TABLE_MARKER: '', EXPAND_END: ''}
 
 
 def _clean(text):
@@ -98,6 +103,21 @@ def _list_parts(line):
     return None
 
 
+def _table_row(text, start, end, bold, inline, columns):
+    """One row of a table, the text from start to end, as a Markdown row of
+    `columns` cells."""
+    cells = []
+    cell_start = start + len(TABLE_MARKER)
+    for cell in text[cell_start:end].split('\t'):
+        cell_end = cell_start + len(cell)
+        body = _inline(cell, bold[cell_start:cell_end],
+                       inline[cell_start:cell_end]).strip()
+        cells.append(body.replace('|', '\\|'))
+        cell_start = cell_end + 1
+    cells += [''] * (columns - len(cells))
+    return '| ' + ' | '.join(cells) + ' |'
+
+
 def to_markdown(state):
     """The state's text as Markdown."""
     text = state.get('text', '')
@@ -106,18 +126,68 @@ def to_markdown(state):
     block = _flags(len(text), state.get('code', []))
     inline = _flags(len(text), state.get('backtick', []))
 
+    lines = text.split('\n')
+    starts = []
+    offset = 0
+    for line in lines:
+        starts.append(offset)
+        offset += len(line) + 1
+
+    def is_row(n):
+        start = starts[n]
+        end = start + len(lines[n])
+        return (lines[n].startswith(TABLE_MARKER)
+                and not all(block[start:end]))
+
     out = []
     in_block = False
-    offset = 0
-    for line in text.split('\n'):
-        start, end = offset, offset + len(line)
-        offset = end + 1
+    table_columns = None   # inside a table, how many columns it has
+    for number, line in enumerate(lines):
+        start = starts[number]
+        end = start + len(line)
         is_block = end > start and all(block[start:end])
         if is_block != in_block:
             out.append(FENCE)
             in_block = is_block
         if is_block:
+            table_columns = None
             out.append(_clean(line))
+            continue
+
+        if is_row(number):
+            header = table_columns is None
+            if header:
+                last = number
+                while last + 1 < len(lines) and is_row(last + 1):
+                    last += 1
+                table_columns = max(lines[n].count('\t') + 1
+                                    for n in range(number, last + 1))
+            out.append(_table_row(text, start, end, bold, inline,
+                                  table_columns))
+            if header:
+                out.append('| ' + ' | '.join(['---'] * table_columns) + ' |')
+            continue
+        if table_columns is not None:
+            table_columns = None
+            # Text right under a table would be read as one more row.
+            if line.strip():
+                out.append('')
+
+        # A section: GitHub reads Markdown inside <details> only after a
+        # blank line, and ends it at a blank line before </details>.
+        for marker, tag in ((EXPAND_OPEN, '<details open>'),
+                            (EXPAND_CLOSED, '<details>')):
+            if line.startswith(marker):
+                body = start + len(marker)
+                title = _inline(text[body:end], bold[body:end],
+                                inline[body:end]).strip()
+                out.extend([tag, f'<summary>{title}</summary>', ''])
+                break
+        else:
+            if line == EXPAND_END:
+                out.extend(['', '</details>'])
+                continue
+        if line.startswith((EXPAND_OPEN, EXPAND_CLOSED)):
             continue
 
         if line == DIVIDER_TEXT:
@@ -151,12 +221,18 @@ def to_markdown(state):
 _FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')
 _HEADING_RE = re.compile(r'^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$')
 _BREAK_RE = re.compile(r'^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$')
+_DETAILS_RE = re.compile(
+    r'^\s*<details(\s+open)?\s*>\s*(?:<summary>(.*?)</summary>)?\s*$', re.I)
+_SUMMARY_RE = re.compile(r'^\s*<summary>(.*?)</summary>\s*$', re.I)
+_DETAILS_END_RE = re.compile(r'^\s*</details>\s*$', re.I)
+_QUOTE_RE = re.compile(r'^ {0,3}>[ \t]?(.*)$')
 _ITEM_RE = re.compile(r'^([ \t]*)[-*+][ \t]+(?:\[([ xX])\][ \t]+)?(.*)$')
 # Only **: __ would take apart names like __init__ in pasted text.
 _BOLD_RE = re.compile(r'\*\*(?=\S)(.+?)(?<=\S)\*\*')
 _LINK_RE = re.compile(r'!?\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)')
 _AUTOLINK_RE = re.compile(r'<((?:https?|ftp|file)://[^>\s]+)>')
 _ESCAPE_RE = re.compile(r'\\([!-/:-@\[-`{-~])')
+_DELIMITER_CELL_RE = re.compile(r'^:?-+:?$')
 
 
 class _Builder:
@@ -226,13 +302,143 @@ def _add_inline(builder, text, allow_bold=True):
         builder.add(_plain(piece[pos:]))
 
 
+def _table_cells(line):
+    """The cells of a Markdown table row, or None for a line that is not
+    one. An escaped pipe is a pipe in a cell, also in code."""
+    if '|' not in line or line.startswith('    '):
+        return None
+    row = line.strip()
+    if row.startswith('|'):
+        row = row[1:]
+    if row.endswith('|') and not row.endswith('\\|'):
+        row = row[:-1]
+    cells, cell, i = [], [], 0
+    while i < len(row):
+        if row[i] == '\\' and i + 1 < len(row):
+            cell.append('|' if row[i + 1] == '|' else row[i:i + 2])
+            i += 2
+            continue
+        if row[i] == '|':
+            cells.append(''.join(cell))
+            cell = []
+        else:
+            cell.append(row[i])
+        i += 1
+    cells.append(''.join(cell))
+    # A cell is one line of a note's table, where a tab is between cells.
+    return [c.strip().replace('\t', ' ') for c in cells]
+
+
+def _table_columns(lines, at):
+    """How many columns the table starting at lines[at] has: its header row
+    and the delimiter row under it agree. None when no table starts there."""
+    if at + 1 >= len(lines):
+        return None
+    header, delimiter = _table_cells(lines[at]), _table_cells(lines[at + 1])
+    if (header is None or delimiter is None
+            or len(header) != len(delimiter)
+            or not all(_DELIMITER_CELL_RE.match(c) for c in delimiter)):
+        return None
+    return len(header)
+
+
+def _add_table_row(builder, cells, columns):
+    cells = (cells + [''] * columns)[:columns]
+    builder.add(TABLE_MARKER)
+    for index, cell in enumerate(cells):
+        if index:
+            builder.add('\t')
+        _add_inline(builder, cell)
+
+
+def _sections(lines):
+    """The lines with each <details> block made a title line, its summary
+    in it, and an end line, without the blank lines that only Markdown needs
+    around a block's content. Code fences are left as they are."""
+    out = []
+    fence = None
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = _FENCE_RE.match(line)
+        if fence is not None or m:
+            if fence is None:
+                fence = m.group(1)
+            elif (line.strip() and not line.strip().lstrip(fence[0])
+                  and len(line.strip()) >= len(fence)):
+                fence = None
+            out.append(line)
+            i += 1
+            continue
+        m = _DETAILS_RE.match(line)
+        if m:
+            title = m.group(2)
+            if title is None and i + 1 < len(lines):
+                summary = _SUMMARY_RE.match(lines[i + 1])
+                if summary:
+                    title = summary.group(1)
+                    i += 1
+            marker = EXPAND_OPEN if m.group(1) else EXPAND_CLOSED
+            out.append(('section', marker, title or ''))
+            i += 1
+            if i < len(lines) and not lines[i].strip():
+                i += 1
+            continue
+        if _DETAILS_END_RE.match(line):
+            if out and out[-1] == '':
+                out.pop()
+            out.append(('end',))
+            i += 1
+            continue
+        out.append(line)
+        i += 1
+    return out
+
+
 def from_markdown(text):
     """A state for Markdown text, ready to paste into a note."""
     builder = _Builder()
     fence = None
     levels = []   # the indents of the list items open, one per level
     first = True
-    for line in text.replace('\r\n', '\n').split('\n'):
+    lines = _sections(text.replace('\r\n', '\n').split('\n'))
+    table_columns = None   # inside a table, how many columns it has
+    skip_delimiter = False
+    for number, line in enumerate(lines):
+        if skip_delimiter:
+            skip_delimiter = False
+            continue
+        if isinstance(line, tuple):
+            table_columns = None
+            levels = []
+            if not first:
+                builder.add('\n')
+            first = False
+            if line[0] == 'end':
+                builder.add(EXPAND_END)
+            else:
+                builder.add(line[1])
+                _add_inline(builder, line[2])
+            continue
+        if table_columns is not None:
+            cells = _table_cells(line) if line.strip() else None
+            if cells is None:
+                table_columns = None
+            else:
+                builder.add('\n')
+                _add_table_row(builder, cells, table_columns)
+                continue
+        if fence is None:
+            columns = _table_columns(lines, number)
+            if columns is not None:
+                if not first:
+                    builder.add('\n')
+                first = False
+                _add_table_row(builder, _table_cells(line), columns)
+                table_columns = columns
+                skip_delimiter = True
+                levels = []
+                continue
         # A fence line leaves no line of its own.
         if fence is not None:
             if line.strip() and not line.strip().lstrip(fence[0]) \
@@ -265,6 +471,12 @@ def from_markdown(text):
                 builder.ranges['heading'].append([start, builder.length])
             levels = []
             continue
+        m = _QUOTE_RE.match(line)
+        if m:
+            builder.add(QUOTE_MARKER)
+            _add_inline(builder, m.group(1))
+            levels = []
+            continue
         m = _ITEM_RE.match(line)
         if m:
             indent = len(m.group(1).expandtabs(4))
@@ -292,7 +504,8 @@ def _line_kinds(state):
 
     def whole(start, end):
         line = text[start:end]
-        return (line == DIVIDER_TEXT or (end > start and (
+        return (line == DIVIDER_TEXT or line.startswith(TABLE_MARKER)
+                or (end > start and (
             all(heading[start:end]) or all(block[start:end]))))
     first_end = text.find('\n') if '\n' in text else len(text)
     last_start = text.rfind('\n') + 1

@@ -1,7 +1,9 @@
 """The Help window: the shortcuts and gestures nothing on screen shows.
 
-What a button tells on hover, such as Bold and Ctrl+B, or a link's tooltip, is
-left out, so the list stays short enough to read at a glance.
+What the screen already tells is left out, so the list stays short enough to
+read at a glance: a button's tooltip, a link's tooltip, and what the Format and
+Insert menus show beside each item, its shortcut and the Markdown that typing
+makes it from, such as **text** or ```.
 """
 import gi
 gi.require_version('Gtk', '3.0')
@@ -11,14 +13,22 @@ from gi.repository import GLib, Gtk
 # markup, so what is typed as it is shows in <tt>: the note's font joins
 # dashes into one.
 HELP = [
-    ('Typing', [
-        ('<tt>-</tt> or <tt>[ ]</tt> then Space',
-         'Start a bullet or a checklist'),
-        ('<tt>---</tt> alone on a line', 'Insert a divider'),
-        ('<tt>`text`</tt>', 'Make inline code'),
+    ('Lists', [
         ('Tab / Shift+Tab', 'Indent or outdent list items, also every '
                             'selected one'),
         ('Ctrl+Enter', 'Check or uncheck the to-dos on the selected lines'),
+    ]),
+    ('Expand', [
+        ('Ctrl+Enter on the title', 'Fold or open it'),
+        ('Enter on its empty last line', 'Go on writing below it'),
+        ('Backspace at the title\'s start',
+         'Take the expand away and keep what it holds'),
+    ]),
+    ('Tables', [
+        ('Tab / Shift+Tab', 'Go to the next or previous cell, and add a row '
+                            'after the last one'),
+        ('Enter', 'Add a row, or end the table on an empty last row'),
+        ('Right-click a cell', 'Add or delete rows and columns'),
     ]),
     ('Mouse', [
         ('Double-click in a code block', 'Select one command'),

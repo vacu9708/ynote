@@ -101,6 +101,9 @@ class StubNote:
     def first_text(self):
         return self.text
 
+    def set_hidden_count(self, count):
+        self.hidden_count = count
+
 
 def make_app(notes=None):
     app = PostItApp.__new__(PostItApp)
@@ -145,6 +148,16 @@ def test_menu_with_one_open_note_and_no_hidden_ones_is_short():
     assert labels(app._indicator.menu) == [
         'Open Notes', '\u2022 Alpha', '---', 'New Note',
         'Bring All to Front', 'Quit']
+
+
+def test_every_note_shows_how_many_notes_are_hidden():
+    notes = {'a': StubNote('Alpha'), 'b': StubNote('Beta', visible=False),
+             'c': StubNote('Gamma', visible=False)}
+    app = make_app(notes)
+
+    app._rebuild_indicator_menu()
+
+    assert [n.hidden_count for n in notes.values()] == [2, 2, 2]
 
 
 def test_menu_without_open_notes_has_no_header_or_separator():

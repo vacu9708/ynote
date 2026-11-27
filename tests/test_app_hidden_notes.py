@@ -164,7 +164,7 @@ def _start(monkeypatch, notes_file):
     app._work_areas = lambda: ([], None)
     app._rebuild_indicator_menu = lambda: None
     app._cleanup_orphaned_images = lambda *a, **k: None
-    app.new_note = lambda: None
+    app.new_note = lambda **_: None
     app._load()
     return app
 
@@ -262,3 +262,54 @@ def test_saving_records_where_each_note_is_in_the_stack(monkeypatch):
 
     assert written == [[{'id': 'b', 'stack': 0}, {'id': 't', 'stack': 1},
                         {'id': 'h', 'stack': -1}]]
+
+
+
+def starting_app(notes):
+    app = make_app(notes)
+    app.calls = []
+    app._stacking_order = lambda: [
+        w for w in notes.values() if w.get_visible()]
+    # The pointer centers a window of any size at (500, 400).
+    app._at_pointer = lambda size: (500 - size[0] // 2, 400 - size[1] // 2)
+    app.new_note = lambda near=None, at_pointer=False: app.calls.append(
+        ('new', at_pointer))
+    app.show_note = lambda note_id: app.calls.append(('show', note_id))
+    app.show_hidden_notes_manager = (
+        lambda parent_note=None, from_tray=False, at=None:
+        app.calls.append(('list', at)))
+    return app
+
+
+class PlacedNote(StubNote):
+    def get_size(self):
+        return 200, 100
+
+    def move(self, x, y):
+        self.moved_to = (x, y)
+
+
+def test_starting_with_no_notes_at_all_makes_a_new_note():
+    app = starting_app({})
+
+    app.do_activate()
+
+    assert app.calls == [('new', True)]
+
+
+def test_starting_with_one_note_hidden_and_none_shown_shows_it():
+    note = PlacedNote('Beta')
+    app = starting_app({'b': note})
+
+    app.do_activate()
+
+    assert app.calls == [('show', 'b')]
+    assert note.moved_to == (400, 350)
+
+
+def test_starting_with_notes_hidden_and_none_shown_lists_them():
+    app = starting_app({'b': StubNote('Beta'), 'c': StubNote('Gamma')})
+
+    app.do_activate()
+
+    assert app.calls == [('list', (320, 250))]

@@ -19,6 +19,9 @@ class FakeTextView:
     def get_buffer(self):
         return self._buf
 
+    def scroll_mark_onscreen(self, mark):
+        pass
+
 
 def make_window(text, cursor=0):
     buf = Gtk.TextBuffer()

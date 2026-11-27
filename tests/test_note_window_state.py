@@ -16,6 +16,9 @@ class FakeTextView:
     def get_buffer(self):
         return self._buf
 
+    def scroll_mark_onscreen(self, mark):
+        pass
+
 
 def make_window(position=(100, 50), size=(300, 320)):
     win = NoteWindow.__new__(NoteWindow)
@@ -217,12 +220,12 @@ def popup_labels(items):
             for item in menu.get_children()]
 
 
-def test_text_menu_puts_emoji_then_the_insert_items_first_and_drops_select_all():
+def test_text_menu_puts_emoji_first_and_drops_select_all():
     labels = popup_labels(['_Cut', '_Copy', '_Paste', '_Delete', '-',
                            'Select _All', '-', 'Insert _Emoji'])
 
     assert labels == [
-        'Insert _Emoji', 'Insert Image', 'Insert Divider  (---)', '-',
+        'Insert _Emoji', '-',
         'Undo  (Ctrl+Z)', 'Redo  (Ctrl+Shift+Z)', '-',
         'Search  (Ctrl+F)', '-',
         '_Cut', '_Copy', '_Paste', '_Delete']

@@ -18,8 +18,9 @@ Ynote runs on Debian- and Ubuntu-based Linux desktops with GTK 3 and Python
 - **Hidden notes** you don't need on screen, which **All notes** search still
   finds
 - **Code blocks** you can copy one command at a time
-- **Checklists, bullet lists, bold text, headings, dividers, links, inline
-  code** for paths and names, **emoji**, and **images**
+- **Checklists, bullet lists, quotes, tables, expands** that fold away,
+  **headings, bold text, dividers, links, inline code**, **emoji**, and
+  **images**
 - **Snapping** notes into half-screen columns with the keyboard
 
 ![A green note at 35% opacity over a terminal full of log lines, with its right-click popover open to show the color swatches, the opacity slider, and the font size buttons, and a collapsed note below it](assets/ynote-customize.png)
@@ -64,19 +65,19 @@ sudo apt remove ynote
 
 ## Good to know
 
-Buttons show their shortcut when you hover over them. These are the things the
-buttons don't show:
+Buttons and menus show their shortcuts and the Markdown you can type instead.
+These are the things they don't show:
 
 - **Right-click** the title bar or bottom bar for the note's color, opacity,
   font size, rename, and delete, and **Help**, a short list of the shortcuts
   below. Double-click the title bar to maximize.
-- Typing `- ` or `[ ] ` at the start of a line makes a bullet or a checklist,
-  `---` alone on a line makes a divider, and `` `text` `` becomes inline code.
-- `Tab` and `Shift+Tab` indent and outdent a list item, or every item on the
-  selected lines.
-- **B**, **H**, and `</>` light up while the text at the cursor is bold, a
-  heading, or inline code, and what you type next gets it. Enter turns them
-  off.
+- **Format** lights up while the text at the cursor is bold, a heading, or
+  inline code, and what you type next gets it. Enter turns it off.
+- `Tab` and `Shift+Tab` indent list items, every selected one too, or move
+  between table cells. In a table, Enter adds a row, and right-clicking a cell
+  adds or deletes rows and columns.
+- `Ctrl+Enter` checks the to-dos on the selected lines, or folds or opens an
+  expand from its title. Lines selected when you insert an expand go into it.
 - Copied text goes to other apps as Markdown, and Markdown pasted in keeps its
   formats. Code alone is copied, and pasted into code, as it is. `Ctrl+V` also
   pastes an image, and `Ctrl+Shift+V` pastes text without reading Markdown.
@@ -87,7 +88,8 @@ buttons don't show:
   up or down, or send it to a corner.
 - `Alt+` scroll over a note steps through your notes from the latest used, as
   `Alt+Tab` does, so notes stacked in one place come up one after another.
-- `✕` hides a note. Bring it back from `▤` or the tray icon's **Hidden Notes**.
+- `✕` hides a note, and the eye beside it lists hidden notes. Starting Ynote
+  with every note hidden opens them at the mouse pointer.
 - The tray icon's menu lists your open notes, so you can jump to one that is
   buried under other windows. **Bring All to Front** in it, or a middle click on
   the icon, raises them all. If your desktop shows no tray icon, such as GNOME

@@ -11,8 +11,9 @@ from gi.repository import Gtk, Gdk, GLib, Gio
 
 from . import autostart, focus, tray
 from .config import (
-    APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CODE_PAD_CHAR, CONF_DIR, ICON_PATH, IMAGES_DIR,
-    NEW_NOTE_LABEL, NOTES_FILE, SETTINGS_FILE, UNTITLED_LABEL, display_path,
+    APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CODE_PAD_CHAR, CONF_DIR, EXPAND_END,
+    ICON_PATH, IMAGES_DIR, NEW_NOTE_LABEL, NEW_NOTE_SIDE, NOTES_FILE,
+    SETTINGS_FILE, TABLE_MARKER, UNTITLED_LABEL, display_path,
 )
 from .images import (
     cleanup_orphaned_images,
@@ -22,7 +23,7 @@ from .images import (
 from .note_manager_window import HiddenNotesWindow
 from .note_window import NoteWindow
 from .search import Note
-from .snap import keep_reachable, place_beside
+from .snap import center_at, keep_reachable, place_beside
 from .storage import (
     UnreadableNotesError, back_up, load_notes, save_notes, set_aside,
 )
@@ -108,13 +109,14 @@ class PostItApp(Gtk.Application):
         autostart.set_enabled(AUTOSTART_FILE, enabled)
 
     def do_activate(self):
-        # From the bottom up, so the notes keep how they are stacked.
+        # Starting Ynote, also while it runs. From the bottom up, so the notes
+        # keep how they are stacked.
         visible = self._stacking_order()
         if visible:
             for w in visible:
                 w.present()
         else:
-            self.new_note()
+            self._open_with_none_shown()
 
     # ------------------------------------------------------------------ tray icon
 
@@ -170,6 +172,10 @@ class PostItApp(Gtk.Application):
         return False
 
     def _rebuild_indicator_menu(self):
+        # Called whenever a note is hidden, shown, made, or deleted.
+        hidden = sum(1 for w in self.notes.values() if not w.get_visible())
+        for w in self.notes.values():
+            w.set_hidden_count(hidden)
         if self._indicator is None:
             return
         # The indicator keeps the one menu it was given and follows its items,
@@ -249,7 +255,7 @@ class PostItApp(Gtk.Application):
             saved = None
             GLib.idle_add(self._warn_unreadable_notes, kept)
         if not saved:
-            self.new_note()
+            self.new_note(at_pointer=True)
             return
         areas, primary = self._work_areas()
         # Made from the bottom of the stack up, so the note that was on top
@@ -339,8 +345,8 @@ class PostItApp(Gtk.Application):
         index = monitors.index(primary) if primary in monitors else 0
         return areas, areas[index]
 
-    def new_note(self, near=None):
-        d = {'id': str(uuid.uuid4())}
+    def new_note(self, near=None, at_pointer=False):
+        d = {'id': str(uuid.uuid4()), 'w': NEW_NOTE_SIDE, 'h': NEW_NOTE_SIDE}
         if near is not None:
             d['x'], d['y'] = near.get_position()
         w = NoteWindow(self, d)
@@ -348,12 +354,18 @@ class PostItApp(Gtk.Application):
         # minimum width, so place it once that is known.
         size = w.get_size()
         natural = w.get_preferred_size()[1]
-        size = (max(size[0], natural.width), max(size[1], natural.height))
+        # A new note is square: as tall as it is wide.
+        side = max(size[0], natural.width, natural.height, NEW_NOTE_SIDE)
+        size = (side, side)
+        w.resize(side, side)
         areas, primary = self._work_areas()
+        pointer = self._at_pointer(size) if at_pointer else None
         if areas and near is not None:
             x, y = place_beside(near.get_position() + near.get_size(),
                                 size, areas)
             w.move(x, y)
+        elif pointer is not None:
+            w.move(*pointer)
         elif primary is not None:
             n = len(self.notes)
             ax, ay, aw, ah = primary
@@ -530,14 +542,48 @@ class PostItApp(Gtk.Application):
         for index, (_, note) in enumerate(notes):
             note.sort_order = float(index)
 
-    def show_hidden_notes_manager(self, parent_note=None, from_tray=False):
+    def _open_with_none_shown(self):
+        """Starting Ynote when no note is on screen: with no hidden note it
+        makes a new one, with one it shows it, and with more it lists them,
+        so a note is not made beside ones that are only hidden. Whichever it
+        is opens at the pointer, where the user is looking."""
+        hidden = self.hidden_notes()
+        if not hidden:
+            self.new_note(at_pointer=True)
+        elif len(hidden) == 1:
+            note_id, note = hidden[0]
+            at = self._at_pointer(note.get_size())
+            if at is not None:
+                note.move(*at)
+            self.show_note(note_id)
+        else:
+            self.show_hidden_notes_manager(
+                from_tray=True, at=self._at_pointer(HiddenNotesWindow.SIZE))
+
+    def _at_pointer(self, size):
+        """(x, y) that centers a window of size on the pointer, inside the
+        work area of the monitor it is on, or None when that is not known.
+        On Wayland an X11 app may only know where the pointer last was over
+        one of its windows."""
+        display = Gdk.Display.get_default()
+        seat = display.get_default_seat() if display is not None else None
+        areas, primary = self._work_areas()
+        if seat is None or not areas:
+            return None
+        _screen, x, y = seat.get_pointer().get_position()
+        return center_at((x, y), size, areas, primary)
+
+    def show_hidden_notes_manager(self, parent_note=None, from_tray=False,
+                                  at=None):
         if parent_note is None and not from_tray:
             parent_note = self._current_note
         if self._hidden_notes_window is None:
             self._hidden_notes_window = HiddenNotesWindow(self)
             self._hidden_notes_window.connect(
                 'destroy', lambda *_: self._clear_hidden_notes_manager())
-        if from_tray:
+        if at is not None:
+            self._hidden_notes_window.set_at(at)
+        elif from_tray:
             self._hidden_notes_window.set_from_tray()
         else:
             self._hidden_notes_window.set_parent_note(parent_note)
@@ -561,7 +607,8 @@ class PostItApp(Gtk.Application):
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         if text is None:
             text = state.get('text', '').replace(CODE_ANCHOR, '')
-            text = text.replace(CODE_PAD_CHAR, '')
+            text = text.replace(CODE_PAD_CHAR, '').replace(TABLE_MARKER, '')
+            text = text.replace(EXPAND_END, '')
         clipboard.set_text(text, -1)
         GLib.idle_add(self._finish_rich_clipboard_claim)
 

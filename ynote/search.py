@@ -6,7 +6,7 @@ into the note text, the same ones GtkTextBuffer uses.
 import re
 from collections import namedtuple
 
-from .config import CODE_ANCHOR, IMAGE_ANCHOR
+from .config import CODE_ANCHOR, EXPAND_END, IMAGE_ANCHOR, TABLE_MARKER
 
 Match = namedtuple('Match', 'note_id title hidden start end snippet')
 Note = namedtuple('Note', 'note_id title hidden text')
@@ -23,7 +23,9 @@ def snippet(text, start, end):
         line_end = len(text)
     cut = max(line_start, start - SNIPPET_LEAD)
     piece = text[cut:min(line_end, cut + SNIPPET_LENGTH)]
-    piece = piece.replace(IMAGE_ANCHOR, '').replace(CODE_ANCHOR, '').strip()
+    for char in (IMAGE_ANCHOR, CODE_ANCHOR, TABLE_MARKER, EXPAND_END):
+        piece = piece.replace(char, '')
+    piece = piece.replace('\t', ' ').strip()
     if cut > line_start:
         piece = '…' + piece
     if cut + SNIPPET_LENGTH < line_end:

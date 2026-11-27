@@ -39,6 +39,9 @@ def sample_note():
         '    ☐ a to-do with a 한글 word',
         '☑ a done to-do',
         inline,
+        # A table: rows start with the invisible TABLE_MARKER.
+        '\u2063Name\tAge',
+        '\u2063Kim 김영식\t31',
         '---',
         code,
         'last line',

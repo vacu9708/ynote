@@ -106,8 +106,10 @@ Some structure lives in the text itself:
 | --- | --- |
 | `U+FFFC` (`IMAGE_ANCHOR`) | Where an image is shown. |
 | `U+2060` (`CODE_ANCHOR`) | An invisible character that lets an empty line carry the code tag. It is stripped when text goes to the system clipboard, and tagged `invisible` by `_hide_code_anchors()` so that GTK leaves it out of the selection that middle click pastes and of a drag. Text read from the buffer therefore includes hidden characters. |
-| `• `, `☐ `, or `☑ ` at the start of a line | A bullet, an open to-do, or a done to-do. Each nesting level adds four leading spaces. |
+| `• `, `☐ `, `☑ `, or `▍ ` at the start of a line | A bullet, an open to-do, a done to-do, or a quote. Each nesting level adds a leading tab. |
 | A line that is exactly `---` | A divider. The dashes are hidden and `_draw_dividers()` paints a line over them. |
+| `▾ ` or `▸ ` at the start of a line, and a line holding only `U+2064` (`EXPAND_END`) | The title of an open or folded expand, and the end of the innermost expand open. Everything between them is what it holds. |
+| `U+2063` (`TABLE_MARKER`) at the start of a line | A row of a table, its cells separated by tabs. Rows next to each other are one table, and the first is its header. |
 
 Emoji sizing, dividers, grayed-out done to-dos, links, and search
 highlights are tags derived from the text while the app runs, and are never
@@ -173,6 +175,12 @@ sequenceDiagram
    so the kept notes' images survive. A note whose window fails to open is
    kept as it was read and saved back unchanged, with image cleanup skipped
    and a warning, so a bug in opening notes never deletes them.
+4. `do_activate()`, which also runs when Ynote is started while it runs,
+   brings the visible notes forward. When none is visible, it opens the one
+   hidden note, or the Hidden Notes window when more are hidden, or makes a
+   new note when none is. Each opens centered on the mouse pointer, inside
+   the work area of its monitor (`snap.center_at()`), as does the empty note
+   of a first start.
 
 ## Other mechanisms
 
@@ -186,6 +194,33 @@ sequenceDiagram
   as Markdown: search, undo, and the editor work on the text as shown, and
   Markdown is only how text crosses the clipboard. `Ctrl+Shift+V` pastes the
   text alone, and a backtick in it, or in any code, never starts inline code.
+- **Tables.** A row is text like a list item: its invisible `TABLE_MARKER`
+  is a marker (`_marker_end()`), so the cursor stays out of it and no format
+  covers it. A cell holds one line, so in a table Tab moves between cells,
+  Enter adds a row, and Backspace and Delete never take the tab between two
+  cells. `_normalize_tables()` gives every row as many cells as the widest
+  and takes out a marker that is not at a line's start. `_apply_tables()`,
+  run with the code margins, measures each column's widest cell with Pango
+  and gives each table a tag whose tab stops line its columns up, with no
+  wrapping, so a wide table scrolls like code. `_draw_tables()` draws the
+  lines and shades the header. On the clipboard a table is a GitHub-style
+  Markdown table.
+- **Expands.** An expand is a section of a note that folds away, a box with
+  a title as in Confluence. `sections.py` finds them in the text, as lists of
+  lines, and `_apply_sections()` hides a folded one's content and end line
+  with a derived `invisible` tag that also takes the line break, so a hidden
+  line takes no room. An open one's end line stays, set very small, as the
+  room at the bottom of its box, and the cursor skips it as it does a divider.
+  Its title and content get margins for how many expands deep they are, and
+  code boxes, tables, and dividers start at `_line_left()`, inside the box.
+  `_draw_sections()` draws the boxes and the chevrons over the title marks,
+  each a button that lights up under the pointer, which are text: folding replaces one with the other, so an expand is saved,
+  undone, and copied as text. `_normalize_sections()` removes an end that
+  ends nothing, ends an expand left open at the end of the note, and keeps a
+  line after the last end for the cursor. While a search highlights a match
+  in a folded expand, it is shown open without changing the note, and folds
+  again when the search closes. Choosing a match in the All notes list opens
+  it. On the clipboard an expand is HTML's `<details>`.
 - **Login autostart.** `autostart.enable_on_first_run()` writes
   `~/.config/autostart/ynote.desktop` once per user, and only when the
   `ynote` command is installed. The Start at Login menu item adds or removes
@@ -287,14 +322,22 @@ sequenceDiagram
   edit is done, because a line typed into a code block gets its tag after the
   buffer reports the change.
 - **Formats at the cursor.** Bold, inline code, and heading are each on or off
-  at the cursor, shown on the B, H, and `</>` buttons. `_sync_format_state()`
+  at the cursor, shown by the Format button, lit while any is on, and checked
+  in its menu. `_sync_format_state()`
   takes them from the text the cursor is attached to whenever it moves, also
-  when deleting text or undoing moves it, a button or shortcut toggles one, typed text gets the ones that are on
+  when deleting text or undoing moves it, a menu item or shortcut toggles one, typed text gets the ones that are on
   and none of the others, also inside a bold or code range, which splits it,
   and Enter turns them all off. `heading_ranges` cover whole lines, so on an empty
   line Heading applies to the text typed there next. A heading is already
-  bold, so in one B is off and disabled, and making a line a heading removes
-  its bold.
+  bold, so in one Bold is off and disabled, and making a line a heading
+  removes its bold.
+- **Format and Insert menus.** The bottom bar keeps one button for the formats
+  of text and one for the elements to insert, so it does not grow with each
+  new element. `_popup_bar_menu()` opens a `Gtk.Menu`, a window of its own,
+  so it can be larger than the note, whose rows show the item, the Markdown
+  typed for it, and its shortcut. What a row shows is true: typing `# `,
+  `**text**`, and ```` ``` ```` turns into a heading, bold text, and a code
+  block as typed, each its own undo step, like `- ` and `` `text` ``.
 - **Right-click popover.** A `Gtk.Popover` is drawn inside the window it is
   attached to, so one that does not fit the note, always the case for a
   collapsed note, is attached to a transparent window of its own.

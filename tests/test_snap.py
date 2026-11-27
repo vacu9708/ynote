@@ -1,4 +1,4 @@
-from ynote.snap import snap_rect
+from ynote.snap import center_at, snap_rect
 
 # Two 2000x800 work areas side by side, so columns are 1000 wide.
 LEFT_AREA = (0, 0, 2000, 800)
@@ -123,3 +123,16 @@ def test_keep_reachable_leaves_visible_notes_alone():
 def test_keep_reachable_pulls_in_a_note_whose_title_bar_is_off_screen():
     assert keep_reachable((5130, 0, 335, 300), DESK, TALL_L) == (2225, 0)
     assert keep_reachable((9000, 9000, 300, 300), DESK, TALL_L) == (2260, 1140)
+
+
+def test_center_at_centers_a_window_on_the_point():
+    areas = [(0, 0, 1920, 1080)]
+
+    assert center_at((960, 540), (200, 100), areas, areas[0]) == (860, 490)
+
+
+def test_center_at_keeps_the_window_inside_the_monitor_of_the_point():
+    areas = [(0, 0, 1920, 1080), (1920, 0, 1280, 1024)]
+
+    # Near the right monitor's top left, the window stays on that monitor.
+    assert center_at((1925, 5), (200, 100), areas, areas[0]) == (1920, 0)

@@ -6,6 +6,8 @@ from gi.repository import Gdk, Gtk
 class HiddenNotesWindow(Gtk.Window):
     NOTE_ID = 0
     LABEL = 1
+    # The width and height it opens at.
+    SIZE = (360, 300)
 
     def __init__(self, app):
         super().__init__(application=app, title='Hidden Notes')
@@ -13,7 +15,7 @@ class HiddenNotesWindow(Gtk.Window):
         self._parent_note = None
         self._position_mode = None
         self._did_initial_position = False
-        self.set_default_size(360, 300)
+        self.set_default_size(*self.SIZE)
         self.set_border_width(10)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -88,6 +90,14 @@ class HiddenNotesWindow(Gtk.Window):
         self._did_initial_position = False
         self.set_transient_for(None)
 
+    def set_at(self, position):
+        """Open with the top left corner at position, such as one centering
+        the window on the pointer."""
+        self._parent_note = None
+        self._position_mode = position
+        self._did_initial_position = False
+        self.set_transient_for(None)
+
     def refresh(self):
         selected_id = self._selected_note_id()
         self._store.clear()
@@ -115,6 +125,12 @@ class HiddenNotesWindow(Gtk.Window):
         if self._did_initial_position:
             return
 
+        if isinstance(self._position_mode, tuple):
+            self.resize(*self.SIZE)
+            self.move(*self._position_mode)
+            self._did_initial_position = True
+            return
+
         if self._position_mode == 'tray':
             # An application indicator has no position to open under, so the
             # window opens in the middle of the screen.
@@ -129,7 +145,7 @@ class HiddenNotesWindow(Gtk.Window):
         display = Gdk.Display.get_default()
         monitor = display.get_primary_monitor() or display.get_monitor(0)
         area = monitor.get_workarea()
-        width, height = 360, 300
+        width, height = self.SIZE
         self.resize(width, height)
         self.move(area.x + (area.width - width) // 2,
                   area.y + (area.height - height) // 2)
@@ -141,8 +157,9 @@ class HiddenNotesWindow(Gtk.Window):
 
         px, py = parent.get_position()
         pw, ph = parent.get_size()
-        self.resize(360, 300)
-        self.move(px + (pw - 360) // 2, py + (ph - 300) // 2)
+        width, height = self.SIZE
+        self.resize(width, height)
+        self.move(px + (pw - width) // 2, py + (ph - height) // 2)
         return True
 
     def _selected_note_id(self):
