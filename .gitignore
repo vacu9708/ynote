@@ -9,3 +9,6 @@ dist/
 venv/
 
 .DS_Store
+
+# Screenshots and logs of failed end-to-end tests.
+tests/e2e/out/

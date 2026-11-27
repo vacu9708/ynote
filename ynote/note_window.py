@@ -1025,6 +1025,9 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
             for dim in (typed, shortcut):
                 dim.get_style_context().add_class('dim-label')
             item.add(row)
+            # Its name for screen readers, and the end-to-end tests, is its
+            # label, not the icon its row starts with.
+            item.get_accessible().set_name(label)
             item.set_sensitive(entry.sensitive)
             item.connect('activate', lambda _, act=entry.action: act())
             menu.append(item)
