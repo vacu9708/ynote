@@ -390,7 +390,11 @@ sequenceDiagram
 ## Ynote 2.0
 
 Ynote 2.0 is being built beside 1.x, and runs only with `YNOTE_WEB` set
-(`config.WEB`), with its notes in `~/.config/ynote-web/`. The editor of 1.x,
+(`config.WEB`), with its notes in `notes-2.json` beside 1.x's `notes.json`:
+it starts from 1.x's notes, converted, and leaves that file to 1.x, which
+cannot read a 2.0 note. Each version keeps the images the other's file uses.
+Once 2.0 replaces 1.x, it saves `notes.json` and keeps the 1.x notes as
+`notes-old.json`. The editor of 1.x,
 a `Gtk.TextView` with structure drawn over it, gives way to ProseMirror, the
 editor Confluence's is built on, in a WebKit web view. The whole note is the
 web page: its title bar, bottom bar, menus, and editor, so they share one

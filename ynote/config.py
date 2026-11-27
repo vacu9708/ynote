@@ -4,10 +4,9 @@ import os
 APP_ID = 'io.github.youngsikyang.ynote'
 
 # Ynote 2.0 while it is built: notes drawn by a web view (web_note_window.py)
-# when YNOTE_WEB is set. It keeps its notes apart, in ~/.config/ynote-web,
-# which starts as a copy of the 1.x notes, and runs beside 1.x.
+# when YNOTE_WEB is set. It runs beside 1.x, so it has an app ID of its own,
+# and its notes are in a file of their own in the same folder (see below).
 WEB = bool(os.environ.get('YNOTE_WEB'))
-OLD_CONF_DIR = os.path.expanduser('~/.config/ynote')
 if WEB:
     APP_ID += '.web'
 
@@ -15,8 +14,15 @@ PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(PACKAGE_DIR)
 ICON_PATH = os.path.join(PROJECT_DIR, 'icon.png')
 
-CONF_DIR = os.path.expanduser('~/.config/ynote-web' if WEB else '~/.config/ynote')
-NOTES_FILE = os.path.join(CONF_DIR, 'notes.json')
+CONF_DIR = os.path.expanduser('~/.config/ynote')
+# The notes of 1.x, and those of 2.0 while it is built. 2.0 starts from the
+# notes of 1.x, converted, and saves them apart, since 1.x cannot read them:
+# a 1.x started after 2.0 had saved over notes.json would empty every note.
+# The two share the images folder.
+V1_NOTES_FILE = os.path.join(CONF_DIR, 'notes.json')
+V2_NOTES_FILE = os.path.join(CONF_DIR, 'notes-2.json')
+NOTES_FILE = V2_NOTES_FILE if WEB else V1_NOTES_FILE
+OTHER_NOTES_FILE = V1_NOTES_FILE if WEB else V2_NOTES_FILE
 IMAGES_DIR = os.path.join(CONF_DIR, 'images')
 SETTINGS_FILE = os.path.join(CONF_DIR, 'settings.json')
 

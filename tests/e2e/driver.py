@@ -222,6 +222,14 @@ class Input:
         xtest.fake_input(self.d, X.KeyRelease, code)
         self._mods(mods, False)
 
+    def hangul(self):
+        """The Korean/English key, which turns Korean input on or off."""
+        code, _spare = self._code(XK.string_to_keysym('Hangul') or 0xff31)
+        xtest.fake_input(self.d, X.KeyPress, code)
+        xtest.fake_input(self.d, X.KeyRelease, code)
+        self.d.sync()
+        quiet()
+
     def type(self, text):
         """Type text key by key; any character, through a spare key code
         when the keyboard has none for it. A line break is Enter."""
@@ -551,10 +559,14 @@ class Note:
 class App:
     """The installed Ynote, started with a HOME of its own."""
 
-    def __init__(self, home, inp, command=('ynote',)):
+    def __init__(self, home, inp, command=('ynote',), web=False, ime=False):
         self.home = home
         self.inp = inp
         self.command = list(command)
+        # Ynote 2.0, whose notes are web pages (YNOTE_WEB), and typing
+        # through the input method, ibus with its Korean engine.
+        self.web = web
+        self.ime = ime
         self.proc = None
         self.log = os.path.join(home, 'ynote.log')
 
@@ -565,11 +577,14 @@ class App:
 
     @property
     def notes_file(self):
-        return os.path.join(self.conf, 'notes.json')
+        """Where the app saves its notes: 2.0 apart from 1.x."""
+        return os.path.join(self.conf, 'notes-2.json' if self.web else 'notes.json')
 
     def write_notes(self, notes):
+        """Notes for the app to open, as 1.x saves them: 2.0 opens them
+        converted on its first start."""
         os.makedirs(self.conf, exist_ok=True)
-        with open(self.notes_file, 'w', encoding='utf-8') as f:
+        with open(os.path.join(self.conf, 'notes.json'), 'w', encoding='utf-8') as f:
             json.dump(notes, f, ensure_ascii=False)
 
     def saved(self):
@@ -585,6 +600,10 @@ class App:
     # process
     def start(self, wait_for_window=True):
         env = dict(os.environ, HOME=self.home)
+        if self.web:
+            env['YNOTE_WEB'] = '1'
+        if self.ime:
+            env['GTK_IM_MODULE'] = 'ibus'
         self.proc = subprocess.Popen(
             self.command, env=env, stdout=open(self.log, 'w'),
             stderr=subprocess.STDOUT, start_new_session=True)

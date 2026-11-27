@@ -30,10 +30,20 @@ else:
         yield path
         shutil.rmtree(path, ignore_errors=True)
 
+    def pytest_configure(config):
+        config.addinivalue_line(
+            'markers', 'web: the test runs Ynote 2.0, whose notes are web pages')
+        config.addinivalue_line(
+            'markers', 'ime: Ynote takes keys through the Korean input method')
+
     @pytest.fixture
     def app(home, inp, request):
-        """Ynote with a HOME of its own, not started yet."""
-        a = App(home, inp, COMMAND)
+        """Ynote with a HOME of its own, not started yet: 2.0 for a test
+        marked web, typed into through the input method for one marked
+        ime."""
+        a = App(home, inp, COMMAND,
+                web=request.node.get_closest_marker('web') is not None,
+                ime=request.node.get_closest_marker('ime') is not None)
         yield a
         if getattr(request.node, 'failed', False):
             name = request.node.name.replace('/', '_')

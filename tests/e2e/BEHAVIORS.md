@@ -276,3 +276,15 @@ placing notes across two monitors (D4, D9: much effort for little).
 - R4 Tables of tab-separated rows (1.13) become tables of cells
 - R5 A note saved without newer fields (color, opacity, collapsed...) gets their defaults
 - R6 What is saved stays readable by an older version, but for the tables field
+
+## S. Korean through an input method, in Ynote 2.0
+
+Typed through ibus with its Korean engine, as on a Korean desktop, into a note
+of 2.0 (`YNOTE_WEB`).
+
+- S1 Korean is saved as composed: space and Enter end a syllable, and Backspace in one takes its last jamo
+- S2 Enter while composing in a list item ends the syllable and starts the next item
+- S3 Markdown typed around Korean, as `**굵게**` or `` `코드` ``, makes it bold or code
+- S4 Ctrl+B while composing keeps the syllable as it was and bolds what follows
+- S5 Korean typed into a table cell, empty or selected by Tab, stays on the cell's line
+- S6 Korean typed into an expand's title and content stays where it is typed

@@ -11,6 +11,7 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
         gir1.2-ayatanaappindicator3-0.1 \
         xvfb xauth openbox dbus dbus-x11 \
         at-spi2-core gir1.2-atspi-2.0 libatk-adaptor \
+        ibus ibus-hangul ibus-gtk3 \
         python3-xlib python3-pytest \
         fonts-ubuntu fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
         fonts-dejavu-core \

@@ -22,7 +22,7 @@ from .images import (
     state_image_files,
 )
 from .note_manager_window import HiddenNotesWindow
-from .config import WEB, OLD_CONF_DIR
+from .config import OTHER_NOTES_FILE, V1_NOTES_FILE, WEB
 if WEB:
     from .web_note_window import WebNoteWindow as NoteWindow
 else:
@@ -71,9 +71,6 @@ class PostItApp(Gtk.Application):
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
-        if (WEB and not os.path.exists(NOTES_FILE)
-                and os.path.exists(os.path.join(OLD_CONF_DIR, 'notes.json'))):
-            shutil.copytree(OLD_CONF_DIR, CONF_DIR, dirs_exist_ok=True)
         os.makedirs(CONF_DIR, exist_ok=True)
         os.makedirs(IMAGES_DIR, exist_ok=True)
 
@@ -249,6 +246,19 @@ class PostItApp(Gtk.Application):
     # ------------------------------------------------------------------ notes
 
     def _load(self):
+        if WEB and not os.path.exists(NOTES_FILE):
+            # 2.0's first start: the notes of 1.x, which open converted. That
+            # file is only read, never set aside or written.
+            try:
+                saved = load_notes(V1_NOTES_FILE)
+            except UnreadableNotesError as e:
+                print(f'ynote: could not read {V1_NOTES_FILE} ({e})', file=sys.stderr)
+                saved = None
+            if not saved:
+                self.new_note(at_pointer=True)
+                return
+            self._open_saved(saved)
+            return
         try:
             saved = load_notes(NOTES_FILE)
             if saved:
@@ -267,6 +277,9 @@ class PostItApp(Gtk.Application):
         if not saved:
             self.new_note(at_pointer=True)
             return
+        self._open_saved(saved)
+
+    def _open_saved(self, saved):
         areas, primary = self._work_areas()
         # Made from the bottom of the stack up, so the note that was on top
         # when Ynote quit opens on top again.
@@ -707,6 +720,14 @@ class PostItApp(Gtk.Application):
         if self._keep_all_images:
             return
         referenced = self._referenced_image_files(data, include_history=include_history)
+        # The images folder is shared with the other version's notes file
+        # (config.OTHER_NOTES_FILE), whose images stay too. If it cannot be
+        # read, nothing is deleted.
+        try:
+            other = load_notes(OTHER_NOTES_FILE) or []
+        except UnreadableNotesError:
+            return
+        referenced |= referenced_image_files(other)
         cleanup_orphaned_images(IMAGES_DIR, referenced)
 
     def save_all(self, include_history=True):

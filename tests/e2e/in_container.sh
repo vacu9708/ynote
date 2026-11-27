@@ -15,6 +15,12 @@ exec dbus-run-session -- bash -c '
         sleep 0.1
     done
     openbox --config-file /src/tests/e2e/openbox-rc.xml >/dev/null 2>&1 &
+    # An input method with the Korean engine, as a Korean desktop has. Apps
+    # take keys as before ibus was here, with the input of GTK itself, but in
+    # the tests that type Korean through it (driver.App(ime=True)).
+    ibus-daemon -drx --panel=disable >/dev/null 2>&1
+    for _ in $(seq 50); do ibus engine hangul 2>/dev/null && break; sleep 0.1; done
+    export IBUS_ADDRESS="$(ibus address)" GTK_IM_MODULE=gtk-im-context-simple
     sleep 0.5
     cd /src
     # All the tests, unless test files are named.

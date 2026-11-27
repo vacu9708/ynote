@@ -37,8 +37,9 @@ a time, so a second launch just brings the running one forward.
 
 Ynote 2.0 draws each note, its bars and its editor, as a web page in a web
 view (see [ARCHITECTURE.md](ARCHITECTURE.md#ynote-20)). While it is built, it
-runs only with `YNOTE_WEB` set, beside a running 1.x and with notes of its
-own in `~/.config/ynote-web/`, copied from `~/.config/ynote/` the first time:
+runs only with `YNOTE_WEB` set, beside a running 1.x. Its notes are in
+`~/.config/ynote/notes-2.json`, which starts as the notes of 1.x, converted;
+`notes.json` is left to 1.x, which cannot read them. The two share `images/`:
 
 ```bash
 YNOTE_WEB=1 python3 ynote.py

@@ -176,12 +176,12 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .48); text-decoration: line-t
 .ProseMirror table { border-collapse: collapse; table-layout: auto; }
 .ProseMirror td, .ProseMirror th {
   border: 1px solid rgba(0, 0, 0, .22); padding: 3px 8px; vertical-align: top; text-align: left;
-  min-width: 2.5em; position: relative;
+  min-width: 2.5em;
 }
+/* No cell is positioned: in a positioned cell WebKit puts what an input
+   method composes, such as Korean, on a line of its own. */
 .ProseMirror th { background: color-mix(in srgb, var(--paper) 50%, #ffffff); font-weight: 700; }
-.ProseMirror .selectedCell::after {
-  content: ""; position: absolute; inset: 0; background: var(--select); pointer-events: none;
-}
+.ProseMirror .selectedCell { background-image: linear-gradient(var(--select), var(--select)); }
 
 .ProseMirror img { max-width: 100%; vertical-align: bottom; border-radius: 3px; }
 .ProseMirror img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
