@@ -177,7 +177,11 @@ sequenceDiagram
 ## Startup
 
 1. `main()` sets `GDK_BACKEND=x11` before GTK loads. Otherwise GTK would pick
-   any Wayland socket it finds. See [Why X11](#why-x11).
+   any Wayland socket it finds. See [Why X11](#why-x11). It also sets
+   `IBUS_ENABLE_SYNC_MODE=1`, unless set, so that an input method such as
+   Korean's answers each key in turn: answered asynchronously, a busy computer
+   took keys out of order, and Enter after a Korean word could land after the
+   next word had started.
 2. `PostItApp.do_startup()` creates the config directories, sets up login
    autostart on an installed app's first run, loads the CSS, and creates the
    tray icon.
