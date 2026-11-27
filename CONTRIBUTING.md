@@ -50,7 +50,27 @@ It runs, in order:
    and fails on any Python error. It is skipped without `xvfb-run`.
 4. The Debian package build.
 
-To test what a feature does, add a pytest test under `tests/`.
+Then run the end-to-end tests, which prove what Ynote does in the real app:
+
+```bash
+tests/e2e/run.sh all
+```
+
+They build the package, install it in Ubuntu 26.04 and 22.04 containers with
+a virtual desktop, and drive it with real mouse and key input, reading what it
+shows through its accessibility tree, the clipboard, and its files. They need
+Docker and the test images, built once:
+
+```bash
+docker build --build-arg BASE=ubuntu:26.04 -t ynote-e2e:26.04 tests/e2e
+docker build --build-arg BASE=ubuntu:22.04 -t ynote-e2e:22.04 tests/e2e
+```
+
+To test what a feature does, add an end-to-end test under `tests/e2e/`, one
+per behavior, named after its entry in
+[tests/e2e/BEHAVIORS.md](tests/e2e/BEHAVIORS.md). Unit tests under `tests/`
+are for logic that needs no window, such as the Markdown conversion. A failed
+end-to-end test leaves a screenshot and the app's log in `tests/e2e/out/`.
 
 ## Package
 

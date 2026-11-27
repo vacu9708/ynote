@@ -22,9 +22,26 @@ holds what those don't: how the user wants the work done.
 - Update ARCHITECTURE.md when a mechanism changes. After a visible UI change,
   regenerate the README screenshots (see CONTRIBUTING.md).
 
+## Testing: end to end
+
+- **Every behavior is proven in the real app, end to end.** A change gets an
+  end-to-end test of what it does, one test per intended behavior, listed in
+  [tests/e2e/BEHAVIORS.md](tests/e2e/BEHAVIORS.md): normal cases and the
+  small edge cases alike. Not a unit test of internals: unit tests with fake
+  windows passed while about ten real bugs were there. Unit tests stay only
+  for pure logic (Markdown, storage, models, snapping, search).
+- `tests/e2e/run.sh all` installs the built package in Ubuntu 26.04 and 22.04
+  containers with a window manager and drives it with real input, about a
+  minute. Only there is a test meaningful: without a window manager, focus
+  between windows behaves otherwise.
+- After writing a test for a fixed bug, put the bug back and see the test
+  fail: several tests passed without testing anything until checked so.
+- When what should happen is unclear, follow Confluence, and note any
+  exception and why in BEHAVIORS.md.
+
 ## After every change
 
-1. Run every check: `./test.sh`. If pytest cannot import `tests.…`, another
+1. Run every check: `./test.sh`, then `tests/e2e/run.sh all`. If pytest cannot import `tests.…`, another
    installed `tests` package is shadowing the repo's; run the suite with the
    repo's folder registered first:
 
@@ -56,7 +73,10 @@ the file to `notes.json.bak`, keeping where the note is and its size.
 
 ## Checking UI headlessly
 
-- Render the real window under `xvfb-run -a dbus-run-session -- python3 …`.
+- To look at something, as when a test fails: each failed end-to-end test
+  leaves a screenshot and the app's log in `tests/e2e/out/`. For a look of
+  your own, render the real window under
+  `xvfb-run -a dbus-run-session -- python3 …`.
 - Capture by cropping the screen (`Gdk.pixbuf_get_from_window` on the root
   window), never a window's own surface: that aborts inside cairo since a
   libxrender1 update.
