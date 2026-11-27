@@ -12,7 +12,8 @@ from gi.repository import Gtk, Gdk, GLib, Pango
 from .editor import TEXT_MARGIN, Editor
 from .config import IMAGE_ANCHOR
 from .styles import (
-    CODE_FONT, CODE_OUTLINE, HEADING_FONT, HEADING_SCALE, TABLE_MARGIN)
+    CODE_FONT, CODE_OUTLINE, HEADING_BOLD_FONT, HEADING_FONT, HEADING_SCALE,
+    TABLE_MARGIN)
 
 # How narrow a column can get, in em, so an empty one can still be clicked.
 MIN_COLUMN_EM = 3
@@ -201,14 +202,17 @@ class CellEditor(Editor):
         font = self._body_font.copy()
         scale = 1.0
         if start.has_tag(self._heading_tag):
-            font.set_family(HEADING_FONT)
-            font.set_weight(Pango.Weight.BOLD)
+            # A heading is bold, and bold in it bolder.
+            bold = start.has_tag(self._bold_tag)
+            font.set_family(HEADING_BOLD_FONT if bold else HEADING_FONT)
+            font.set_weight(Pango.Weight.HEAVY if bold else Pango.Weight.BOLD)
             scale = HEADING_SCALE
-        elif start.has_tag(self._backtick_tag):
-            font.set_family(CODE_FONT)
-            scale = self._backtick_tag.get_property('scale')
-        if start.has_tag(self._bold_tag):
-            font.set_weight(Pango.Weight.BOLD)
+        else:
+            if start.has_tag(self._backtick_tag):
+                font.set_family(CODE_FONT)
+                scale = self._backtick_tag.get_property('scale')
+            if start.has_tag(self._bold_tag):
+                font.set_weight(Pango.Weight.BOLD)
         return self._text_width(font, text, scale)
 
     # -------------------------------------------------------------- keys

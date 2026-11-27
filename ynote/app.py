@@ -10,6 +10,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
 from . import autostart, focus, tray
+from .app_fonts import register_fonts
 from .config import (
     APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CODE_PAD_CHAR, CONF_DIR, EXPAND_END,
     ICON_PATH, IMAGES_DIR, NEW_NOTE_LABEL, NEW_NOTE_SIDE, NOTES_FILE,
@@ -35,6 +36,8 @@ SWITCH_PAUSE_MS = 200
 
 class PostItApp(Gtk.Application):
     def __init__(self):
+        # Before any text is laid out, so Pango finds them.
+        register_fonts()
         super().__init__(
             application_id=APP_ID,
             flags=Gio.ApplicationFlags.FLAGS_NONE)

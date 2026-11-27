@@ -953,7 +953,7 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
         ed = self._active_editor()
         return [
             BarItem('<b>B</b>', 'Bold', '**text**', 'Ctrl+B', ed._toggle_bold,
-                    ed._bold_active, not ed._heading_active),
+                    ed._bold_active, True),
             BarItem('<b>H</b>', 'Heading', '# text', 'Ctrl+H',
                     ed._toggle_heading, ed._heading_active, True),
             BarItem('&lt;/&gt;', 'Inline code', '`text`', 'Ctrl+E',

@@ -228,40 +228,45 @@ def test_bold_with_a_selection_toggles_the_text_and_follows_it():
     assert not win._bold_active
 
 
-def test_bold_is_off_and_unavailable_in_a_heading():
+def test_bold_is_off_in_a_heading_and_turns_on_and_off():
     win, buf = make_window('Title\nbody')
     tag_range(buf, win._heading_tag, 0, 5)
-    tag_range(buf, win._bold_tag, 0, 5)
 
     buf.place_cursor(buf.get_iter_at_offset(5))
     win._sync_format_state()
     assert win._heading_active and not win._bold_active
-    assert format_item(win, 'Bold') == (False, False)
+    assert format_item(win, 'Bold') == (False, True)
+
+    buf.select_range(buf.get_iter_at_offset(0), buf.get_iter_at_offset(5))
+    win._toggle_bold()
+    assert ranges(win, win._bold_tag) == [[0, 5]]
+    assert ranges(win, win._heading_tag) == [[0, 5]]
 
     win._toggle_bold()
+    assert ranges(win, win._bold_tag) == []
+
+
+def test_text_typed_in_a_heading_is_bold_once_bold_is_on():
+    win, buf = make_window('', cursor=0)
+    win._toggle_heading()
     assert not win._bold_active
 
-    buf.place_cursor(buf.get_iter_at_offset(8))
-    win._sync_format_state()
-    assert format_item(win, 'Bold')[1]
-
-
-def test_text_typed_in_a_heading_is_not_bold():
-    win, buf = make_window('', cursor=0)
-    win._toggle_bold()
-    win._toggle_heading()
-
     type_text(win, buf, 'Plan')
+    win._toggle_bold()
+    type_text(win, buf, ' B')
 
-    assert ranges(win, win._heading_tag) == [[0, 4]]
-    assert ranges(win, win._bold_tag) == []
+    assert ranges(win, win._heading_tag) == [[0, 6]]
+    assert ranges(win, win._bold_tag) == [[4, 6]]
 
 
-def test_making_a_line_a_heading_removes_its_bold():
+def test_bold_stays_when_a_line_becomes_a_heading_and_back():
     win, buf = make_window('Title', cursor=2)
-    tag_range(buf, win._bold_tag, 0, 5)
+    tag_range(buf, win._bold_tag, 0, 2)
 
     win._toggle_heading()
-
     assert ranges(win, win._heading_tag) == [[0, 5]]
-    assert ranges(win, win._bold_tag) == []
+    assert ranges(win, win._bold_tag) == [[0, 2]]
+
+    win._toggle_heading()
+    assert ranges(win, win._heading_tag) == []
+    assert ranges(win, win._bold_tag) == [[0, 2]]

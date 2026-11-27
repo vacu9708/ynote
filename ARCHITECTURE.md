@@ -79,6 +79,7 @@ flowchart LR
 | `ynote/markdown.py` | Converts a note's text and formats to Markdown for the clipboard, and pasted Markdown back. |
 | `ynote/autostart.py` | The per-user login autostart entry. |
 | `ynote/config.py` | Paths and constants. |
+| `ynote/app_fonts.py` | Registers the fonts in `ynote/fonts/` for Ynote alone: the Black weight of Noto Serif and Noto Serif KR, for bold in a heading, which most systems lack. They come with their SIL Open Font License. |
 | `ynote/styles.py` | The note color palette and the GTK CSS built from it. It has no GTK import, so it is unit-tested. |
 
 ## Note data model
@@ -354,11 +355,13 @@ sequenceDiagram
   when deleting text or undoing moves it, a menu item or shortcut toggles one, typed text gets the ones that are on
   and none of the others, also inside a bold or code range, which splits it,
   and Enter turns them all off. `heading_ranges` cover whole lines, so on an empty
-  line Heading applies to the text typed there next. A heading is already
-  bold, so in one Bold is off and disabled, and making a line a heading
-  removes its bold. The text at the start of a list item or quote, after its
-  marker, takes formats from the text after the cursor, as at the start of a
-  line.
+  line Heading applies to the text typed there next. A heading is bold, and
+  Bold is off in it until turned on, which makes it bolder, as in Confluence:
+  `_refresh_heading_bold()` puts the heading's Black weight where bold and a
+  heading meet, whenever either changes. Making a line a heading or taking it
+  away leaves its bold as it is. The text at the start of a
+  list item or quote, after its marker, takes formats from the text after
+  the cursor, as at the start of a line.
 - **Format and Insert menus.** The bottom bar keeps one button for the formats
   of text and one for the elements to insert, so it does not grow with each
   new element. `_popup_bar_menu()` opens a `Gtk.Menu`, a window of its own,

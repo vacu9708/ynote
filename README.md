@@ -110,4 +110,6 @@ To run Ynote from source, run the tests, or build the package, see
 
 ## License
 
-Ynote is released under the MIT License. See [LICENSE](LICENSE).
+Ynote is released under the MIT License. See [LICENSE](LICENSE). The fonts in
+[ynote/fonts](ynote/fonts) are under the SIL Open Font License that comes with
+them.

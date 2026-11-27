@@ -32,7 +32,8 @@ from .styles import (
     BODY_FONT, BULLET_SIZE, CHECKBOX_SIZE, CODE_BLOCK_MARGIN, CODE_FONT,
     CODE_GAP, CODE_OUTLINE, CODE_PAD, CODE_PAD_Y, CODE_RADIUS, CODE_TEXT_COLOR,
     EXPAND_BUTTON_PAD, EXPAND_GAP, EXPAND_MARGIN, EXPAND_PAD,
-    EXPAND_TITLE_SCALE, HEADING_FONT, HEADING_SCALE, INLINE_CODE_RISE,
+    EXPAND_TITLE_SCALE, HEADING_BOLD_FONT, HEADING_FONT, HEADING_SCALE,
+    INLINE_CODE_RISE,
     LINE_SPACING, MARKER_GAP, QUOTE_BAR,
 )
 
@@ -772,7 +773,7 @@ class Editor:
             buf.remove_tag(self._backtick_tag, start, end)
         self._clear_line_breaks(start, text)
         if not new_line:
-            if bold and not heading:
+            if bold:
                 self._apply_tag_to_non_newline_chars(
                     buf, self._bold_tag, start, end)
             if inline_code:
@@ -3025,10 +3026,8 @@ class Editor:
         start, end = self._line_bounds(line)
         if start.equal(end):
             self._heading_active = True
-            self._bold_active = False
             self._refresh_format_buttons()
         else:
-            buf.remove_tag(self._bold_tag, start, end)
             buf.apply_tag(self._heading_tag, start, end)
             self._sync_format_state()
         self._flush_snapshot()
@@ -3309,9 +3308,7 @@ class Editor:
         lines = self._heading_lines()
         self._heading_active = bool(lines) and all(
             self._line_is_fully_tagged(self._heading_tag, ln) for ln in lines)
-        # A heading is already bold, so bold is neither on nor available there.
-        self._bold_active = (not self._heading_active
-                             and self._format_at_cursor(buf, self._bold_tag))
+        self._bold_active = self._format_at_cursor(buf, self._bold_tag)
         self._refresh_format_buttons()
 
     def _format_at_cursor(self, buf, tag):
@@ -3348,9 +3345,34 @@ class Editor:
                 and self._marker_end(ln) is None
                 and not self._line_bounds(ln)[0].ends_line()]
 
+    def _on_format_tag_changed(self, buf, tag, start, end):
+        if tag is self._bold_tag or tag is self._heading_tag:
+            if self._heading_bold_sid is None:
+                self._heading_bold_sid = GLib.idle_add(
+                    self._refresh_heading_bold,
+                    priority=GLib.PRIORITY_HIGH_IDLE)
+
+    def _refresh_heading_bold(self):
+        """Put the bolder weight where bold and a heading meet, once the
+        formats have changed: bold in a heading, which is bold already,
+        makes it bolder, as in Confluence."""
+        self._heading_bold_sid = None
+        buf = self.tv.get_buffer()
+        buf.remove_tag(self._heading_bold_tag, buf.get_start_iter(),
+                       buf.get_end_iter())
+        headings = self._get_tag_ranges(self._heading_tag)
+        if not headings:
+            return False
+        for b_start, b_end in self._get_tag_ranges(self._bold_tag):
+            for h_start, h_end in headings:
+                low, high = max(b_start, h_start), min(b_end, h_end)
+                if low < high:
+                    buf.apply_tag(self._heading_bold_tag,
+                                  buf.get_iter_at_offset(low),
+                                  buf.get_iter_at_offset(high))
+        return False
+
     def _toggle_bold(self):
-        if self._heading_active:
-            return
         if not self._toggle_tag(self._bold_tag):
             self._bold_active = not self._bold_active
             self._refresh_format_buttons()
@@ -3612,12 +3634,10 @@ class Editor:
         self._flush_snapshot()
         for ln in lines:
             start, end = self._line_bounds(ln)
+            # Bold in the line stays, and is bolder in a heading.
             if remove:
                 buf.remove_tag(self._heading_tag, start, end)
             else:
-                # Bold would not show in a heading, and would come back
-                # unexpectedly if the heading were removed.
-                buf.remove_tag(self._bold_tag, start, end)
                 buf.apply_tag(self._heading_tag, start, end)
         self._flush_snapshot()
         self._queue_save()
@@ -4192,6 +4212,11 @@ class Editor:
         self._heading_tag = buf.create_tag(
             'heading', family=HEADING_FONT, weight=Pango.Weight.BOLD,
             scale=HEADING_SCALE)
+        # Derived: bold in a heading, which is bold already, makes it bolder,
+        # as in Confluence. Made by _refresh_heading_bold(), not saved.
+        self._heading_bold_tag = buf.create_tag(
+            'heading-bold', family=HEADING_BOLD_FONT,
+            weight=Pango.Weight.HEAVY)
         self._emoji_tag = buf.create_tag('emoji', scale=self._emoji_scale())
         # A line that is exactly DIVIDER_TEXT is drawn as a horizontal rule:
         # the dashes are hidden and _draw_dividers() paints the line.
@@ -4225,6 +4250,9 @@ class Editor:
         self._cursor_offset = 0
         self._leaving_marker = False
         buf.connect('mark-set', self._on_mark_set)
+        self._heading_bold_sid = None
+        for signal in ('apply-tag', 'remove-tag'):
+            buf.connect_after(signal, self._on_format_tag_changed)
         self._watch_code_blocks(buf)
         self._hl_tag.set_priority(buf.get_tag_table().get_size() - 1)
         self._refresh_emoji_tags()

@@ -246,8 +246,7 @@ def to_markdown(state):
                        + _inline(text[body_start:end], bold[body_start:end],
                                  inline[body_start:end]))
         elif end > start and all(heading[start:end]):
-            # Bold does not show in a heading, so it is left out.
-            out.append('# ' + _inline(text[start:end], [False] * len(line),
+            out.append('# ' + _inline(text[start:end], bold[start:end],
                                       inline[start:end]).strip())
         else:
             out.append(_inline(line, bold[start:end], inline[start:end]))
@@ -301,7 +300,7 @@ def _plain(text):
     return _ESCAPE_RE.sub(r'\1', text)
 
 
-def _add_inline(builder, text, allow_bold=True):
+def _add_inline(builder, text):
     """Add one line of Markdown text: code spans first, then bold in what is
     left, as Markdown reads them."""
     i = 0
@@ -335,7 +334,7 @@ def _add_inline(builder, text, allow_bold=True):
                 builder.add(CODE_PAD_CHAR + piece + CODE_PAD_CHAR, 'backtick')
             continue
         pos = 0
-        for m in _BOLD_RE.finditer(piece) if allow_bold else ():
+        for m in _BOLD_RE.finditer(piece):
             builder.add(_plain(piece[pos:m.start()]))
             builder.add(_plain(m.group(1)), 'bold')
             pos = m.end()
@@ -509,7 +508,8 @@ def from_markdown(text):
         m = _HEADING_RE.match(line)
         if m:
             start = builder.length
-            _add_inline(builder, (m.group(1) or '').strip(), allow_bold=False)
+            # Bold in a heading makes it bolder.
+            _add_inline(builder, (m.group(1) or '').strip())
             if builder.length > start:
                 builder.ranges['heading'].append([start, builder.length])
             levels = []

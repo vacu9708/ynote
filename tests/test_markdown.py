@@ -64,6 +64,17 @@ def test_markdown_comes_back_with_its_formats():
     assert spans(st, 'bold') == ['bold']
 
 
+def test_bold_in_a_heading_goes_out_and_comes_back():
+    st = state('Big Title', heading=[[0, 9]], bold=[[4, 9]])
+
+    md = to_markdown(st)
+    back = from_markdown(md)
+
+    assert md == '# Big **Title**'
+    assert spans(back, 'heading') == ['Big Title']
+    assert spans(back, 'bold') == ['Title']
+
+
 def test_markdown_lists_come_back_as_items_at_their_levels():
     # Nested by two spaces as GitHub writes them, or by four.
     for step in ('  ', '    '):

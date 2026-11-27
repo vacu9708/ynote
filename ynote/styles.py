@@ -87,6 +87,9 @@ TABLE_MARGIN = 4
 # A heading is told from body text by its size, its weight, and a serif face,
 # which sets it apart from the sans body font even at the same size.
 HEADING_FONT = 'Noto Serif, DejaVu Serif, serif'
+# Bold in a heading, which is bold already, is its Black weight: Noto Serif
+# and, for Korean, Noto Serif KR, which come with Ynote (see app_fonts.py).
+HEADING_BOLD_FONT = 'Noto Serif, Noto Serif KR, DejaVu Serif, serif'
 HEADING_SCALE = 1.25
 
 
