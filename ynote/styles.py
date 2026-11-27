@@ -80,13 +80,9 @@ CODE_BLOCK_MARGIN = 4
 # Inline code is raised a little to sit centered in its box.
 INLINE_CODE_RISE = 1
 
-# A table cell keeps this room in pixels between its text and its lines, on
-# the sides and above and below, and the table this room from the lines
-# around it. An empty column is this many em wide, so it can be clicked.
-TABLE_PAD = 6
-TABLE_PAD_Y = 3
+# A table keeps this room in pixels from the lines around it. Its cells have
+# the room of a note's text inside them, and a header row in bold.
 TABLE_MARGIN = 4
-TABLE_MIN_COLUMN = 2
 
 # A heading is told from body text by its size, its weight, and a serif face,
 # which sets it apart from the sans body font even at the same size.

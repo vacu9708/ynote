@@ -74,8 +74,8 @@ These are the things they don't show:
 - **Format** lights up while the text at the cursor is bold, a heading, or
   inline code, and what you type next gets it. Enter turns it off.
 - `Tab` and `Shift+Tab` indent list items, every selected one too, or move
-  between table cells. In a table, Enter adds a row, and right-clicking a cell
-  adds or deletes rows and columns.
+  between table cells, where anything a note holds can go. Right-click a cell
+  to add or delete rows and columns.
 - `Ctrl+Enter` checks the to-dos on the selected lines, or folds or opens an
   expand from its title. Lines selected when you insert an expand go into it.
 - Copied text goes to other apps as Markdown, and Markdown pasted in keeps its

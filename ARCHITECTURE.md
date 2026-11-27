@@ -19,6 +19,7 @@ flowchart LR
         App["app.py<br/>PostItApp"]
         Window["note_window.py<br/>NoteWindow"]
         Editor["editor.py<br/>Editor"]
+        Table["table.py<br/>table of editors"]
         Manager["note_manager_window.py<br/>Hidden Notes window"]
         Tray["tray.py<br/>tray indicator"]
     end
@@ -49,9 +50,11 @@ flowchart LR
     Editor -->|uses| Links
     Editor -->|uses| Markdown
     Editor -->|uses| Sections
+    Editor -->|holds| Table
+    Table -->|cells are| Editor
 
     classDef node fill:#FFFFFF,stroke:#4A5568,color:#1A202C
-    class Main,App,Window,Editor,Manager,Tray,Storage,Images,Autostart,Models,Snap,Search,Links,Markdown,Sections node
+    class Main,App,Window,Editor,Table,Manager,Tray,Storage,Images,Autostart,Models,Snap,Search,Links,Markdown,Sections node
     style GTK fill:#FFF4D6,stroke:#B7791F,color:#3D2C00
     style Pure fill:#E8F8EF,stroke:#2F855A,color:#143C2B
 ```
@@ -63,6 +66,7 @@ flowchart LR
 | `ynote/app.py` | Application lifecycle, tray icon, the set of notes, hidden-note order, the shared rich clipboard, and saving. |
 | `ynote/note_window.py` | One note's window: its title bar, bottom bar with the Format and Insert menus, search bar, snapping, collapsing, saving, and the right-click popover with color, opacity, and font size. A `NoteWindow` is an `Editor`. |
 | `ynote/editor.py` | The text editor: formats, lists, quotes, code, tables, expands, images, typed Markdown, undo/redo, the clipboard, and drawing what GTK does not. It needs only `self.tv` and what its owner sets (`app`, the font size and colors); `_queue_save()` and `_refresh_format_buttons()` are hooks the owner overrides. |
+| `ynote/table.py` | A table whose cells are editors: `TableWidget` and `CellEditor`. |
 | `ynote/sections.py` | Finds the expands in a note's lines. |
 | `ynote/note_manager_window.py` | The Hidden Notes window: list, reorder, and restore hidden notes. |
 | `ynote/tray.py` | Loads the application indicator library and makes the tray indicator, which the desktop draws and positions. Also words the tray menu's labels. |
@@ -99,6 +103,7 @@ character ranges over plain text, not as markup:
 | `text` | The note text, including the special characters below. |
 | `bold_ranges`, `heading_ranges`, `code_ranges`, `backtick_ranges` | `[start, end)` character offsets into `text`. GTK buffer offsets count characters, so they match Python string indices. |
 | `images` | `{file, original_name, offset}` per image. `offset` is where its placeholder character sits in `text`. |
+| `tables` | `{offset, rows}` per table, at its placeholder character like an image. `rows` are lists of cells, each a rich state: `text` and `bold`, `heading`, `code`, `backtick`, and `images`, as the clipboard holds them. An older Ynote shows nothing there and drops the field when it saves. |
 | `x`, `y`, `w`, `h` | Window position and size. A maximized note saves the rectangle it had before, and a collapsed note saves its expanded height as `h`. |
 | `hidden`, `sort_order` | Whether the note is hidden, and its place in the Hidden Notes list. |
 | `on_top`, `font_size` | Always-on-top and the note's font size. |
@@ -115,7 +120,7 @@ Some structure lives in the text itself:
 | `• `, `☐ `, `☑ `, or `▍ ` at the start of a line | A bullet, an open to-do, a done to-do, or a quote. Each nesting level adds a leading tab. |
 | A line that is exactly `---` | A divider. The dashes are hidden and `_draw_dividers()` paints a line over them. |
 | `▾ ` or `▸ ` at the start of a line, and a line holding only `U+2064` (`EXPAND_END`) | The title of an open or folded expand, and the end of the innermost expand open. Everything between them is what it holds. |
-| `U+2063` (`TABLE_MARKER`) at the start of a line | A row of a table, its cells separated by tabs. Rows next to each other are one table, and the first is its header. |
+| `U+2063` (`TABLE_MARKER`) at the start of a line | A row of a table as tables were before their cells were editors, cells separated by tabs. Such rows, from an older note or pasted Markdown, become a table when the note opens or the paste lands. |
 
 Emoji sizing, dividers, grayed-out done to-dos, links, and search
 highlights are tags derived from the text while the app runs, and are never
@@ -200,17 +205,22 @@ sequenceDiagram
   as Markdown: search, undo, and the editor work on the text as shown, and
   Markdown is only how text crosses the clipboard. `Ctrl+Shift+V` pastes the
   text alone, and a backtick in it, or in any code, never starts inline code.
-- **Tables.** A row is text like a list item: its invisible `TABLE_MARKER`
-  is a marker (`_marker_end()`), so the cursor stays out of it and no format
-  covers it. A cell holds one line, so in a table Tab moves between cells,
-  Enter adds a row, and Backspace and Delete never take the tab between two
-  cells. `_normalize_tables()` gives every row as many cells as the widest
-  and takes out a marker that is not at a line's start. `_apply_tables()`,
-  run with the code margins, measures each column's widest cell with Pango
-  and gives each table a tag whose tab stops line its columns up, with no
-  wrapping, so a wide table scrolls like code. `_draw_tables()` draws the
-  lines and shades the header. On the clipboard a table is a GitHub-style
-  Markdown table.
+- **Tables.** A table (`table.py`) is a `TableWidget`, a grid of
+  `CellEditor`s, at a child anchor alone on its line, as an image is. Each
+  cell is an `Editor` of its own, so it holds lines, lists, code, and images
+  as a note does; it takes the note's font size and colors, and its changes
+  are saved with the note and are a step of the note's undo
+  (`_on_table_changed()`). The Format and Insert menus and the shortcuts act
+  on `_active_editor()`, the note's text or the cell last focused. Tab moves
+  between cells, and Up and Down at a cell's edge, or Esc, go on to the next
+  cell or out of the table; the cursor coming onto a table's line by a key
+  goes into it. A click in a cell ends there, since a text view passes it on
+  to the note's, which would place its own cursor at the table. Text deleted
+  over a table's anchor takes the table with it. A column is as wide as its widest line, shrunk to fit the
+  note. The table draws its lines and shaded header itself, and a folded
+  expand hides it. Searching covers the cells: `buffer_text()` puts their text
+  after the note's, and `show_match()` finds the cell. On the clipboard a
+  table is a GitHub Markdown table, with `<br>` for a line break in a cell.
 - **Expands.** An expand is a section of a note that folds away, a box with
   a title as in Confluence. `sections.py` finds them in the text, as lists of
   lines, and `_apply_sections()` hides a folded one's content and end line

@@ -181,3 +181,20 @@ def test_a_section_becomes_details_and_back_without_extra_lines():
     assert md == ('<details open>\n<summary>Test info</summary>\n\nrun it\n\n'
                   '</details>\nafter')
     assert from_markdown(md)['text'] == text
+
+
+def test_a_table_of_editors_becomes_a_markdown_table_with_br_line_breaks():
+    def cell(text, **ranges):
+        return state(text, **ranges)
+    st = dict(state('Intro\n￼\nafter'), tables=[{'offset': 6, 'rows': [
+        [cell('Name'), cell('Notes')],
+        [cell('Kim'), cell('first\nsecond|x', bold=[[0, 5]])]]}])
+
+    assert to_markdown(st) == ('Intro\n\n| Name | Notes |\n| --- | --- |\n'
+                               '| Kim | **first**<br>second\\|x |\n\nafter')
+
+
+def test_br_in_a_pasted_table_cell_is_a_line_break_to_come():
+    st = from_markdown('| a |\n| - |\n| one<br>two |')
+
+    assert st['text'] == f'{TABLE_MARKER}a\n{TABLE_MARKER}one two'

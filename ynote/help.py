@@ -27,7 +27,7 @@ HELP = [
     ('Tables', [
         ('Tab / Shift+Tab', 'Go to the next or previous cell, and add a row '
                             'after the last one'),
-        ('Enter', 'Add a row, or end the table on an empty last row'),
+        ('Esc', 'Leave the table, to the line after it'),
         ('Right-click a cell', 'Add or delete rows and columns'),
     ]),
     ('Mouse', [

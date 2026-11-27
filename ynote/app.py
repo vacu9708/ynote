@@ -17,8 +17,8 @@ from .config import (
 )
 from .images import (
     cleanup_orphaned_images,
-    image_files_from_metadata,
     referenced_image_files,
+    state_image_files,
 )
 from .note_manager_window import HiddenNotesWindow
 from .note_window import NoteWindow
@@ -684,8 +684,7 @@ class PostItApp(Gtk.Application):
                 history_files.update(w.history_image_files())
             rich_clipboard = getattr(self, '_rich_clipboard', None)
             if rich_clipboard:
-                history_files.update(
-                    image_files_from_metadata(rich_clipboard.get('images', [])))
+                history_files.update(state_image_files(rich_clipboard))
 
         return referenced_image_files(data, history_files)
 

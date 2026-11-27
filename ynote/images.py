@@ -37,11 +37,22 @@ def image_files_from_metadata(images):
     return files
 
 
+def state_image_files(state):
+    """The image files a note's text, or a rich state of it, uses: its own
+    images and those in the cells of its tables, however deep."""
+    files = image_files_from_metadata(state.get('images', []))
+    for table in state.get('tables', []) or []:
+        for row in table.get('rows', []):
+            for cell in row:
+                files.update(state_image_files(cell))
+    return files
+
+
 def referenced_image_files(notes_data, history_files=()):
     referenced = set()
 
     for note in notes_data or []:
-        referenced.update(image_files_from_metadata(note.get('images', [])))
+        referenced.update(state_image_files(note))
 
     for name in history_files or ():
         if name and not os.path.isabs(name):

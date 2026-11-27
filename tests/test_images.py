@@ -89,3 +89,13 @@ def test_cleanup_orphaned_images_removes_only_unreferenced_files(tmp_path):
 
 def test_cleanup_orphaned_images_missing_directory_is_noop(tmp_path):
     assert cleanup_orphaned_images(tmp_path / 'missing', set()) == []
+
+
+def test_images_in_table_cells_are_in_use():
+    from ynote.images import referenced_image_files
+    note = {'images': [{'file': 'a.png'}], 'tables': [{'offset': 0, 'rows': [
+        [{'text': '', 'images': [{'file': 'b.png'}]}],
+        [{'text': '', 'images': [], 'tables': [{'rows': [[{
+            'images': [{'file': 'c.png'}]}]]}]}]]}]}
+
+    assert referenced_image_files([note]) == {'a.png', 'b.png', 'c.png'}

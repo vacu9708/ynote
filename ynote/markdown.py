@@ -118,9 +118,39 @@ def _table_row(text, start, end, bold, inline, columns):
     return '| ' + ' | '.join(cells) + ' |'
 
 
+def _cell_markdown(cell):
+    """A table cell's text and formats as the Markdown of one cell: its
+    lines joined by <br>, as GitHub breaks a line in a cell, and any pipe
+    escaped."""
+    # A line of code is inline code there, as a cell has no room for fences.
+    cell = dict(cell, code=[],
+                backtick=cell.get('backtick', []) + cell.get('code', []))
+    lines = [line.strip() for line in to_markdown(cell).split('\n')]
+    return '<br>'.join(lines).replace('|', '\\|')
+
+
+def _rich_table(rows):
+    """A table of editors' rows as a Markdown table, its first row the
+    header."""
+    columns = max(len(row) for row in rows)
+    out = []
+    for number, row in enumerate(rows):
+        # A header is bold in Markdown already.
+        cells = [_cell_markdown(dict(cell, bold=[]) if number == 0 else cell)
+                 for cell in row]
+        cells += [''] * (columns - len(cells))
+        out.append('| ' + ' | '.join(cells) + ' |')
+        if number == 0:
+            out.append('| ' + ' | '.join(['---'] * columns) + ' |')
+    return out
+
+
 def to_markdown(state):
     """The state's text as Markdown."""
     text = state.get('text', '')
+    # A table of editors is a placeholder in the text at its offset.
+    rich_tables = {table.get('offset'): table.get('rows') or []
+                   for table in state.get('tables', []) or []}
     bold = _flags(len(text), state.get('bold', []))
     heading = _flags(len(text), state.get('heading', []))
     block = _flags(len(text), state.get('code', []))
@@ -145,6 +175,16 @@ def to_markdown(state):
     for number, line in enumerate(lines):
         start = starts[number]
         end = start + len(line)
+        if line == IMAGE_ANCHOR and start in rich_tables:
+            if in_block:
+                out.append(FENCE)
+                in_block = False
+            if out and out[-1].strip():
+                out.append('')
+            out.extend(_rich_table(rich_tables[start]))
+            # Text right under a table would be read as one more row.
+            table_columns = 0
+            continue
         is_block = end > start and all(block[start:end])
         if is_block != in_block:
             out.append(FENCE)
@@ -326,7 +366,10 @@ def _table_cells(line):
         i += 1
     cells.append(''.join(cell))
     # A cell is one line of a note's table, where a tab is between cells.
-    return [c.strip().replace('\t', ' ') for c in cells]
+    # A cell is one line of tab-separated text until it is made a table of
+    # editors, which takes U+2028 for a line break in a cell.
+    return [re.sub(r'<br\s*/?>', '\u2028', c.strip(), flags=re.I)
+            .replace('\t', ' ') for c in cells]
 
 
 def _table_columns(lines, at):

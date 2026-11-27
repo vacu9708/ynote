@@ -313,6 +313,13 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
 
         self._build_editor(data)
         self._sw.add(self.tv)
+        # The menus and shortcuts act on the note's text while it has the
+        # cursor, and on a table's cell while that has it.
+        self.tv.connect('focus-in-event',
+                        lambda *_: self._set_active_editor(self) or False)
+        # A table's columns fit the note's width.
+        self._tv_width = 0
+        self.tv.connect('size-allocate', self._on_tv_size)
 
         # ---- Search bar (hidden until Ctrl+F) ----
         # Wrapped in a Revealer so the widget is always realized — avoids the
@@ -368,27 +375,27 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
         accel.connect(Gdk.KEY_f, Gdk.ModifierType.CONTROL_MASK, 0,
                       lambda *_: self._toggle_search() or True)
         accel.connect(Gdk.KEY_b, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._toggle_bold() or True)
+                      lambda *_: self._active_editor()._toggle_bold() or True)
         accel.connect(Gdk.KEY_h, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._toggle_heading() or True)
+                      lambda *_: self._active_editor()._toggle_heading() or True)
         accel.connect(Gdk.KEY_e, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._toggle_inline_code() or True)
+                      lambda *_: self._active_editor()._toggle_inline_code() or True)
         accel.connect(Gdk.KEY_8, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._toggle_bullet() or True)
+                      lambda *_: self._active_editor()._toggle_bullet() or True)
         accel.connect(Gdk.KEY_KP_8, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._toggle_bullet() or True)
+                      lambda *_: self._active_editor()._toggle_bullet() or True)
         accel.connect(Gdk.KEY_9, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._toggle_checklist() or True)
+                      lambda *_: self._active_editor()._toggle_checklist() or True)
         accel.connect(Gdk.KEY_KP_9, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._toggle_checklist() or True)
+                      lambda *_: self._active_editor()._toggle_checklist() or True)
         accel.connect(Gdk.KEY_c,
                       Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK,
-                      0, lambda *_: self._toggle_code_block() or True)
+                      0, lambda *_: self._active_editor()._toggle_code_block() or True)
         accel.connect(Gdk.KEY_z, Gdk.ModifierType.CONTROL_MASK, 0,
-                      lambda *_: self._undo() or True)
+                      lambda *_: self._active_editor()._undo() or True)
         accel.connect(Gdk.KEY_z,
                       Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK,
-                      0, lambda *_: self._redo() or True)
+                      0, lambda *_: self._active_editor()._redo() or True)
 
         # Edge strips on all four sides. The outer 14px of each strip resizes
         # the matching corner, the rest resizes the edge.
@@ -801,32 +808,25 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
     def _close_search(self):
         self._search_revealer.set_reveal_child(False)
         self._search_entry.set_text('')
-        self._clear_highlights()
         # The expands a match showed open fold again.
-        self._refresh_line_styles()
+        for editor in [self] + self._all_cells():
+            editor._clear_highlights()
+            editor._refresh_line_styles()
         self.tv.grab_focus()
 
     def _do_search(self):
-        self._clear_highlights()
+        for editor in [self] + self._all_cells():
+            editor._clear_highlights()
         query = self._search_entry.get_text()
         if not query:
             self._refresh_results(query)
             self._refresh_line_styles()
             return
-        buf   = self.tv.get_buffer()
-        start = buf.get_start_iter()
-        flags = Gtk.TextSearchFlags.CASE_INSENSITIVE | \
-                Gtk.TextSearchFlags.TEXT_ONLY
-        while True:
-            result = start.forward_search(query, flags, None)
-            if not result:
-                break
-            m_start, m_end = result
-            buf.apply_tag(self._hl_tag, m_start, m_end)
-            start = m_end
+        # In the note's text and in every table cell. Matches in a folded
+        # expand show it open.
+        for editor in [self] + self._all_cells():
+            editor._highlight(query)
         self._refresh_results(query)
-        # Matches in a folded expand show it open.
-        self._refresh_line_styles()
 
     def _refresh_results(self, query):
         for row in self._results.get_children():
@@ -874,12 +874,45 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
                              buf.get_iter_at_offset(chars), True)
 
     def buffer_text(self):
+        """The note's text for searching all notes, with the text of each
+        table cell after it, one per line. See show_match()."""
         buf = self.tv.get_buffer()
-        return buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        for cell in self._all_cells():
+            cbuf = cell.tv.get_buffer()
+            text += '\n' + cbuf.get_slice(cbuf.get_start_iter(),
+                                          cbuf.get_end_iter(), True)
+        return text
+
+    def _match_in_cell(self, start, end):
+        """(cell, start, end) for a match past the note's own text in
+        buffer_text(), or None for one in the note's text."""
+        buf = self.tv.get_buffer()
+        offset = buf.get_char_count()
+        if start < offset:
+            return None
+        for cell in self._all_cells():
+            length = cell.tv.get_buffer().get_char_count()
+            offset += 1
+            if start <= offset + length:
+                return cell, start - offset, end - offset
+            offset += length
+        return None
 
     def show_match(self, start, end):
         # Select the match and scroll to it once the window has its size.
         self._expand()
+        found = self._match_in_cell(start, end)
+        if found is not None:
+            cell, low, high = found
+            cbuf = cell.tv.get_buffer()
+            cbuf.select_range(cbuf.get_iter_at_offset(low),
+                              cbuf.get_iter_at_offset(high))
+            self._open_sections_around(
+                self.tv.get_buffer().get_iter_at_child_anchor(
+                    cell.table.anchor).get_offset())
+            cell.tv.grab_focus()
+            return
         self._open_sections_around(start)
         buf = self.tv.get_buffer()
         buf.select_range(buf.get_iter_at_offset(start), buf.get_iter_at_offset(end))
@@ -887,44 +920,66 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
         GLib.idle_add(lambda: self.tv.scroll_to_mark(
             buf.get_insert(), 0.1, False, 0, 0) and False)
 
+    def _active_editor(self):
+        """The editor the Format and Insert menus and the shortcuts act on:
+        the note's text, or the table cell the cursor was last in."""
+        return getattr(self, '_active', None) or self
+
+    def _set_active_editor(self, editor):
+        self._active = editor
+        # A note has one selection, as a page does: the note's text and each
+        # cell are text views of their own, so the ones the cursor is not in
+        # drop theirs. The selection's end comes to the cursor, which stays
+        # where it is, so nothing follows a cursor that moved.
+        for other in [self] + self._all_cells():
+            if other is not editor:
+                buf = other.tv.get_buffer()
+                if buf.get_has_selection():
+                    buf.move_mark(buf.get_selection_bound(),
+                                  buf.get_iter_at_mark(buf.get_insert()))
+        self._refresh_format_buttons()
+
     def _refresh_format_buttons(self):
         # The Format button is lit while a format is on at the cursor, so
         # that what is typed next gets it. Its menu checks which ones are.
         ctx = self._format_btn.get_style_context()
-        if self._bold_active or self._heading_active or self._code_active:
+        ed = self._active_editor()
+        if ed._bold_active or ed._heading_active or ed._code_active:
             ctx.add_class('pinned')
         else:
             ctx.remove_class('pinned')
 
     def _format_items(self):
+        ed = self._active_editor()
         return [
-            BarItem('<b>B</b>', 'Bold', '**text**', 'Ctrl+B', self._toggle_bold,
-                    self._bold_active, not self._heading_active),
+            BarItem('<b>B</b>', 'Bold', '**text**', 'Ctrl+B', ed._toggle_bold,
+                    ed._bold_active, not ed._heading_active),
             BarItem('<b>H</b>', 'Heading', '# text', 'Ctrl+H',
-                    self._toggle_heading, self._heading_active, True),
+                    ed._toggle_heading, ed._heading_active, True),
             BarItem('&lt;/&gt;', 'Inline code', '`text`', 'Ctrl+E',
-                    self._toggle_inline_code, self._code_active, True),
+                    ed._toggle_inline_code, ed._code_active, True),
         ]
 
     def _insert_items(self):
+        ed = self._active_editor()
         return [
             # A bullet is small in any font, so it is drawn a size up.
             BarItem('<span size="x-large">•</span>', 'Bullet list', '- item', 'Ctrl+8',
-                    self._toggle_bullet, None, True),
+                    ed._toggle_bullet, None, True),
             BarItem(CHECKBOX_MARKER.strip(), 'Checklist', '[ ] item', 'Ctrl+9',
-                    self._toggle_checklist, None, True),
+                    ed._toggle_checklist, None, True),
             BarItem('❝', 'Quote', '> text', '',
-                    lambda: self._toggle_list((QUOTE_MARKER,)), None, True),
+                    lambda: ed._toggle_list((QUOTE_MARKER,)), None, True),
             BarItem('&lt;/&gt;', 'Code block', '```', 'Ctrl+Shift+C',
-                    self._toggle_code_block, None, True, boxed=True),
-            BarItem('—', 'Divider', '---', '', self._insert_divider,
+                    ed._toggle_code_block, None, True, boxed=True),
+            BarItem('—', 'Divider', '---', '', ed._insert_divider,
                     None, True),
-            BarItem('▸', 'Expand', '', '', self._insert_section, None, True),
-            # Not inside a table: it would join that table.
+            BarItem('▸', 'Expand', '', '', ed._insert_section, None, True),
+            # A table is not put in a table's cell.
             BarItem('⊞', 'Table', '', '', self._insert_table, None,
-                    self._cursor_table_cell() is None),
+                    ed is self),
             BarItem('🖼', 'Image…', '', 'Ctrl+V',
-                    self._choose_and_insert_image, None, True),
+                    ed._choose_and_insert_image, None, True),
         ]
 
     def _popup_bar_menu(self, button, items):
@@ -1230,6 +1285,8 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
         self._body_rgba = Gdk.RGBA()
         self._body_rgba.parse(PALETTE[self._color][0])
         self.tv.queue_draw()
+        for table in getattr(self, '_table_widgets', []):
+            table.queue_draw()
 
     def _show_about_dialog(self):
         dialog = Gtk.AboutDialog(transient_for=self, modal=True)
@@ -1295,9 +1352,23 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
         else:
             ctx.remove_class('pinned')
 
+    def _all_cells(self):
+        return [cell for table in self._table_widgets
+                for cell in table.all_cells()]
+
+    def _on_tv_size(self, tv, allocation):
+        if allocation.width != self._tv_width:
+            self._tv_width = allocation.width
+            for table in self._table_widgets:
+                table.queue_widths()
+
     def _change_font_size(self, delta: int):
         self._font_size = max(8, min(32, self._font_size + delta))
         self._apply_note_font()
+        for cell in self._all_cells():
+            cell._apply_note_font()
+        for table in self._table_widgets:
+            table.queue_widths()
         self._queue_save()
 
     def _on_configure(self, _, event):
@@ -1336,5 +1407,6 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
                     code_ranges=self._get_tag_ranges(self._code_tag),
                     backtick_ranges=self._get_tag_ranges(self._backtick_tag),
                     images=self._get_images_state(),
+                    tables=self._get_tables_state(),
                     font_size=self._font_size, color=self._color,
                     opacity=self._opacity, collapsed=self._collapsed)

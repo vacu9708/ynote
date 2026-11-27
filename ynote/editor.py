@@ -23,7 +23,7 @@ from .config import (
     DIVIDER_TEXT, EXPAND_CLOSED, EXPAND_END, EXPAND_OPEN, IMAGE_ANCHOR,
     IMAGES_DIR, QUOTE_MARKER, TABLE_MARKER,
 )
-from .images import image_files_from_metadata, image_path, normalize_image_meta
+from .images import image_path, normalize_image_meta, state_image_files
 from .links import find_links
 from .markdown import fit_between, from_markdown, is_all_code, to_markdown
 from .sections import find_sections, hidden_lines, section_at
@@ -33,8 +33,7 @@ from .styles import (
     CODE_GAP, CODE_OUTLINE, CODE_PAD, CODE_PAD_Y, CODE_RADIUS, CODE_TEXT_COLOR,
     EXPAND_BUTTON_PAD, EXPAND_GAP, EXPAND_MARGIN, EXPAND_PAD,
     EXPAND_TITLE_SCALE, HEADING_FONT, HEADING_SCALE, INLINE_CODE_RISE,
-    LINE_SPACING, MARKER_GAP, QUOTE_BAR, TABLE_MARGIN, TABLE_MIN_COLUMN,
-    TABLE_PAD, TABLE_PAD_Y,
+    LINE_SPACING, MARKER_GAP, QUOTE_BAR,
 )
 
 
@@ -167,6 +166,8 @@ class Editor:
     _hidden_lines = frozenset()
     # The title line of the expand whose button is under the pointer.
     _expand_hover = None
+    # The tables of editors in the text; a list once _build_editor() runs.
+    _table_widgets = ()
 
     # ------------------------------------------------------------------ images
 
@@ -296,9 +297,14 @@ class Editor:
         return paths
 
     def history_image_files(self):
+        """The images any undo step could bring back: of this text, of the
+        tables in it, and of each table cell's own undo steps."""
         files = set()
         for state in self._history:
-            files.update(image_files_from_metadata(state.get('images', [])))
+            files.update(state_image_files(state))
+        for table in self._table_widgets:
+            for cell in table.all_cells():
+                files.update(cell.history_image_files())
         return files
 
     def _save_pixbuf_to_images_dir(self, pixbuf, original_name='pasted-image.png'):
@@ -487,6 +493,7 @@ class Editor:
             'backtick': self._get_tag_ranges_between(
                 self._backtick_tag, start_offset, end_offset),
             'images': self._get_images_between(start, end),
+            'tables': self._get_tables_between(start_offset, end_offset),
         }
 
     def _copy_rich_selection_to_clipboard(self):
@@ -604,10 +611,14 @@ class Editor:
             image_meta['offset'] = insert_offset + image_meta.get('offset', 0)
             images.append(image_meta)
         self._restore_images(images)
+        self._restore_tables([
+            dict(table, offset=insert_offset + table.get('offset', 0))
+            for table in state.get('tables', [])])
 
         self._strip_marker_formats()
         self._normalize_code_pads()
-        self._normalize_tables()
+        # Markdown tables pasted in come as rows of tab-separated text.
+        self._convert_text_tables()
         self._normalize_sections()
         self._refresh_line_styles()
         end_offset = insert_offset + len(text)
@@ -655,7 +666,6 @@ class Editor:
             text = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()
         if not text:
             return
-        text = self._fit_text_to_cell(text)
         buf = self.tv.get_buffer()
         self._flush_snapshot()
         self._paste_plain = True
@@ -666,17 +676,6 @@ class Editor:
             self._paste_plain = False
         self._flush_snapshot()
         self._queue_save()
-
-    def _fit_text_to_cell(self, text):
-        """Text pasted into a table cell, which holds one line: its lines
-        joined by spaces."""
-        buf = self.tv.get_buffer()
-        bounds = buf.get_selection_bounds()
-        at = bounds[0] if bounds else buf.get_iter_at_mark(buf.get_insert())
-        if '\n' not in text or not self._is_table_row(at.get_line()):
-            return text
-        return ' '.join(part.strip() for part in text.splitlines()
-                        if part.strip())
 
     def _paste_markdown_if_any(self):
         """Paste text from another app with the formats its Markdown gives,
@@ -693,13 +692,7 @@ class Editor:
         if not text:
             return False
         state = from_markdown(text)
-        fitted = (text if TABLE_MARKER in state['text']
-                  else self._fit_text_to_cell(text))
-        if fitted != text:
-            # Lines pasted into a cell become one line, which keeps its bold
-            # and inline code but is no heading or code block.
-            state = dict(from_markdown(fitted), heading=[], code=[])
-        elif state['text'] == text and not any(
+        if state['text'] == text and not any(
                 state[key] for key in ('bold', 'heading', 'code', 'backtick')):
             return False
 
@@ -714,6 +707,22 @@ class Editor:
         self._flush_snapshot()
         self._insert_rich_state_at_cursor(state)
         return True
+
+    def _highlight(self, query):
+        """Mark each match of query in the text, without regard to case."""
+        buf = self.tv.get_buffer()
+        start = buf.get_start_iter()
+        flags = (Gtk.TextSearchFlags.CASE_INSENSITIVE
+                 | Gtk.TextSearchFlags.TEXT_ONLY)
+        while query:
+            result = start.forward_search(query, flags, None)
+            if not result:
+                break
+            m_start, m_end = result
+            buf.apply_tag(self._hl_tag, m_start, m_end)
+            start = m_end
+        # Matches in a folded expand show it open.
+        self._refresh_line_styles()
 
     def _clear_highlights(self):
         buf = self.tv.get_buffer()
@@ -965,6 +974,11 @@ class Editor:
         return False
 
     def _on_buf_changed(self, buf):
+        # A table goes with its anchor when text over it is deleted, such as
+        # a selection across it that is typed over; an anchor that is gone
+        # has no place in the text to ask for.
+        self._table_widgets = [t for t in self._table_widgets
+                               if not t.anchor.get_deleted()]
         if self._restoring:
             return
         if not self._normalizing:
@@ -984,7 +998,8 @@ class Editor:
                 and last.get('heading', []) == state['heading']
                 and last.get('code', []) == state['code']
                 and last.get('backtick', []) == state['backtick']
-                and last.get('images', []) == state['images']):
+                and last.get('images', []) == state['images']
+                and last.get('tables', []) == state['tables']):
             return False
         # Truncate any redo history
         del self._history[self._hist_pos + 1:]
@@ -1004,11 +1019,13 @@ class Editor:
             'code': self._get_tag_ranges(self._code_tag),
             'backtick': self._get_tag_ranges(self._backtick_tag),
             'images': self._get_images_state(),
+            'tables': self._get_tables_state(),
         }
 
     def _restore_state(self, state):
         self._restoring = True
         self._remove_all_image_widgets()
+        self._remove_all_table_widgets()
         buf = self.tv.get_buffer()
         old_text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
         old_cursor = buf.get_iter_at_mark(buf.get_insert()).get_offset()
@@ -1037,6 +1054,7 @@ class Editor:
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(state.get('images', []))
+        self._restore_tables(state.get('tables', []))
         self._strip_marker_formats()
         self._normalize_code_pads()
         self._refresh_emoji_tags()
@@ -1157,11 +1175,6 @@ class Editor:
     def _on_tv_button_press(self, tv, event):
         if event.type == Gdk.EventType.BUTTON_PRESS and event.button == 1:
             return self._on_tv_single_click(event)
-        if (event.type == Gdk.EventType.BUTTON_PRESS and event.button == 3
-                and not tv.get_buffer().get_has_selection()):
-            # The table items of the menu act on the cell right-clicked.
-            self._click_table_cell(event, move_only=True)
-            return False
         # In a code block, a double click selects the clicked line, which is
         # usually one command, and a triple click selects the whole block.
         multi = (Gdk.EventType.DOUBLE_BUTTON_PRESS, Gdk.EventType.TRIPLE_BUTTON_PRESS)
@@ -1201,7 +1214,7 @@ class Editor:
                 return True
             line = self._checkbox_line_at(event.x, event.y)
             if line is None:
-                return self._click_table_cell(event)
+                return False
             self._toggle_checked([line])
             return True
         if state == Gdk.ModifierType.CONTROL_MASK:
@@ -1223,6 +1236,8 @@ class Editor:
 
     def _handle_tv_key(self, tv, event):
         state = event.state & Gtk.accelerator_get_default_mod_mask()
+        if self._on_key_beside_table(tv.get_buffer(), event, state):
+            return True
         if (state == Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK
                 and Gdk.keyval_to_lower(event.keyval) == Gdk.KEY_v):
             self._paste_plain_text()
@@ -1236,7 +1251,7 @@ class Editor:
             return False
 
         buf = tv.get_buffer()
-        if self._on_table_key(buf, event.keyval, state):
+        if self._on_table_edge_key(buf, event.keyval, state):
             return True
         if self._on_section_key(buf, event.keyval, state):
             return True
@@ -1469,9 +1484,7 @@ class Editor:
         start, end = buf.get_start_iter(), buf.get_end_iter()
         for tag in (self._code_top_tag, self._code_bottom_tag,
                     self._pad_tag, *self._marker_tags.values(),
-                    *self._slot_tags.values(), self._table_row_tag,
-                    self._table_top_tag, self._table_bottom_tag,
-                    self._table_head_tag, *self._table_tab_tags):
+                    *self._slot_tags.values()):
             buf.remove_tag(tag, start, end)
         self._tag_list_markers(buf)
         self._even_lines(buf)
@@ -1498,8 +1511,6 @@ class Editor:
                     after = here.copy()
                     after.forward_char()
                     buf.apply_tag(self._pad_tag, here, after)
-        # After the padding of inline code, which a cell's width takes in.
-        self._apply_tables(buf)
         return False
 
     def _hide_code_anchors(self, buf):
@@ -1809,7 +1820,6 @@ class Editor:
         pad = CODE_PAD
         if self._opacity < 1.0:
             self._draw_text_backing(tv, cr, buf, visible)
-        self._draw_tables(tv, cr, buf, first, last)
         line = first
         while line <= last:
             # A folded section's code takes no room and has no box.
@@ -1971,6 +1981,14 @@ class Editor:
                         and event.type == Gdk.EventType.KEY_PRESS)
             GLib.idle_add(self._keep_pads_out_of_selection, previous, keyboard,
                           priority=GLib.PRIORITY_HIGH_IDLE)
+        # A key that brings the cursor onto a table's line takes it into the
+        # table. A click leaves it beside the table, as in Confluence.
+        event = Gtk.get_current_event()
+        by_key = event is not None and event.type == Gdk.EventType.KEY_PRESS
+        if (by_key and not buf.get_has_selection() and self._table_widgets
+                and self._table_on_line(it.get_line()) is not None):
+            GLib.idle_add(self._enter_table, offset, offset >= previous,
+                          priority=GLib.PRIORITY_HIGH_IDLE)
         if not buf.get_has_selection() and it.get_line() in self._skip_lines:
             GLib.idle_add(self._skip_divider, offset, offset >= previous,
                           priority=GLib.PRIORITY_HIGH_IDLE)
@@ -2019,12 +2037,11 @@ class Editor:
             buf.insert(end, '\n')
         buf.place_cursor(buf.get_iter_at_line(line + 1))
 
-    # ------------------------------------------------------------------ tables
-    # A row of a table is a line that starts with TABLE_MARKER, with its cells
-    # separated by tabs, and the rows next to each other are one table whose
-    # first row is its header. Like a list marker, the marker is text, so a
-    # table is saved, undone, searched, and copied between notes as text.
-    # Tab stops line up the columns and _draw_tables() draws the lines.
+    # ------------------------------------------------------------------ text tables
+    # Before a table's cells were editors, a table was rows of text: a line
+    # that starts with TABLE_MARKER, its cells separated by tabs. Pasted
+    # Markdown tables still come so. _convert_text_tables() makes them tables
+    # of editors; these find them.
 
     def _is_table_row(self, line):
         buf = self.tv.get_buffer()
@@ -2045,15 +2062,6 @@ class Editor:
                     runs.append([number, number])
         return runs
 
-    def _table_bounds(self, line):
-        """The first and last line of the table that holds the row `line`."""
-        first = last = line
-        while self._is_table_row(first - 1):
-            first -= 1
-        while self._is_table_row(last + 1):
-            last += 1
-        return first, last
-
     def _row_cells(self, line):
         """(start, end) offsets of the text of each cell of the row `line`."""
         buf = self.tv.get_buffer()
@@ -2065,209 +2073,6 @@ class Editor:
             cells.append((offset, offset + len(cell)))
             offset += len(cell) + 1
         return cells
-
-    @staticmethod
-    def _cell_index(cells, offset):
-        """Which of the cells the offset is in. A cell ends where the tab
-        after it is, which is still in it."""
-        index = 0
-        for number, (start, _end) in enumerate(cells):
-            if start <= offset:
-                index = number
-        return index
-
-    def _apply_tables(self, buf):
-        """Tag the rows of every table and line up its columns: each column is
-        as wide as its widest cell, and a tab stop starts each one."""
-        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
-        self._tables = []
-        if TABLE_MARKER not in text:
-            return
-        lines = text.split('\n')
-        min_width = TABLE_MIN_COLUMN * self._font_size
-        for index, (first, last) in enumerate(self._table_runs(buf, lines)):
-            left = self._line_left(first)
-            columns = max(lines[n].count('\t') for n in range(first, last + 1))
-            widths = [min_width] * (columns + 1)
-            for line in range(first, last + 1):
-                start, end = self._line_bounds(line)
-                buf.apply_tag(self._table_row_tag, start, end)
-                head = line == first
-                if head:
-                    after = start.copy()
-                    after.forward_chars(len(TABLE_MARKER))
-                    buf.apply_tag(self._table_head_tag, after, end)
-                for column, (low, high) in enumerate(self._row_cells(line)):
-                    widths[column] = max(widths[column],
-                                         self._cell_text_width(buf, low, high,
-                                                               head))
-            buf.apply_tag(self._table_top_tag, *self._line_bounds(first))
-            buf.apply_tag(self._table_bottom_tag, *self._line_bounds(last))
-            # Where each column's line is, from the table's left edge. Its
-            # text starts a pixel and the padding further in.
-            edges = [0]
-            for width in widths:
-                edges.append(edges[-1] + width + 2 * TABLE_PAD + 1)
-            tabs = self._table_tabs_tag(index, tuple(edges[1:-1]))
-            # In from the table's left line, which is further in inside an
-            # expand. The tag is made after the row tag, so it wins over it.
-            tabs.set_property('left-margin', left + 1 + TABLE_PAD)
-            buf.apply_tag(tabs, buf.get_iter_at_line(first),
-                          self._line_bounds(last)[1])
-            self._tables.append((first, last, [left + x for x in edges]))
-
-    def _table_tabs_tag(self, index, stops):
-        """The tag with the tab stops of the index-th table. Tab stops are
-        relative to where a row's text starts."""
-        buf = self.tv.get_buffer()
-        while len(self._table_tab_tags) <= index:
-            tag = buf.create_tag(f'table-tabs-{len(self._table_tab_tags)}')
-            tag.ynote_stops = None
-            self._table_tab_tags.append(tag)
-        tag = self._table_tab_tags[index]
-        if stops and tag.ynote_stops != stops:
-            tabs = Pango.TabArray.new(len(stops), True)
-            for number, stop in enumerate(stops):
-                tabs.set_tab(number, Pango.TabAlign.LEFT, stop)
-            tag.set_property('tabs', tabs)
-            tag.ynote_stops = stops
-        return tag
-
-    def _cell_text_width(self, buf, start, end, head):
-        """Width in pixels of the text from start to end, in the fonts its
-        formats give it, and of the images in it, as they are shown."""
-        if start >= end:
-            return 0
-        text = buf.get_slice(buf.get_iter_at_offset(start),
-                             buf.get_iter_at_offset(end), True)
-        attributes = Pango.AttrList()
-        code_scale = self._code_tag.get_property('scale')
-        emoji_scale = self._emoji_tag.get_property('scale')
-        it = buf.get_iter_at_offset(start)
-        index = 0
-        measured = []
-        images = 0
-        for char in text:
-            anchor = it.get_child_anchor()
-            if anchor is not None:
-                # An image is a widget in the text, as wide as it is drawn.
-                images += max((widget.get_preferred_width()[1]
-                               for widget in anchor.get_widgets()), default=0)
-                it.forward_char()
-                continue
-            measured.append(char)
-            size = len(char.encode())
-            found = []
-            if head or it.has_tag(self._bold_tag):
-                found.append(Pango.attr_weight_new(Pango.Weight.BOLD))
-            if it.has_tag(self._backtick_tag) and not it.has_tag(self._pad_tag):
-                found += [Pango.attr_family_new(CODE_FONT),
-                          Pango.attr_scale_new(code_scale)]
-            elif self._is_emoji_char(char):
-                found.append(Pango.attr_scale_new(emoji_scale))
-            for attribute in found:
-                attribute.start_index = index
-                attribute.end_index = index + size
-                attributes.insert(attribute)
-            index += size
-            it.forward_char()
-        width = images
-        if measured:
-            layout = self.tv.create_pango_layout(''.join(measured))
-            layout.set_font_description(self._body_font)
-            layout.set_attributes(attributes)
-            width += layout.get_extents()[1].width / Pango.SCALE
-        return math.ceil(width)
-
-    def _draw_tables(self, tv, cr, buf, first, last):
-        """Draw the lines of each visible table, with its header shaded."""
-        count = buf.get_line_count()
-        dx, dy = tv.buffer_to_window_coords(Gtk.TextWindowType.WIDGET, 0, 0)
-        for table_first, table_last, edges in self._tables:
-            if (table_last < first or table_first > last or table_last >= count
-                    or table_first in self._hidden_lines):
-                continue
-            rows = [tv.get_line_yrange(buf.get_iter_at_line(line))
-                    for line in range(table_first, table_last + 1)]
-            ys = [y for y, _ in rows]
-            ys[0] += TABLE_MARGIN
-            ys.append(rows[-1][0] + rows[-1][1] - TABLE_MARGIN)
-            ys = [y + dy for y in ys]
-            xs = [x + dx for x in edges]
-            width = xs[-1] - xs[0] + 1
-            if self._opacity < 1.0:
-                body = self._body_rgba
-                cr.set_source_rgba(body.red, body.green, body.blue, 1.0)
-                cr.rectangle(xs[0], ys[0], width, ys[-1] - ys[0])
-                cr.fill()
-            head = self._code_rgba
-            cr.set_source_rgba(head.red, head.green, head.blue, 1.0)
-            cr.rectangle(xs[0], ys[0], width, ys[1] - ys[0])
-            cr.fill()
-            cr.set_source_rgba(*CODE_OUTLINE)
-            cr.set_line_width(1)
-            for y in ys[:-1]:
-                cr.move_to(xs[0], y + 0.5)
-                cr.line_to(xs[-1] + 1, y + 0.5)
-            cr.move_to(xs[0], ys[-1] - 0.5)
-            cr.line_to(xs[-1] + 1, ys[-1] - 0.5)
-            for x in xs:
-                cr.move_to(x + 0.5, ys[0])
-                cr.line_to(x + 0.5, ys[-1])
-            cr.stroke()
-
-    def _normalize_tables(self):
-        """Give every row of a table as many cells as its widest row has, and
-        take out a TABLE_MARKER that is not at the start of a line, as one
-        left by joining a row to the line before it. Returns whether the text
-        changed. The cursor stays at the characters it was at."""
-        if self._normalizing:
-            return False
-        buf = self.tv.get_buffer()
-        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
-        if TABLE_MARKER not in text:
-            return False
-        lines = text.split('\n')
-        starts, offset = [], 0
-        for line in lines:
-            starts.append(offset)
-            offset += len(line) + 1
-        edits = []   # (offset, text to insert, or None to delete one char)
-        for number, line in enumerate(lines):
-            index = line.find(TABLE_MARKER, 1)
-            if index >= 0 and not self._is_code_line(buf, number):
-                while index >= 0:
-                    edits.append((starts[number] + index, None))
-                    index = line.find(TABLE_MARKER, index + 1)
-        for first, last in self._table_runs(buf, lines):
-            columns = max(lines[n].count('\t') for n in range(first, last + 1))
-            for number in range(first, last + 1):
-                missing = columns - lines[number].count('\t')
-                if missing:
-                    edits.append((starts[number] + len(lines[number]),
-                                  '\t' * missing))
-        if not edits:
-            return False
-
-        marks = [buf.get_iter_at_mark(buf.get_insert()).get_offset(),
-                 buf.get_iter_at_mark(buf.get_selection_bound()).get_offset()]
-        self._normalizing = True
-        try:
-            for offset, insert in sorted(edits, key=lambda e: -e[0]):
-                if insert is None:
-                    buf.delete(buf.get_iter_at_offset(offset),
-                               buf.get_iter_at_offset(offset + 1))
-                    marks = [m - 1 if m > offset else m for m in marks]
-                else:
-                    self._insert_plain(offset, insert)
-                    marks = [m + len(insert) if m > offset else m
-                             for m in marks]
-            insert, bound = (buf.get_iter_at_offset(m) for m in marks)
-            buf.select_range(insert, bound)
-        finally:
-            self._normalizing = False
-        self._queue_code_margins()
-        return True
 
     def _insert_plain(self, offset, text):
         """Insert text at offset without the formats of the text before it."""
@@ -2289,7 +2094,6 @@ class Editor:
             edit(self.tv.get_buffer())
         finally:
             self._restoring = False
-        self._normalize_tables()
         self._normalize_sections()
         self._refresh_line_styles()
         self._sync_format_state()
@@ -2297,211 +2101,296 @@ class Editor:
         self._flush_snapshot()
         self._queue_save()
 
+    # ------------------------------------------------------------------ tables of editors
+    # A table is a TableWidget (table.py) at a child anchor, alone on its
+    # line, as an image is at its anchor. Its cells are editors of their own.
+    # Its rows are saved in the note's `tables`, at the anchor's offset.
+
+    def _table_anchors(self):
+        """(offset, anchor) of each table in the text, in order."""
+        buf = self.tv.get_buffer()
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        found = []
+        offset = text.find(IMAGE_ANCHOR)
+        while offset >= 0:
+            anchor = buf.get_iter_at_offset(offset).get_child_anchor()
+            if anchor is not None and hasattr(anchor, 'ynote_table'):
+                found.append((offset, anchor))
+            offset = text.find(IMAGE_ANCHOR, offset + 1)
+        return found
+
+    def _get_tables_state(self):
+        return [{'offset': offset, 'rows': anchor.ynote_table.rows_state()}
+                for offset, anchor in self._table_anchors()]
+
+    def _get_tables_between(self, start, end):
+        return [{'offset': offset - start,
+                 'rows': anchor.ynote_table.rows_state()}
+                for offset, anchor in self._table_anchors()
+                if start <= offset < end]
+
+    def _restore_tables(self, tables):
+        """Put each table at its offset, where its placeholder is."""
+        if not tables:
+            return
+        from .table import TableWidget
+        buf = self.tv.get_buffer()
+        for table in sorted(tables, key=lambda t: -t.get('offset', 0)):
+            offset = int(table.get('offset', 0))
+            it = buf.get_iter_at_offset(offset)
+            if not it.is_end() and it.get_char() == IMAGE_ANCHOR:
+                after = it.copy()
+                after.forward_char()
+                buf.delete(it, after)
+                it = buf.get_iter_at_offset(offset)
+            anchor = buf.create_child_anchor(it)
+            widget = TableWidget(self, table.get('rows') or [], anchor)
+            anchor.ynote_table = widget
+            self.tv.add_child_at_anchor(widget, anchor)
+            widget.show_all()
+            self._table_widgets.append(widget)
+
+    def _remove_all_table_widgets(self):
+        for widget in self._table_widgets:
+            parent = widget.get_parent()
+            if parent:
+                parent.remove(widget)
+        self._table_widgets = []
+
+    def _on_table_changed(self):
+        """A cell or the shape of a table changed: it is saved, and is a
+        step of the note's undo, as an edit of the text is."""
+        if self._restoring:
+            return
+        self._queue_save()
+        if self._snap_sid:
+            GLib.source_remove(self._snap_sid)
+        self._snap_sid = GLib.timeout_add(600, self._take_snapshot)
+
+    def _table_on_line(self, line):
+        """The table alone on line, or None."""
+        buf = self.tv.get_buffer()
+        if line < 0 or line >= buf.get_line_count():
+            return None
+        anchor = buf.get_iter_at_line(line).get_child_anchor()
+        return getattr(anchor, 'ynote_table', None)
+
     def _insert_table(self, columns=3, rows=3):
         """Insert an empty table with a header row, on the cursor's line when
-        it is empty, else on a line after it."""
-        def edit(buf):
-            line = buf.get_iter_at_mark(buf.get_insert()).get_line()
-            start, end = self._line_bounds(line)
-            table = '\n'.join([TABLE_MARKER + '\t' * (columns - 1)] * rows)
+        it is empty, else on a line after it, and put the cursor in its first
+        cell."""
+        from .table import empty_cell
+        buf = self.tv.get_buffer()
+        self._flush_snapshot()
+        line = buf.get_iter_at_mark(buf.get_insert()).get_line()
+        start, end = self._line_bounds(line)
+        self._restoring = True
+        try:
             if buf.get_slice(start, end, True).strip(CODE_ANCHOR + ' \t'):
-                self._insert_plain(end.get_offset(), '\n' + table)
+                self._insert_plain(end.get_offset(), '\n')
                 line += 1
             else:
                 buf.delete(start, end)
-                self._insert_plain(start.get_offset(), table)
+            offset = buf.get_iter_at_line(line).get_offset()
             # A line to go on writing after the table.
-            _, end = self._line_bounds(line + rows - 1)
-            if end.is_end():
-                buf.insert(end, '\n')
-            buf.place_cursor(buf.get_iter_at_offset(
-                buf.get_iter_at_line(line).get_offset() + len(TABLE_MARKER)))
-        self._edit_lines(edit)
+            if self._line_bounds(line)[1].is_end():
+                buf.insert(buf.get_end_iter(), '\n')
+            self._restore_tables([{
+                'offset': offset,
+                'rows': [[empty_cell() for _ in range(columns)]
+                         for _ in range(rows)]}])
+        finally:
+            self._restoring = False
+        self._refresh_line_styles()
+        self._flush_snapshot()
+        self._queue_save()
+        table = self._table_on_line(line)
+        if table is not None:
+            GLib.idle_add(lambda: table.focus_cell(0, 0) and False)
 
-    def _add_table_row(self, line):
-        """Add an empty row after the row `line` and put the cursor in it."""
-        def edit(buf):
-            columns = len(self._row_cells(line))
-            offset = self._line_bounds(line)[1].get_offset()
-            self._insert_plain(offset, '\n' + TABLE_MARKER + '\t' * (columns - 1))
-            buf.place_cursor(buf.get_iter_at_offset(
-                offset + 1 + len(TABLE_MARKER)))
-        self._edit_lines(edit)
+    def _leave_table(self, table, forward):
+        """Put the cursor in the text after the table, or before it, making
+        a line there when there is none."""
+        buf = self.tv.get_buffer()
+        at = buf.get_iter_at_child_anchor(table.anchor)
+        line = at.get_line()
+        # The cursor comes from the table, not from where the note's cursor
+        # last was, so a divider or an expand's end next to the table is
+        # skipped the way it leaves, not back into the table.
+        self._cursor_offset = at.get_offset()
+        if forward:
+            if line + 1 >= buf.get_line_count():
+                buf.insert(buf.get_end_iter(), '\n')
+            target = buf.get_iter_at_line(line + 1)
+        elif line > 0:
+            target = self._line_bounds(line - 1)[1]
+        else:
+            buf.insert(buf.get_start_iter(), '\n')
+            target = buf.get_start_iter()
+        buf.place_cursor(target)
+        self.tv.grab_focus()
+        self._set_active_editor(self)
+        self.tv.scroll_mark_onscreen(buf.get_insert())
 
-    def _delete_table_rows(self, first, last):
-        """Delete the lines from first to last, with the line break before
-        them, or after them at the start of the note, and put the cursor at
-        the end of the line before, or at the start of the text after."""
+    def _delete_table(self, table):
+        """Take the table out with its line, as one undo step."""
+        buf = self.tv.get_buffer()
+        line = buf.get_iter_at_child_anchor(table.anchor).get_line()
+
         def edit(buf):
-            start = buf.get_iter_at_line(first)
-            _, end = self._line_bounds(last, include_newline=first == 0)
-            if first > 0:
+            start, end = self._line_bounds(line, include_newline=True)
+            if end.is_end() and line > 0:
                 start.backward_char()
             offset = start.get_offset()
             buf.delete(start, end)
-            target = buf.get_iter_at_offset(offset)
-            if first == 0 and self._is_table_row(0):
-                target.forward_chars(len(TABLE_MARKER))
-            buf.place_cursor(target)
+            if table in self._table_widgets:
+                self._table_widgets.remove(table)
+            buf.place_cursor(buf.get_iter_at_offset(offset))
         self._edit_lines(edit)
+        self.tv.grab_focus()
 
-    def _cursor_table_cell(self):
-        """(line, column) of the cell the cursor is in, or None."""
-        buf = self.tv.get_buffer()
-        cursor = buf.get_iter_at_mark(buf.get_insert())
-        line = cursor.get_line()
-        if not self._is_table_row(line):
+    def _table_beside_cursor(self, buf):
+        """The table the cursor is right of, on the table's own line, as a
+        click beside a table puts it, or None."""
+        if buf.get_has_selection() or not self._table_widgets:
             return None
-        return line, self._cell_index(self._row_cells(line),
-                                      cursor.get_offset())
+        cursor = buf.get_iter_at_mark(buf.get_insert())
+        table = self._table_on_line(cursor.get_line())
+        if table is None or cursor.starts_line():
+            return None
+        return table
 
-    def _add_table_column(self):
-        """Add an empty column after the cursor's."""
-        here = self._cursor_table_cell()
-        if here is None:
-            return
-        line, column = here
-        first, last = self._table_bounds(line)
+    def _on_key_beside_table(self, buf, event, state):
+        """With the cursor right of a table, as in Confluence: text typed,
+        pasted, or Enter goes on a line after the table, Backspace goes into
+        its last cell, and Delete does nothing, so the table keeps its line
+        to itself. The arrow keys move on as they do."""
+        table = self._table_beside_cursor(buf)
+        if table is None:
+            return False
+        keyval = event.keyval
+        plain = state & ~Gdk.ModifierType.SHIFT_MASK == 0
+        if plain and keyval == Gdk.KEY_BackSpace:
+            row = len(table.cells) - 1
+            table.focus_cell(row, len(table.cells[row]) - 1)
+            return True
+        if plain and keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete):
+            return True
+        enter = plain and keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter)
+        paste = (state & Gdk.ModifierType.CONTROL_MASK
+                 and Gdk.keyval_to_lower(keyval) == Gdk.KEY_v)
+        typed = plain and Gdk.keyval_to_unicode(keyval) != 0
+        if not (enter or paste or typed):
+            return False
+        self._open_line_after_table(buf, table)
+        # Enter has made its line; typing and pasting go on as ever there,
+        # through an input method too.
+        return enter
 
-        def edit(buf):
-            for row in range(last, first - 1, -1):
-                cells = self._row_cells(row)
-                self._insert_plain(cells[min(column, len(cells) - 1)][1], '\t')
-            buf.place_cursor(buf.get_iter_at_offset(
-                self._row_cells(line)[column + 1][0]))
-        self._edit_lines(edit)
-
-    def _delete_table_column(self):
-        """Delete the cursor's column, or the whole table when it has no
-        other."""
-        here = self._cursor_table_cell()
-        if here is None:
-            return
-        line, column = here
-        first, last = self._table_bounds(line)
-        if len(self._row_cells(line)) == 1:
-            self._delete_table_rows(first, last)
-            return
-
-        def edit(buf):
-            for row in range(last, first - 1, -1):
-                cells = self._row_cells(row)
-                if column >= len(cells):
-                    continue
-                start, end = cells[column]
-                # The cell and the tab after it, or before the last one.
-                if column + 1 < len(cells):
-                    end += 1
-                else:
-                    start -= 1
-                buf.delete(buf.get_iter_at_offset(start),
-                           buf.get_iter_at_offset(end))
-            cells = self._row_cells(line)
-            buf.place_cursor(buf.get_iter_at_offset(
-                cells[min(column, len(cells) - 1)][1]))
-        self._edit_lines(edit)
-
-    def _step_cell(self, forward):
-        """Tab: the cursor goes to the end of the next cell, or of the one
-        before. Past the last cell a new row is added."""
-        buf = self.tv.get_buffer()
-        line, column = self._cursor_table_cell()
-        cells = self._row_cells(line)
-        first, last = self._table_bounds(line)
-        if forward:
-            if column + 1 < len(cells):
-                target = cells[column + 1][1]
-            elif line < last:
-                target = self._row_cells(line + 1)[0][1]
-            else:
-                self._add_table_row(line)
-                return
-        elif column > 0:
-            target = cells[column - 1][1]
-        elif line > first:
-            target = self._row_cells(line - 1)[-1][1]
-        else:
-            target = cells[0][1]
-        buf.place_cursor(buf.get_iter_at_offset(target))
+    def _open_line_after_table(self, buf, table):
+        """Put the cursor at the start of a new line after the table, or of
+        the empty line already there."""
+        line = buf.get_iter_at_child_anchor(table.anchor).get_line()
+        after = line + 1
+        if not (after < buf.get_line_count()
+                and self._line_bounds(after)[0].ends_line()):
+            buf.insert(self._line_bounds(line)[1], '\n')
+        buf.place_cursor(buf.get_iter_at_line(after))
         self.tv.scroll_mark_onscreen(buf.get_insert())
 
-    def _on_table_key(self, buf, keyval, state):
-        """Keys that act on a table. A cell holds one line of text, so Enter
-        adds a row, and a tab is what separates cells, so Tab moves between
-        them, and Backspace or Delete never take one."""
+    def _on_table_edge_key(self, buf, keyval, state):
+        """Backspace and Delete next to a table never join a line to its
+        line. Backspace on an empty line after a table takes that line away,
+        and from the start of a line with text goes into the table; Delete
+        at the end of a line with text before a table does nothing."""
+        if state != 0 or buf.get_has_selection() or not self._table_widgets:
+            return False
         cursor = buf.get_iter_at_mark(buf.get_insert())
         line = cursor.get_line()
-        if not self._is_table_row(line):
-            # Delete at the end of a line would join the table's first row to
-            # it, and take that row out of the table.
-            return (state == 0 and keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete)
-                    and not buf.get_has_selection() and cursor.ends_line()
-                    and not cursor.starts_line()
-                    and self._is_table_row(line + 1))
-        if (keyval in (Gdk.KEY_Tab, Gdk.KEY_KP_Tab, Gdk.KEY_ISO_Left_Tab)
-                and state in (0, Gdk.ModifierType.SHIFT_MASK)):
-            self._step_cell(state == 0 and keyval != Gdk.KEY_ISO_Left_Tab)
+        if (keyval == Gdk.KEY_BackSpace and cursor.starts_line()
+                and self._table_on_line(line - 1) is not None):
+            table = self._table_on_line(line - 1)
+            if cursor.ends_line():
+                before = cursor.copy()
+                before.backward_char()
+                buf.delete(before, cursor)
+            row = len(table.cells) - 1
+            table.focus_cell(row, len(table.cells[row]) - 1)
             return True
-        if buf.get_has_selection() or state != 0:
-            return False
-        offset = cursor.get_offset()
-        cells = self._row_cells(line)
-        empty = all(start == end for start, end in cells)
-        first, last = self._table_bounds(line)
-        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
-            if empty and line == last:
-                # Enter on an empty last row ends the table, as on an empty
-                # list item: the row becomes an empty line.
-                def edit(buf):
-                    buf.delete(*self._line_bounds(line))
-                self._edit_lines(edit)
-            elif line == first and offset == cells[0][0]:
-                # At the very start of the table, a line before it.
-                def edit(buf):
-                    buf.insert(buf.get_iter_at_line(line), '\n')
-                    buf.place_cursor(buf.get_iter_at_line(line))
-                self._edit_lines(edit)
-            else:
-                self._add_table_row(line)
+        if (keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete) and cursor.ends_line()
+                and not cursor.starts_line()
+                and self._table_on_line(line + 1) is not None):
             return True
-        if keyval == Gdk.KEY_BackSpace:
-            if offset == cells[0][0]:
-                if empty:
-                    self._delete_table_rows(line, line)
-                return True
-            return any(offset == start for start, _ in cells[1:])
-        if keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete):
-            return any(offset == end for _, end in cells)
         return False
 
-    def _table_cell_at_pointer(self, x, y):
-        """(iter under the pointer, (start, end) of the cell whose column the
-        pointer is in), or None outside a table. The space a cell's text does
-        not fill is the tab after it, which GTK counts as the next cell's."""
-        bx, by = self.tv.window_to_buffer_coords(
-            Gtk.TextWindowType.TEXT, int(x), int(y))
-        _, it = self.tv.get_iter_at_location(bx, by)
-        line = it.get_line()
-        for first, last, edges in self._tables:
-            if first <= line <= last and self._is_table_row(line):
-                cells = self._row_cells(line)
-                column = bisect.bisect_right(edges, bx) - 1
-                return it, cells[max(0, min(len(cells) - 1, column))]
-        return None
-
-    def _click_table_cell(self, event, move_only=False):
-        """Put the cursor in the cell clicked. Returns whether the click is
-        handled; GTK places the cursor itself when it is in that cell."""
-        hit = self._table_cell_at_pointer(event.x, event.y)
-        if hit is None:
-            return False
-        it, (start, end) = hit
-        offset = it.get_offset()
-        if start <= offset <= end and not move_only:
-            return False
+    def _enter_table(self, offset, forward):
+        """The cursor came onto a table's line by a key: it goes into the
+        table, at its first cell coming down and its last coming up."""
         buf = self.tv.get_buffer()
-        buf.place_cursor(buf.get_iter_at_offset(min(end, max(start, offset))))
-        self.tv.grab_focus()
+        it = buf.get_iter_at_mark(buf.get_insert())
+        if it.get_offset() != offset or buf.get_has_selection():
+            return False
+        table = self._table_on_line(it.get_line())
+        if table is None:
+            return False
+        if forward:
+            table.focus_cell(0, 0, at_end=False)
+        else:
+            row = len(table.cells) - 1
+            table.focus_cell(row, len(table.cells[row]) - 1)
+        return False
+
+    @staticmethod
+    def _line_ranges(text):
+        """A range over each line of text that has any, not its breaks."""
+        ranges, start = [], 0
+        for line in text.split('\n'):
+            if line:
+                ranges.append([start, start + len(line)])
+            start += len(line) + 1
+        return ranges
+
+    def _convert_text_tables(self):
+        """Make each table of tab-separated rows, as tables were before their
+        cells were editors and as pasted Markdown comes, a table of editors.
+        Each cell keeps its formats, and a U+2028 in it is a line break.
+        Returns whether any was made."""
+        buf = self.tv.get_buffer()
+        text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
+        if TABLE_MARKER not in text:
+            return False
+        runs = self._table_runs(buf, text.split('\n'))
+        if not runs:
+            return False
+        self._restoring = True
+        try:
+            # From the last, so each run's lines are where they were. A
+            # table made is kept in place by its anchor.
+            for first, last in reversed(runs):
+                rows = []
+                for line in range(first, last + 1):
+                    row = []
+                    for low, high in self._row_cells(line):
+                        cell = self._rich_state(low, high)
+                        cell.pop('tables', None)
+                        cell['text'] = cell['text'].replace(' ', '\n')
+                        if line == first:
+                            # A header cell is bold until bold is turned
+                            # off in it.
+                            cell['bold'] = self._line_ranges(cell['text'])
+                        row.append(cell)
+                    rows.append(row)
+                columns = max(len(row) for row in rows)
+                from .table import empty_cell
+                for row in rows:
+                    row.extend(empty_cell() for _ in range(columns - len(row)))
+                start = buf.get_iter_at_line(first)
+                end = self._line_bounds(last)[1]
+                offset = start.get_offset()
+                buf.delete(start, end)
+                self._restore_tables([{'offset': offset, 'rows': rows}])
+        finally:
+            self._restoring = False
         return True
 
     # ------------------------------------------------------------------ sections
@@ -2597,14 +2486,16 @@ class Editor:
                 buf.apply_tag(self._expand_end_tag, low, high)
                 self._expand_boxes.append((section.title, section.end, level))
 
+        # A table's widget is not text, so a folded expand hides it apart.
+        for table in self._table_widgets:
+            line = buf.get_iter_at_child_anchor(table.anchor).get_line()
+            table.set_visible(line not in hidden)
+
         for line, level in depth.items():
             if line in hidden or line in titles or line in ends:
                 continue
             if self._is_code_line(buf, line):
                 kind = 'code'
-            elif self._is_table_row(line):
-                # Its tab stops tag sets its margin: see _apply_tables().
-                continue
             else:
                 kind = 'body'
             buf.apply_tag(self._expand_tag(kind, level), *whole_line(line))
@@ -3481,7 +3372,6 @@ class Editor:
     def _run_pad_normalization(self):
         self._pads_sid = None
         self._normalize_code_pads()
-        self._normalize_tables()
         self._normalize_sections()
         return False
 
@@ -3874,26 +3764,8 @@ class Editor:
         search_item = Gtk.MenuItem(label='Search  (Ctrl+F)')
         search_item.connect('activate', lambda _: self._toggle_search())
 
-        # Elements are inserted from the Insert button. A table's own items
-        # act on the cell clicked, so they are here.
-        table_items = []
-        if self._cursor_table_cell() is not None:
-            line = self.tv.get_buffer().get_iter_at_mark(
-                self.tv.get_buffer().get_insert()).get_line()
-            for label, callback in (
-                    ('Add Row  (Enter)', lambda: self._add_table_row(line)),
-                    ('Add Column', self._add_table_column),
-                    ('Delete Row', lambda: self._delete_table_rows(line, line)),
-                    ('Delete Column', self._delete_table_column),
-                    ('Delete Table',
-                     lambda: self._delete_table_rows(*self._table_bounds(line)))):
-                item = Gtk.MenuItem(label=label)
-                item.connect('activate', lambda _, cb=callback: cb())
-                table_items.append(item)
-
         # Each prepend goes above the last, so this reads bottom to top:
-        # Insert Emoji first, then Undo and Redo, then Search. In a table,
-        # its items go above them all.
+        # Insert Emoji first, then Undo and Redo, then Search.
         menu.prepend(Gtk.SeparatorMenuItem())
         menu.prepend(search_item)
         menu.prepend(Gtk.SeparatorMenuItem())
@@ -3902,10 +3774,6 @@ class Editor:
         if emoji_item is not None:
             menu.prepend(Gtk.SeparatorMenuItem())
             menu.prepend(emoji_item)
-        if table_items:
-            menu.prepend(Gtk.SeparatorMenuItem())
-            for item in reversed(table_items):
-                menu.prepend(item)
 
         menu.show_all()
 
@@ -3995,15 +3863,6 @@ class Editor:
         tv.set_pixels_above_lines(above)
         tv.set_pixels_below_lines(total - above)
         tv.set_pixels_inside_wrap(total)
-        below = total - above
-        self._table_row_tag.set_property('pixels-above-lines',
-                                         above + TABLE_PAD_Y)
-        self._table_row_tag.set_property('pixels-below-lines',
-                                         below + TABLE_PAD_Y)
-        self._table_top_tag.set_property(
-            'pixels-above-lines', above + TABLE_PAD_Y + TABLE_MARGIN)
-        self._table_bottom_tag.set_property(
-            'pixels-below-lines', below + TABLE_PAD_Y + TABLE_MARGIN)
 
         # What _even_lines() works from. The fonts are measured again when the
         # size changes, so what was measured is forgotten.
@@ -4162,13 +4021,16 @@ class Editor:
                              'heading': data.get('heading_ranges', []),
                              'code': data.get('code_ranges', []),
                              'backtick': data.get('backtick_ranges', []),
-                             'images': data.get('images', [])}]
+                             'images': data.get('images', []),
+                             'tables': data.get('tables', [])}]
         self._hist_pos  = 0
         self._bold_active = False
         self._code_active = False
         self._heading_active = False
         self._pending_format_inserts = []
         self._image_widgets = []
+        # The tables of editors in the text. See table.py.
+        self._table_widgets = []
         # [first line, last line, right] of each code block drawn so far, in
         # order. See _watch_code_blocks().
         self._code_blocks = []
@@ -4232,23 +4094,6 @@ class Editor:
         # but the cursor beside it would be as small. See _pad_kind().
         self._pad_tag = buf.create_tag('inline-pad', family=BODY_FONT,
                                        scale=1.0)
-        # Derived too: the rows of a table. A row stays on one line, its first
-        # cell starts inside the table's line and padding, and the room above
-        # and below it is set by _refresh_code_spacing(). The first and last
-        # row also keep the room around the table, so they are made after the
-        # row tag, to win over it. The tab stops that line up the columns
-        # differ from table to table: see _apply_tables().
-        self._table_row_tag = buf.create_tag(
-            'table-row', wrap_mode=Gtk.WrapMode.NONE,
-            left_margin=TEXT_MARGIN + 1 + TABLE_PAD)
-        self._table_top_tag = buf.create_tag('table-top')
-        self._table_bottom_tag = buf.create_tag('table-bottom')
-        self._table_head_tag = buf.create_tag('table-head',
-                                              weight=Pango.Weight.BOLD)
-        self._table_tab_tags = []
-        # (first line, last line, x of each column's left line and of the
-        # right edge) of each table, in buffer coordinates.
-        self._tables = []
         # Derived too: an expand. What a folded one hides, and the mark that
         # ends it, are invisible. Its triangle's characters are not seen, as
         # _draw_sections() draws a chevron over them, and its title is small
@@ -4335,11 +4180,13 @@ class Editor:
                           buf.get_iter_at_offset(s),
                           buf.get_iter_at_offset(e))
         self._restore_images(data.get('images', []))
+        self._restore_tables(data.get('tables', []))
         self._strip_marker_formats()
-        # Notes from before inline code had spaces for padding, and from
-        # before list items were indented by tabs.
-        pads_changed = self._normalize_code_pads()
-        pads_changed = self._normalize_tables() or pads_changed
+        # Notes from before inline code had spaces for padding, from before
+        # list items were indented by tabs, and from before a table's cells
+        # were editors, when it was rows of tab-separated text.
+        pads_changed = self._convert_text_tables()
+        pads_changed = self._normalize_code_pads() or pads_changed
         pads_changed = self._normalize_sections() or pads_changed
         if self._tab_list_indents() or pads_changed:
             self._history[0] = self._current_state()

@@ -1,209 +1,152 @@
-"""A table is rows of cells: a row is a line that starts with TABLE_MARKER and
-has its cells separated by tabs. Tab moves between cells, Enter adds a row,
-and Backspace or Delete never take the tab between two cells. ¶ stands for the
-marker and → for a tab in the text of these tests."""
-from types import SimpleNamespace
+"""A table in a real note: it goes away with text deleted over it, keeps each
+cell's selection and whether a folded expand hides it when it is laid out
+again, and is left past what the cursor skips, not back into it."""
+from unittest.mock import MagicMock
 
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
-from gi.repository import Gdk, Gtk
+from gi.repository import Gdk, Gio, Gtk
 
-from ynote.config import TABLE_MARKER
+from ynote.config import EXPAND_END, EXPAND_OPEN, TABLE_MARKER
 from ynote.note_window import NoteWindow
 
 
-def tb(text):
-    return text.replace('¶', TABLE_MARKER).replace('→', '\t')
+class FakeApp(Gtk.Application):
+    """An application a note can be made in: whatever it is asked for is a
+    stand-in."""
+
+    def __getattr__(self, name):
+        value = MagicMock(name=name)
+        setattr(self, name, value)
+        return value
 
 
-def shown(buf):
-    text = buf.get_slice(buf.get_start_iter(), buf.get_end_iter(), True)
-    return text.replace(TABLE_MARKER, '¶').replace('\t', '→')
+_app = None
 
 
-class FakeTextView:
-    def __init__(self, buf):
-        self._buf = buf
+def make_note(lines):
+    global _app
+    if _app is None:
+        _app = FakeApp(application_id='io.github.ynote.tests',
+                       flags=Gio.ApplicationFlags.NON_UNIQUE)
+        _app.register(None)
+    note = NoteWindow(_app, {'id': 'n', 'text': '\n'.join(lines),
+                             'w': 400, 'h': 400})
+    settle()
+    return note
 
-    def get_buffer(self):
-        return self._buf
 
-    def scroll_mark_onscreen(self, mark):
-        pass
+def settle():
+    while Gtk.events_pending():
+        Gtk.main_iteration()
 
 
-def make_window(text, cursor=0):
-    buf = Gtk.TextBuffer()
-    buf.set_text(tb(text))
-    win = NoteWindow.__new__(NoteWindow)
-    win.tv = FakeTextView(buf)
-    for name in ('code', 'heading', 'bold', 'backtick'):
-        setattr(win, f'_{name}_tag', buf.create_tag(name))
-    win._divider_lines = []
-    win._snap_sid = None
-    win._pending_format_inserts = []
-    win._restoring = False
-    win._flush_snapshot = lambda: None
-    win._queue_save = lambda: None
-    win._sync_format_state = lambda: None
-    win._refresh_line_styles = lambda: None
-    win._queue_code_margins = lambda: None
-    buf.place_cursor(buf.get_iter_at_offset(cursor))
-    return win, buf
+def table_row(*cells):
+    return TABLE_MARKER + '\t'.join(cells)
 
 
 def cursor(buf):
     return buf.get_iter_at_mark(buf.get_insert()).get_offset()
 
 
-def press(win, keyval, state=0):
-    return win._on_tv_key_press(
-        win.tv, SimpleNamespace(state=state, keyval=keyval))
-
-
-# Offsets: ¶ 0, "ab" 1..3, → 3, "c" 4, \n 5, ¶ 6, "d" 7, → 8, "" 9.
-TABLE = '¶ab→c\n¶d→'
-
-
-def test_tab_goes_to_the_end_of_the_next_cell():
-    win, buf = make_window(TABLE, cursor=2)
-
-    assert press(win, Gdk.KEY_Tab)
-
-    assert cursor(buf) == 5
-    assert shown(buf) == TABLE
-
-
-def test_tab_from_the_last_cell_of_a_row_goes_to_the_next_row():
-    win, buf = make_window(TABLE, cursor=5)
-
-    press(win, Gdk.KEY_Tab)
-
-    assert cursor(buf) == 8
-
-
-def test_tab_from_the_last_cell_adds_a_row():
-    win, buf = make_window(TABLE, cursor=9)
-
-    press(win, Gdk.KEY_Tab)
-
-    assert shown(buf) == '¶ab→c\n¶d→\n¶→'
-    assert cursor(buf) == 11
-
-
-def test_shift_tab_goes_to_the_cell_before():
-    win, buf = make_window(TABLE, cursor=7)
-
-    press(win, Gdk.KEY_ISO_Left_Tab, Gdk.ModifierType.SHIFT_MASK)
-
-    assert cursor(buf) == 5
-
-
-def test_enter_adds_a_row_after_the_cursors_row():
-    win, buf = make_window(TABLE, cursor=2)
-
-    assert press(win, Gdk.KEY_Return)
-
-    assert shown(buf) == '¶ab→c\n¶→\n¶d→'
-    assert cursor(buf) == 7
-
-
-def test_enter_on_an_empty_last_row_ends_the_table():
-    win, buf = make_window('¶ab→c\n¶→', cursor=7)
-
-    press(win, Gdk.KEY_Return)
-
-    assert shown(buf) == '¶ab→c\n'
-    assert cursor(buf) == 6
-
-
-def test_enter_at_the_start_of_the_table_adds_a_line_before_it():
-    win, buf = make_window(TABLE, cursor=1)
-
-    press(win, Gdk.KEY_Return)
-
-    assert shown(buf) == '\n' + TABLE
-    assert cursor(buf) == 0
-
-
-def test_backspace_and_delete_never_take_the_tab_between_cells():
-    win, buf = make_window(TABLE, cursor=4)
-    assert press(win, Gdk.KEY_BackSpace)
-    buf.place_cursor(buf.get_iter_at_offset(3))
-    assert press(win, Gdk.KEY_Delete)
-
-    assert shown(buf) == TABLE
-
-
-def test_backspace_inside_a_cell_is_left_to_gtk():
-    win, buf = make_window(TABLE, cursor=2)
-
-    assert not press(win, Gdk.KEY_BackSpace)
-
-
-def test_backspace_at_the_start_of_an_empty_row_deletes_it():
-    win, buf = make_window('¶ab→c\n¶→\n¶d→', cursor=7)
-
-    press(win, Gdk.KEY_BackSpace)
-
-    assert shown(buf) == '¶ab→c\n¶d→'
-    assert cursor(buf) == 5
-
-
-def test_delete_at_the_end_of_a_line_before_a_table_keeps_the_table():
-    win, buf = make_window('text\n' + TABLE, cursor=4)
-
-    assert press(win, Gdk.KEY_Delete)
-
-
-def test_rows_get_as_many_cells_as_the_widest():
-    win, buf = make_window('¶a→b→c\n¶d')
-    win._normalizing = False
-
-    assert win._normalize_tables()
-
-    assert shown(buf) == '¶a→b→c\n¶d→→'
-
-
-def test_a_marker_joined_into_a_line_is_taken_out():
-    win, buf = make_window('text¶a→b')
-    win._normalizing = False
-
-    win._normalize_tables()
-
-    assert shown(buf) == 'texta→b'
-
-
-def test_add_column_adds_a_cell_after_the_cursors_in_every_row():
-    win, buf = make_window(TABLE, cursor=2)
-
-    win._add_table_column()
-
-    assert shown(buf) == '¶ab→→c\n¶d→→'
-    assert cursor(buf) == 4
-
-
-def test_delete_column_takes_the_cursors_cell_from_every_row():
-    win, buf = make_window(TABLE, cursor=4)
-
-    win._delete_table_column()
-
-    assert shown(buf) == '¶ab\n¶d'
-
-
-def test_insert_table_on_an_empty_line_puts_the_cursor_in_its_first_cell():
-    win, buf = make_window('text\n', cursor=5)
-
-    win._insert_table(columns=2, rows=2)
-
-    assert shown(buf) == 'text\n¶→\n¶→\n'
-    assert cursor(buf) == 6
-
-
-def test_a_row_is_not_a_list_item_heading_or_code_line():
-    win, buf = make_window('¶• a→b', cursor=3)
-
-    assert win._marker_end(0) == 1
-    assert win._heading_lines() == []
-    assert win._line_list_parts(0) is None
+def test_text_deleted_over_a_table_takes_the_table_with_it():
+    note = make_note(['above', table_row('a', 'b'), table_row('c', 'd'),
+                      'below'])
+    buf = note.tv.get_buffer()
+    assert len(note._table_widgets) == 1
+
+    # As typing over a selection from "above" into "below" deletes it.
+    buf.select_range(buf.get_iter_at_offset(2),
+                     buf.get_iter_at_offset(buf.get_char_count() - 2))
+    buf.delete_selection(True, True)
+    settle()
+
+    assert note._table_widgets == []
+    assert buf.get_slice(*buf.get_bounds(), True) == 'abow'
+
+
+def test_leaving_a_table_skips_an_expands_end_the_way_it_leaves():
+    note = make_note([EXPAND_OPEN + 'Title', table_row('a', 'b'), EXPAND_END,
+                      'after'])
+    buf = note.tv.get_buffer()
+    table = note._table_widgets[0]
+    # The note's cursor was last further down than the table.
+    buf.place_cursor(buf.get_end_iter())
+    settle()
+    table.focus_cell(0, 1)
+    settle()
+
+    table.leave(forward=True)
+    settle()
+
+    assert note._active_editor() is note
+    after = buf.get_slice(*buf.get_bounds(), True).index('after')
+    assert cursor(buf) == after
+
+
+def test_added_rows_and_columns_are_shown():
+    note = make_note(['above', table_row('a', 'b')])
+    table = note._table_widgets[0]
+
+    table.add_row(0)
+    table.add_column(1)
+    settle()
+
+    assert all(cell.tv.get_visible() for cell in table.all_cells())
+
+
+def test_a_click_in_a_cell_stays_in_the_cell():
+    note = make_note(['above', table_row('a', 'b')])
+    table = note._table_widgets[0]
+    note.show_all()
+    settle()
+    tv = table.cells[0][1].tv
+    passed_on = []
+    note.tv.connect('button-press-event',
+                    lambda *_: passed_on.append(True) or False)
+
+    event = Gdk.Event.new(Gdk.EventType.BUTTON_PRESS)
+    event.button.button = 1
+    event.button.window = tv.get_window(Gtk.TextWindowType.TEXT)
+    Gtk.propagate_event(tv, event)
+
+    assert passed_on == []
+
+
+def test_a_header_cell_is_bold_until_bold_is_turned_off():
+    note = make_note(['above', table_row('Name', 'Age'), table_row('Kim', '3')])
+    table = note._table_widgets[0]
+    head, body = table.cells[0][0], table.cells[1][0]
+    assert head.state()['bold'] == [[0, 4]]
+    assert body.state()['bold'] == []
+
+    table.add_column(1)
+    settle()
+    empty = table.cells[0][2]
+    empty.tv.get_buffer().place_cursor(empty.tv.get_buffer().get_end_iter())
+    empty._sync_format_state()
+    assert empty._bold_active
+    empty._toggle_bold()
+    assert not empty._bold_active
+
+    hbuf = head.tv.get_buffer()
+    hbuf.select_range(hbuf.get_start_iter(), hbuf.get_end_iter())
+    head._toggle_bold()
+    assert head.state()['bold'] == []
+
+
+def test_a_note_has_one_selection_across_its_text_and_cells():
+    note = make_note(['above', table_row('Name', 'Age'), table_row('Kim', '3')])
+    table = note._table_widgets[0]
+    head = table.cells[0][0].tv.get_buffer()
+    head.select_range(head.get_start_iter(), head.get_end_iter())
+    note._set_active_editor(table.cells[0][0])
+
+    table.focus_cell(1, 0)
+    assert not head.get_has_selection()
+
+    body = table.cells[1][0].tv.get_buffer()
+    body.select_range(body.get_start_iter(), body.get_end_iter())
+    note._set_active_editor(note)
+    assert not body.get_has_selection()
