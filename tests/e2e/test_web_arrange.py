@@ -71,10 +71,10 @@ def test_B10_web_a_double_click_on_the_title_bar_maximizes_and_restores(app):
     app.inp.click(x + 150, y + 16, count=2)
     wait_until(lambda: t.box[2] >= SCREEN_W - 20, what='maximizing')
     nx, ny, nw, nh = t.box
-    # A while apart, or the clicks, at the same place in the window, would
-    # count as a triple click.
+    # A while apart and elsewhere, or the clicks, at the same place in the
+    # window, would count as a triple click.
     settle(0.6)
-    app.inp.click(nx + 150, ny + 16, count=2)
+    app.inp.click(nx + 400, ny + 16, count=2)
     wait_until(lambda: t.box[2] == w, what='restoring')
     app.quit()
     saved = saved_note(app, 't')

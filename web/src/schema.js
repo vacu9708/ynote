@@ -110,6 +110,9 @@ const marks = {
     toDOM: () => ['strong', 0],
   },
   code: {
+    // Text typed right after inline code is plain, as in 1.x: a command is
+    // usually followed by words about it. Inside, it is code.
+    inclusive: false,
     parseDOM: [{tag: 'code'}],
     toDOM: () => ['code', 0],
   },

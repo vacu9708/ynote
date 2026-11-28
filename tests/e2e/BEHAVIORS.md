@@ -83,68 +83,68 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 ## E. Text formats: bold, heading, inline code
 
-- E1 Ctrl+B bolds or unbolds a selection; without one it turns bold on or off for what is typed
-- E2 With bold text before the cursor, Bold is on and the Format button lights up
-- E3 At the start of a line, the text after the cursor counts
-- E4 At the start of a list item's, to-do's, or quote's text, after its marker, the text after the cursor counts
-- E5 At the left edge of bold within a line, Bold is off: the text before the cursor counts, as in Confluence
-- E6 A selection shows a format on only when all of it has it
-- E7 Bold turned off in the middle of bold text types plain text there, splitting it
-- E8 Enter turns every format off
-- E9 Ctrl+H makes the cursor's line, or every line a selection touches, a heading; again takes it away when all are headings
-- E10 Heading on an empty line makes the text typed next a heading; again cancels it
-- E11 Code lines, dividers, and list items do not become headings
-- E12 Enter at the end of a heading starts a plain line
-- E13 A heading is bold with Bold off; Bold on makes it bolder, in the font's Black weight [px]
-- E14 Making a line a heading, or taking the heading away, keeps the bold in it
+- E1 Ctrl+B bolds or unbolds a selection; without one it turns bold on or off for what is typed [2.0]
+- E2 With bold text before the cursor, Bold is on and the Format button lights up [2.0]
+- E3 At the start of a line, the text after the cursor counts [2.0]
+- E4 At the start of a list item's, to-do's, or quote's text, after its marker, the text after the cursor counts [2.0]
+- E5 At the left edge of bold within a line, Bold is off: the text before the cursor counts, as in Confluence [2.0]
+- E6 A selection shows a format on only when all of it has it [2.0]
+- E7 Bold turned off in the middle of bold text types plain text there, splitting it [2.0]
+- E8 Enter turns every format off [2.0]
+- E9 Ctrl+H makes the cursor's line, or every line a selection touches, a heading; again takes it away when all are headings [2.0]
+- E10 Heading on an empty line makes the text typed next a heading; again cancels it [2.0]
+- E11 Code lines, dividers, and list items do not become headings [2.0]
+- E12 Enter at the end of a heading starts a plain line [2.0]
+- E13 A heading is bold with Bold off; Bold on makes it bolder, in the font's Black weight [px] (2.0: U3) [2.0]
+- E14 Making a line a heading, or taking the heading away, keeps the bold in it [2.0]
 - E15 Bold in a heading goes out and comes back as Markdown, `# Title **bold**`
-- E16 Ctrl+E turns inline code on or off, or makes a selection code or plain
-- E17 Inline code has a padding character at each end, which copying leaves out
-- E18 Text typed right after inline code is plain; typed inside it, code
-- E19 Turning code on or off at its edge steps the cursor over the padding
-- E20 Backspace and Delete next to the padding take the character beyond it
-- E21 Deleting the last character of inline code takes its padding too
-- E22 A selection never ends on the padding: keys step over it, a drag stops at the text
-- E23 Code turned off in its middle splits it, each part with its padding
-- E24 Enter does not carry inline code to the next line
+- E16 Ctrl+E turns inline code on or off, or makes a selection code or plain [2.0]
+- E17 Inline code has a padding character at each end, which copying leaves out (1.x only: 2.0 keeps no padding characters)
+- E18 Text typed right after inline code is plain; typed inside it, code (2.0 too, unlike Confluence, which goes on in code: a command is usually followed by words about it) [2.0]
+- E19 Turning code on or off at its edge steps the cursor over the padding (1.x only: 2.0 keeps no padding characters)
+- E20 Backspace and Delete next to the padding take the character beyond it (1.x only: 2.0 keeps no padding characters)
+- E21 Deleting the last character of inline code takes its padding too (1.x only: 2.0 keeps no padding characters)
+- E22 A selection never ends on the padding: keys step over it, a drag stops at the text (1.x only: 2.0 keeps no padding characters)
+- E23 Code turned off in its middle splits it, each part with its padding (1.x only: 2.0 keeps no padding characters)
+- E24 Enter does not carry inline code to the next line [2.0]
 
 ## F. Markdown typed into a note
 
-- F1 `**text**` typed makes bold; stars around spaces, or in a glob like `*.txt`, stay as they are
-- F2 `` `text` `` typed makes inline code, with the cursor after it
-- F3 Backticks in a code block, in inline code, or on two lines do not make code
-- F4 `# ` on an empty line makes the next text a heading; before text, its line; after text, `#` stays
-- F5 ` ``` ` on an empty line starts a code block; after text it stays text
-- F6 `- ` makes a bullet, `[ ] ` a to-do, also after a bullet; not in a code block
-- F7 `> ` starts a quote
-- F8 A line of `---` is a divider
-- F9 Each item of the Insert and Format menus shows its icon, shortcut, and Markdown
+- F1 `**text**` typed makes bold; stars around spaces, or in a glob like `*.txt`, stay as they are [2.0]
+- F2 `` `text` `` typed makes inline code, with the cursor after it [2.0]
+- F3 Backticks in a code block, in inline code, or on two lines do not make code [2.0]
+- F4 `# ` on an empty line makes the next text a heading; before text, its line; after text, `#` stays [2.0]
+- F5 ` ``` ` on an empty line starts a code block; after text it stays text [2.0]
+- F6 `- ` makes a bullet, `[ ] ` a to-do, also after a bullet; not in a code block [2.0]
+- F7 `> ` starts a quote [2.0]
+- F8 A line of `---` is a divider [2.0]
+- F9 Each item of the Insert and Format menus shows its icon, shortcut, and Markdown (2.0: T15)
 
 ## G. Lists: bullets and to-dos
 
-- G1 Ctrl+8 toggles a bullet and Ctrl+9 a to-do; Ctrl+8 on a to-do makes it a bullet
-- G2 Enter starts the next item of the kind (a to-do unchecked); Enter on an empty item ends the list
-- G3 Enter at an item's start or in its marker adds an empty item above; in its text, splits it
-- G4 Tab and Shift+Tab indent and outdent by one level, one tab character
-- G5 Tab and Shift+Tab over a selection indent each item in it and keep the selection; a selection ending at a line's start leaves that line out; one without list items is left to GTK
-- G6 Backspace at a top item's start takes the marker; at a nested item's, empty or not, outdents it one level
-- G7 Delete at a line's end, joining the next item, takes its marker first
-- G8 A click on a box checks it without moving the cursor; checked items are gray
-- G9 Ctrl+Enter checks or unchecks the to-dos on the selected lines only
-- G10 The cursor and selection ends never go into a marker; a click on a marker stays on its line
-- G11 Home stays at an item's start; Shift+Home once selects its text, twice its marker too
-- G12 Shift+Left from an item's start takes the marker, then the line break; back gives them up in that order; a mouse selection takes a marker it reaches over
-- G13 Left from an item's start goes to the end of the line before
-- G14 Bold over several list lines leaves the markers and line breaks without it
-- G15 Bullets and to-dos do not apply to code block lines, as Ctrl+8 in a code block
-- G16 A list item does not become a heading
-- G17 An older note's lists indented by spaces get tabs when it opens, keeping their formats; a list typed after spaces gets tabs too
-- G18 Formats on markers and line breaks in an older note are taken off when it opens
+- G1 Ctrl+8 toggles a bullet and Ctrl+9 a to-do; Ctrl+8 on a to-do makes it a bullet [2.0]
+- G2 Enter starts the next item of the kind (a to-do unchecked); Enter on an empty item ends the list [2.0]
+- G3 Enter at an item's start or in its marker adds an empty item above; in its text, splits it [2.0]
+- G4 Tab and Shift+Tab indent and outdent by one level, one tab character [2.0]
+- G5 Tab and Shift+Tab over a selection indent each item in it and keep the selection; a selection ending at a line's start leaves that line out; one without list items is left to GTK [2.0]
+- G6 Backspace at a top item's start takes the marker; at a nested item's, empty or not, outdents it one level [2.0]
+- G7 Delete at a line's end, joining the next item, takes its marker first [2.0]
+- G8 A click on a box checks it without moving the cursor; checked items are gray [2.0]
+- G9 Ctrl+Enter checks or unchecks the to-dos on the selected lines only [2.0]
+- G10 The cursor and selection ends never go into a marker; a click on a marker stays on its line (1.x only: 2.0 has no marker characters in the text)
+- G11 Home stays at an item's start; Shift+Home once selects its text, twice its marker too (1.x only: 2.0 has no marker characters in the text)
+- G12 Shift+Left from an item's start takes the marker, then the line break; back gives them up in that order; a mouse selection takes a marker it reaches over (1.x only: 2.0 has no marker characters in the text)
+- G13 Left from an item's start goes to the end of the line before [2.0]
+- G14 Bold over several list lines leaves the markers and line breaks without it (1.x only: 2.0 has no marker characters in the text)
+- G15 Bullets and to-dos do not apply to code block lines, as Ctrl+8 in a code block [2.0]
+- G16 A list item does not become a heading [2.0]
+- G17 An older note's lists indented by spaces get tabs when it opens, keeping their formats; a list typed after spaces gets tabs too (2.0: as such a note is converted, R)
+- G18 Formats on markers and line breaks in an older note are taken off when it opens (2.0: as such a note is converted, R)
 
 ## H. Quotes
 
-- H1 Insert > Quote or `> ` starts a quote, with a bar beside it
-- H2 Enter continues a quote; Enter on an empty line ends it
+- H1 Insert > Quote or `> ` starts a quote, with a bar beside it [2.0]
+- H2 Enter continues a quote; Enter on an empty line ends it [2.0]
 - H3 A wrapped quote's later rows start as far in as its text [px]
 
 ## I. Code blocks

@@ -61,7 +61,8 @@ const dateRule = new InputRule(/(?:^|\s)(\/\/)$/, (state, match, start, end) => 
 
 const dividerRule = new InputRule(/^---$/, (state, match, start, end) => {
   const $start = state.doc.resolve(start);
-  if ($start.parent.type !== paragraph || $start.parent.content.size !== 3) return null;
+  // The last - is being typed and not in the line yet: the line is "--".
+  if ($start.parent.type !== paragraph || $start.parent.content.size !== 2) return null;
   const tr = state.tr.replaceWith($start.before(), $start.after(),
     [horizontal_rule.create(), paragraph.create()]);
   return tr.setSelection(TextSelection.create(tr.doc, $start.before() + 2));
@@ -170,6 +171,7 @@ const keys = keymap({
   'ArrowRight': rightOutOfTable,
   'ArrowUp': outOfCode('up'),
   'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand),
+  'Delete': cmd.deleteInItem,
 });
 
 // --- The view --------------------------------------------------------------

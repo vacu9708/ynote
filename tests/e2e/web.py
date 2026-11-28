@@ -11,13 +11,13 @@ NOTE = {'id': 'test', 'title': 'test', 'text': '', 'x': 100, 'y': 80,
         'w': 420, 'h': 360}
 
 
-def start(app, text='', **fields):
+def start(app, text='', at=(0, 10), **fields):
     """Ynote 2.0 with one note titled test, as 1.x saved it, clicked into at
-    the end of its first line."""
+    the end of its first line: clicked at, from the text's top left."""
     app.write_notes([dict(NOTE, text=text, **fields)])
     app.start()
     note = WebNote(app, app.note('test').frame)
-    note.click_text(0, 10)
+    note.click_text(*at)
     note.app.inp.key('end')
     quiet()
     return note
@@ -127,14 +127,17 @@ def saved_blocks(app, note_id='test'):
     return ' '.join(brief(b) for b in doc['content'])
 
 
-def assert_saved(app, expected, note_id='test', timeout=5):
-    """The note's blocks, once saved, are as expected."""
+def assert_saved(app, expected, note_id='test', timeout=5, last_line=True):
+    """The note's blocks, once saved, are as expected; without last_line,
+    an empty line ending the note is left out."""
     got = None
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         quiet()
         try:
             got = saved_blocks(app, note_id)
+            if not last_line:
+                got = got.removesuffix(' paragraph()')
         except (OSError, ValueError, KeyError, TestError):
             pass
         if got == expected:

@@ -9,8 +9,10 @@ import {schema} from './schema.js';
 const {paragraph, heading, code_block, blockquote, horizontal_rule, bullet_list,
   list_item, expand, expand_title, table, table_row, table_cell, table_header} = schema.nodes;
 
-export const toggleBold = toggleMark(schema.marks.strong);
-export const toggleInlineCode = toggleMark(schema.marks.code);
+// A selection only partly bold (or code) is made so all over, as in 1.x and
+// Confluence: the format shows on only when all of it has it.
+export const toggleBold = toggleMark(schema.marks.strong, null, {removeWhenPresent: false});
+export const toggleInlineCode = toggleMark(schema.marks.code, null, {removeWhenPresent: false});
 
 // The nearest ancestor of the selection's start of a type, as {node, pos, depth}.
 export function ancestor(state, type) {
@@ -27,8 +29,8 @@ export function headingActive(state) {
 
 export function toggleHeading(state, dispatch) {
   if (headingActive(state)) return setBlockType(paragraph)(state, dispatch);
-  // A list item is never made a heading, as in 1.x.
-  if (ancestor(state, list_item)) return false;
+  // A list item or a line of code is never made a heading, as in 1.x.
+  if (ancestor(state, list_item) || state.selection.$from.parent.type === code_block) return false;
   return setBlockType(heading)(state, dispatch);
 }
 
@@ -266,6 +268,28 @@ export function splitItem(state, dispatch) {
 }
 
 // Backspace at the start of an item outdents it, or ends the list at its top.
+// Delete at the end of an item's line joins the next item's line to it, as
+// in 1.x and Confluence, and what that item held after its line (a nested
+// list) comes along; the default made it a second paragraph of the item.
+export function deleteInItem(state, dispatch) {
+  const {$cursor} = state.selection;
+  if (!$cursor || $cursor.parentOffset !== $cursor.parent.content.size) return false;
+  const d = $cursor.depth - 1;
+  if (d < 1 || $cursor.node(d).type !== list_item || $cursor.index(d) !== $cursor.node(d).childCount - 1) return false;
+  const itemEnd = $cursor.after(d);
+  const next = state.doc.nodeAt(itemEnd);
+  if (!next || next.type !== list_item || next.firstChild.type !== paragraph) return false;
+  if (dispatch) {
+    const rest = next.content.cut(next.firstChild.nodeSize);
+    const tr = state.tr.delete(itemEnd, itemEnd + next.nodeSize);
+    tr.insert($cursor.pos, next.firstChild.content);
+    if (rest.size) tr.insert(tr.mapping.map(itemEnd - 1, -1), rest);
+    tr.setSelection(TextSelection.create(tr.doc, $cursor.pos));
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
 export function backspaceInItem(state, dispatch) {
   const {$cursor} = state.selection;
   if (!$cursor || $cursor.parentOffset > 0) return false;
