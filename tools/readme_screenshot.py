@@ -198,12 +198,13 @@ def sample_notes():
     deploy.line('• restart the workers last')
     other = NoteBuilder()
     other.line('Reference')
-    hidden = [('k8s', 'k8s', k8s), ('nginx', 'nginx', nginx),
-              ('deploy', 'Deploy', deploy), ('psql', 'psql', other),
-              ('tmux', 'tmux', other), ('oncall', 'On-call handoff', other)]
-    for order, (note_id, title, builder) in enumerate(hidden):
+    hidden = [('k8s', 'k8s', k8s, 'blue'), ('nginx', 'nginx', nginx, 'green'),
+              ('deploy', 'Deploy', deploy, 'yellow'), ('psql', 'psql', other, 'purple'),
+              ('tmux', 'tmux', other, 'gray'), ('oncall', 'On-call handoff', other, 'orange')]
+    for order, (note_id, title, builder, color) in enumerate(hidden):
         note = builder.note(note_id, title, x=0, w=340, h=200, hidden=True)
         note['sort_order'] = float(order)
+        note['color'] = color
         out.append(note)
     return out
 

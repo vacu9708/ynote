@@ -62,7 +62,7 @@ two monitors (D4, D9: much effort for little).
 
 ## C. Hidden notes
 
-- C1 Hidden notes lists them, the latest hidden first, each on its own color (T18)
+- C1 Hidden notes lists them under its title and their count, the latest hidden first, each a card of its note's colors (T18)
 - C2 Notes hidden together (Hide all, in the tray) come first in that order (not tested: the tray)
 - C3 Choosing one shows it where it was (T18, X5)
 - C6 Show all shows every hidden note (T19)

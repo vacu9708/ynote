@@ -6,6 +6,8 @@
 // A menu is a list of items:
 //   {id, icon, label, md, keys: ['Ctrl', 'B'], on, check, disabled, danger}
 //   {sep: true}, {section: 'Table'}
+//   {header: 'Hidden notes', icon, count}: a menu's title, as the hidden
+//   notes' list has, so it says what it is
 //   {swatches: [{id, value, color, on}]}
 //   {slider: {id, label, value, min, max, step, unit}}
 //   {stepper: {id, label, value, min, max}}
@@ -58,19 +60,22 @@ function row(item) {
     return el('div', {class: 'row static'}, el('span', {class: 'label'}, item.label),
       item.md ? el('span', {class: 'md'}, item.md) : el('span'), keysOf(item.keys));
   }
-  // A note, as in the hidden notes, shows on its own color, as Windows'
-  // Sticky Notes lists them.
-  const color = item.colorName && (PALETTE[item.colorName] || PALETTE.yellow).paper;
+  // A note, as in the hidden notes, is a little card of its own colors, as
+  // Windows' Sticky Notes lists them: its paper, with its title bar's color
+  // down the side; pointed at, it offers to show the note.
+  const colors = item.colorName && (PALETTE[item.colorName] || PALETTE.yellow);
   const mark = item.icon ? strokeIcon(item.icon, 16) : null;
   const node = el('div', {class: ['row', item.on && 'on', item.danger && 'danger', item.disabled && 'off',
-    color && 'colored'].filter(Boolean).join(' '),
-  role: 'menuitem', 'aria-disabled': item.disabled ? 'true' : null, style: color ? `background:${color}` : null},
+    colors && 'card'].filter(Boolean).join(' '),
+  role: 'menuitem', 'aria-disabled': item.disabled ? 'true' : null,
+  style: colors ? `background:${colors.paper};border-left-color:${colors.bar}` : null},
   el('span', {class: 'ic'}, mark),
   el('span', {class: 'label'}, item.label),
   item.md ? el('span', {class: 'md'}, item.md) : el('span'),
-  item.check !== undefined
-    ? el('span', {class: 'chk' + (item.check ? ' checked' : '')}, item.check ? strokeIcon('check', 12) : null)
-    : keysOf(item.keys));
+  colors ? el('span', {class: 'show-ic'}, strokeIcon('open', 14))
+    : item.check !== undefined
+      ? el('span', {class: 'chk' + (item.check ? ' checked' : '')}, item.check ? strokeIcon('check', 12) : null)
+      : keysOf(item.keys));
   const index = rows.length;
   rows.push(node);
   node.addEventListener('mousemove', () => { if (current !== index) light(index); });
@@ -137,6 +142,11 @@ function render(items) {
   root.replaceChildren(...items.map(item => {
     if (item.sep) return el('div', {class: 'sep'});
     if (item.section) return el('div', {class: 'section'}, item.section);
+    if (item.header) {
+      return el('div', {class: 'menu-header'}, item.icon ? strokeIcon(item.icon, 16) : null,
+        el('span', {class: 'label'}, item.header),
+        item.count !== undefined ? el('span', {class: 'count'}, String(item.count)) : null);
+    }
     if (item.note) return el('div', {class: 'note-line'}, item.note);
     if (item.swatches) return swatches(item.swatches);
     if (item.slider) return slider(item.slider);

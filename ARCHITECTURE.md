@@ -266,7 +266,8 @@ sequenceDiagram
   opens its find on the query. Match case, regular expression, and All notes
   are kept in `settings.json` (`find`) and sent to every note.
 - **Hidden notes and the shortcuts.** Both are menus of the popup window:
-  the hidden notes, latest hidden first, each on its own color, below the
+  the hidden notes under a title, latest hidden first, each a card of its
+  note's colors, below the
   note or at the pointer from the tray (`web_note_window.show_hidden_list()`),
   and the keyboard shortcuts, made from the actions (`menus.helpPage()`), in
   two columns with the version and where the notes are.

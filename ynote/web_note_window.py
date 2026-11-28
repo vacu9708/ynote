@@ -708,17 +708,18 @@ def show_hidden_list(app, anchor):
     """A menu of the hidden notes, the latest hidden first, at anchor, a
     rectangle on the screen: choosing one shows it, or Show all shows them
     all."""
-    items = []
-    for note_id, window in app.hidden_notes():
+    hidden = app.hidden_notes()
+    items = [{'header': 'Hidden notes', 'icon': 'hidden', 'count': len(hidden)}]
+    for note_id, window in hidden:
         # The title alone; an untitled note goes by its first line.
         items.append({'id': 'note:' + note_id,
                       'label': window.title or window.first_text(40) or UNTITLED_LABEL,
                       'colorName': window._color})
-    if not items:
+    if not hidden:
         items.append({'id': 'none', 'label': 'No hidden notes', 'disabled': True})
     items += [{'sep': True},
-              {'id': 'show-all', 'icon': 'open', 'label': 'Show all', 'disabled': items[0]['id'] == 'none'}]
-    popup().open(_HiddenChoice(app), {'items': items, 'byKeys': True}, anchor)
+              {'id': 'show-all', 'icon': 'open', 'label': 'Show all', 'disabled': not hidden}]
+    popup().open(_HiddenChoice(app), {'items': items}, anchor)
 
 
 class _HiddenChoice:

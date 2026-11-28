@@ -15,7 +15,7 @@ Engineer-friendly sticky notes for Linux desktops.
   hidden ones too
 - **Snap** notes into half-screen columns with `Alt` and the arrows
 
-![Left: a pink note with its menu open, showing new note, hidden notes, colors, opacity, font size, and the keyboard shortcuts. Middle: a note finding restart in all notes, listing matches in hidden notes. Right: the hidden notes, each on its color](assets/ynote-hidden.png)
+![Left: a pink note with its menu open, showing new note, hidden notes, colors, opacity, font size, and the keyboard shortcuts. Middle: a note finding restart in all notes, listing matches in hidden notes. Right: the hidden notes, each a card of its note's colors](assets/ynote-hidden.png)
 
 ## Install
 
