@@ -59,6 +59,9 @@ class PostItApp(Gtk.Application):
         self._switch_index = 0
         self._switch_amount = 0.0
         self._switch_time = None
+        # The way the last scroll went, for a first scroll GTK gives no
+        # amount for (scroll_amount()).
+        self._last_scroll = 1
         self._rich_clipboard = None
         self._rich_clipboard_owned = False
         self._ignore_next_clipboard_owner_change = False
@@ -500,12 +503,39 @@ class PostItApp(Gtk.Application):
             target.present_with_time(time)
 
     def end_note_switch(self):
-        """Alt was let go: the note Alt + scroll stopped on is the latest."""
+        """Alt was let go: the note Alt + scroll stopped on is the latest,
+        and gets the focus, as Alt+Tab gives it: GNOME brings a note forward
+        while Alt is held, but keeps the focus where it was."""
         if self._switch_order is None:
             return
         target = self._switch_order[self._switch_index]
         self._switch_order = None
         self._mark_recent(target)
+        if target.get_visible() and not target.is_active():
+            if not focus.present_at_server_time(target):
+                target.present()
+
+    def scroll_amount(self, event):
+        """How far a scroll goes, in notches, down positive. GTK on X11
+        cannot tell the first smooth scroll's amount, as it has no amount
+        before it to measure from, and gives 0: that one counts as a notch
+        the way the last one went, down at first, so the first Alt+scroll
+        after a start is not lost. A touchpad's stop has no amount and is
+        not a scroll."""
+        direction = event.direction
+        if direction == Gdk.ScrollDirection.SMOOTH:
+            _ok, dx, dy = event.get_scroll_deltas()
+            if dx == 0 and dy == 0 and not getattr(event, 'is_stop', False):
+                dy = self._last_scroll
+        elif direction == Gdk.ScrollDirection.DOWN:
+            dy = 1
+        elif direction == Gdk.ScrollDirection.UP:
+            dy = -1
+        else:
+            dy = 0
+        if dy:
+            self._last_scroll = 1 if dy > 0 else -1
+        return dy
 
     def _notes_by_recency(self):
         visible = [w for w in self.notes.values() if w.get_visible()]

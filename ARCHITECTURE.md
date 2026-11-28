@@ -507,10 +507,12 @@ design. The GTK window stays, frameless, for what only a window can do.
   text, plain or as a regular expression. The current match's folded
   expands open while it is current (not an undo step), and the others fold
   back.
-- **Alt+scroll.** The note it steps to is presented at the X server's
-  time, as from the tray: with the scroll's own time GNOME left it behind
-  while another app had the focus, as right after a start until a note was
-  clicked (`PostItApp._step_note()`, for 1.x too).
+- **Alt+scroll.** The note it steps to is brought forward at the X
+  server's time, as from the tray, and gets the focus when Alt is let go
+  (`end_note_switch()`): GNOME keeps the focus where it was while Alt is
+  held. GTK on X11 gives the first smooth scroll no amount, having none
+  before it to measure from; `scroll_amount()` counts it as a notch the way
+  the last went. Both are shared with 1.x.
 - **Corners.** With a compositing window manager, the window has an RGBA
   visual and the page a transparent background, so the note's corners are
   round, and menus have room for a shadow. Without one, both are square.

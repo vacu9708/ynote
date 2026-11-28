@@ -375,3 +375,5 @@ Markdown on the clipboard; the right-click menu does the same.
 - X4 A quick second scroll is one step
 - X5 A hidden note shows again where it was
 - X6 Alt+scroll brings up stacked notes one after another, as in 1.x [WM] (right after a start, with another app focused, GNOME left the note behind when presented at the scroll's time; it is now presented at the X server's time, which openbox, which the tests run, does not need)
+- X7 Letting go of Alt gives the note Alt+scroll stopped on the focus, as Alt+Tab does: GNOME brings a note forward while Alt is held but keeps the focus where it was (openbox focuses it at once, so the test does not catch that)
+- X8 The first Alt+scroll after a start steps too: GTK on X11 gives the first smooth scroll no amount, which now counts as a notch the way the last one went, down at first (Xvfb gives the amount, so no test catches it)

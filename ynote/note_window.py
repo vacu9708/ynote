@@ -501,13 +501,7 @@ class NoteWindow(Gtk.ApplicationWindow, Editor):
         # PostItApp.scroll_notes()).
         if not self._alt_only(ev):
             return False
-        dy = 0
-        if ev.direction == Gdk.ScrollDirection.SMOOTH:
-            _ok, _dx, dy = ev.get_scroll_deltas()
-        elif ev.direction == Gdk.ScrollDirection.DOWN:
-            dy = 1
-        elif ev.direction == Gdk.ScrollDirection.UP:
-            dy = -1
+        dy = self.app.scroll_amount(ev)
         if dy:
             self.app.scroll_notes(self, dy, ev.time)
         return True

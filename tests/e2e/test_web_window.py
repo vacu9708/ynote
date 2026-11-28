@@ -137,3 +137,15 @@ def test_X6_alt_scroll_brings_up_stacked_notes_one_after_another(app, inp, versi
     inp._mods(['alt'], False)
     assert len(set(seen)) == 2 and 'c' not in seen, seen
     del top
+
+
+def test_X7_letting_go_of_alt_gives_the_note_stepped_to_the_focus(app, inp):
+    a, b, c = three(app)
+    x, y, w, h = c.box
+    inp.move(x + 50, y + 100)
+    inp._mods(['alt'], True)
+    inp.press(5)
+    inp.release(5)
+    settle(0.3)
+    inp._mods(['alt'], False)
+    wait_until(lambda: active(b), what='b with the focus once Alt is let go')
