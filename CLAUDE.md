@@ -9,7 +9,7 @@ holds what those don't: how the user wants the work done.
 - The user writes in Korean. Answer in Korean, but write everything in the
   repository in English: code, comments, docs, commit messages, and test
   data, but for Korean text that tests how Korean is handled.
-- They want each change visible right away: see "After every change".
+- They try each change themselves: see "After every change".
 
 ## Docs
 
@@ -64,23 +64,19 @@ holds what those don't: how the user wants the work done.
    sys.modules['tests']=m; import pytest; sys.exit(pytest.main(['-q']))"
    ```
 
-2. Rebuild the package (`./build-deb.sh`) and restart the running Ynote from
-   the checkout, without being asked, so the user can try the change at once:
-   find it with `pgrep -a python3 | grep ynote.py` (`pgrep -f` matches its own
-   shell), stop it with `kill -TERM` (it saves first), update the test note
-   while it is stopped if the change calls for it (see "Test note"), then
-   `setsid nohup python3 <checkout>/ynote.py &`.
-3. After each commit, give the user
-   `sudo apt install --reinstall ./dist/ynote_<version>.deb`: installing needs
-   their sudo, and without `--reinstall` apt skips a build that keeps the
-   released version, as every build between releases does.
+2. Rebuild the package (`./build-deb.sh`). Do not start, stop, or restart
+   Ynote, any version: the user runs it themselves, with their own `./dev.sh`
+   (rebuild, reinstall, run; excluded from git in `.git/info/exclude`).
+3. After each commit, tell the user to run `./dev.sh`: installing needs their
+   sudo, and it reinstalls with `--reinstall`, as apt skips a build that keeps
+   the released version, as every build between releases does.
 
 ## Test note
 
 The user tries each change in their note titled "test note", written in
 [tools/test-note.md](tools/test-note.md). When a change adds something the
 note should show, or changes how something in it looks or works, edit that
-file, and while Ynote is stopped in step 2, run `python3 tools/test_note.py`.
+file, and ask the user to quit Ynote before running `python3 tools/test_note.py`.
 It writes the note into the real `~/.config/ynote/notes.json`, after copying
 the file to `notes.json.bak`, keeping where the note is and its size.
 
