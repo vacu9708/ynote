@@ -1,5 +1,5 @@
 // Every action of a note, in one list: the toolbar, the menus, the / menu,
-// the palette, and the keyboard shortcuts page are all made from it, so a
+// and the keyboard shortcuts page are all made from it, so a
 // new action shows everywhere with the same name, icon, Markdown, and keys.
 //
 // An action: {id, label, icon, md, keys, run(ctx), enabled(ctx), active(ctx)}
@@ -83,7 +83,7 @@ export const ACTIONS = [
   {id: 'new-note', group: 'Notes', label: 'New note', icon: 'plus', keys: ['Ctrl', 'N'], window: true},
   {id: 'rename', group: 'Notes', label: 'Rename', icon: 'rename', keys: ['F2'],
     run: ({chrome}) => { chrome.editTitle(); return true; }, enabled: () => true},
-  {id: 'find', group: 'Notes', label: 'Find in this note', icon: 'search', keys: ['Ctrl', 'F'],
+  {id: 'find', group: 'Notes', label: 'Find', icon: 'search', keys: ['Ctrl', 'F'],
     run: ({chrome}) => { chrome.openFind(); return true; }, enabled: () => true},
   {id: 'collapse', group: 'Notes', label: 'Collapse', icon: 'down', window: true},
   {id: 'pin', group: 'Notes', label: 'Always on top', icon: 'pin', window: true},

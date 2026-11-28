@@ -5,7 +5,7 @@
 //
 // A menu is a list of items:
 //   {id, icon, label, md, keys: ['Ctrl', 'B'], on, check, disabled, danger}
-//   {sep: true}, {section: 'Table'}, {footer: ['↑↓ to choose', ...]}
+//   {sep: true}, {section: 'Table'}
 //   {swatches: [{id, value, color, on}]}
 //   {slider: {id, label, value, min, max, step, unit}}
 //   {stepper: {id, label, value, min, max}}
@@ -121,13 +121,21 @@ function render(items) {
   root.replaceChildren(...items.map(item => {
     if (item.sep) return el('div', {class: 'sep'});
     if (item.section) return el('div', {class: 'section'}, item.section);
-    if (item.footer) return el('div', {class: 'footer'}, item.footer.map(t => el('span', {}, t)));
     if (item.swatches) return swatches(item.swatches);
     if (item.slider) return slider(item.slider);
     if (item.stepper) return stepper(item.stepper);
     if (item.toggle) return toggle(item.toggle);
     return row(item);
   }));
+}
+
+function sendSize() {
+  // Measured whole: the window may still be hidden, with no height to
+  // limit the menu by, and is then made to fit it, within the monitor.
+  root.style.maxHeight = 'none';
+  const box = root.getBoundingClientRect();
+  root.style.maxHeight = '';
+  post({type: 'size', width: Math.ceil(box.width), height: Math.ceil(box.height)});
 }
 
 window.menu = {
@@ -138,12 +146,7 @@ window.menu = {
     render(spec.items || []);
     if (spec.light !== undefined && spec.light >= 0) light(spec.light);
     else if (spec.byKeys) step(1);
-    // Measured whole: the window may still be hidden, with no height to
-    // limit the menu by, and is then made to fit it, within the monitor.
-    root.style.maxHeight = 'none';
-    const box = root.getBoundingClientRect();
-    root.style.maxHeight = '';
-    post({type: 'size', width: Math.ceil(box.width), height: Math.ceil(box.height)});
+    sendSize();
   },
   // Keys from the app, which has them while the menu is open, or from the
   // note while it types into a menu that follows the text, like /.

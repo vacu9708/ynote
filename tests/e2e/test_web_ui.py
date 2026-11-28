@@ -47,7 +47,7 @@ def test_T4_keys_move_in_a_menu_and_enter_chooses(app, inp):
     inp.key('down')                 # Quote, the first
     inp.key('enter')
     wait_until(lambda: not menu_open(app), what='the menu to close')
-    assert_saved(app, "blockquote(paragraph('hello'))")
+    assert_saved(app, "blockquote(paragraph('hello')) paragraph()")
 
 
 def test_T5_esc_closes_a_menu_and_nothing_changes(app, inp):
@@ -83,7 +83,7 @@ def test_T8_right_click_in_a_table_cell_adds_a_row(app, inp):
     choose(app, 'Insert row below')
     assert_saved(app, "table(table_row(table_header(paragraph('k')) table_header(paragraph('v'))) "
                       "table_row(table_cell(paragraph()) table_cell(paragraph())) "
-                      "table_row(table_cell(paragraph('a')) table_cell(paragraph('b'))))")
+                      "table_row(table_cell(paragraph('a')) table_cell(paragraph('b')))) paragraph()")
 
 
 def test_T9_copy_on_a_code_block_copies_the_whole_block(app, inp):
@@ -128,7 +128,7 @@ def test_T13_a_match_in_a_folded_expand_opens_it(app, inp):
     inp.type('secret')
     inp.key('esc')
     inp.type('X')
-    assert_saved(app, "paragraph('top') expand(expand_title('T') paragraph('X'))")
+    assert_saved(app, "paragraph('top') expand(expand_title('T') paragraph('X')) paragraph()")
     assert saved_note(app)['doc']['content'][1]['attrs']['open'] is True
 
 

@@ -63,6 +63,9 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #titlebar { background: var(--bar); }
 #bottombar { background: var(--soft); border-top: 1px solid rgba(0, 0, 0, .07); height: 32px; overflow: hidden; }
 .bar-space { flex: 1; }
+/* The title bar moves the note, so it shows the arrow, not a text cursor;
+   renaming (F2, or the note menu) shows the text cursor. */
+#titlebar, #title { cursor: default; }
 #title {
   flex: 1; min-width: 0; padding: 1px 4px; border-radius: 5px;
   font-weight: 700; font-size: 14.5px; color: #1A1A1A;
@@ -71,6 +74,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #title.untitled { color: rgba(0, 0, 0, .42); }
 #title[contenteditable="plaintext-only"], #title[contenteditable="true"] {
   background: #fff; box-shadow: 0 0 0 2px var(--accent); outline: none; user-select: text; text-overflow: clip;
+  cursor: text;
 }
 .bar-btn {
   position: relative; height: 26px; min-width: 26px; flex: none;
@@ -158,9 +162,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .ProseMirror > :first-child, .item-content > :first-child, .expand-content > :first-child,
 td > :first-child, th > :first-child, blockquote > :first-child { margin-top: 0; }
 .ProseMirror p { margin: 0; min-height: 1.5em; }
-.ProseMirror h1 { font: 900 1.28em/1.3 var(--heading); margin: .5em 0 .12em; }
+.ProseMirror h1 { font: 700 1.28em/1.3 'Noto Serif', 'Noto Serif KR', serif; margin: .5em 0 .12em; }
 .ProseMirror strong { font-weight: 700; }
-.ProseMirror h1 strong { font-weight: 900; }
+/* A heading is bold; bold in it is bolder, in the Black weight Ynote brings. */
+.ProseMirror h1 strong { font-family: var(--heading); font-weight: 900; }
 
 /* Inline code: its own box on each row it wraps to. */
 .ProseMirror code {
@@ -208,17 +213,19 @@ td > :first-child, th > :first-child, blockquote > :first-child { margin-top: 0;
 .ProseMirror ul { margin: 0; padding-left: 1.45em; list-style-type: disc; }
 .ProseMirror li { position: relative; }
 .ProseMirror li.todo { list-style: none; }
+/* A to-do: a white box, checked in blue with a white tick, as in Confluence
+   and GitHub; its text grays out when done. */
 .todo-box {
-  position: absolute; left: -1.38em; top: .32em; width: .93em; height: .93em; box-sizing: border-box;
-  border: 2px solid rgba(0, 0, 0, .55); border-radius: 4px; cursor: pointer;
+  position: absolute; left: -1.42em; top: .22em; width: 1.05em; height: 1.05em; box-sizing: border-box;
+  border: 1.5px solid rgba(0, 0, 0, .5); border-radius: 4px; background: #fff; cursor: pointer;
 }
-.todo-box:hover { border-color: #000; }
-li.done > .todo-box { background: #2B2B2B; border-color: #2B2B2B; }
+.todo-box:hover { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47, 111, 228, .18); }
+li.done > .todo-box { background: var(--accent); border-color: var(--accent); }
 li.done > .todo-box::after {
-  content: ""; position: absolute; left: .25em; top: .04em; width: .2em; height: .45em;
+  content: ""; position: absolute; left: .3em; top: .1em; width: .22em; height: .48em;
   border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
-li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-through; text-decoration-color: rgba(0, 0, 0, .3); }
+li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-through; text-decoration-color: rgba(0, 0, 0, .35); }
 
 /* Expands: a box with a chevron before the title; folded, the title only. */
 .expand {
@@ -246,7 +253,8 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-t
 }
 /* No cell is positioned: in a positioned cell WebKit puts what an input
    method composes, such as Korean, on a line of its own. */
-.ProseMirror th { background: rgba(255, 255, 255, .5); font-weight: 700; }
+.ProseMirror th { background: rgba(255, 255, 255, .5); font-weight: normal; }
+/* A header's text is bold by its own format, so bold turns off in it. */
 .ProseMirror .selectedCell { background-image: linear-gradient(var(--select), var(--select)); }
 
 .ProseMirror img { max-width: 100%; vertical-align: bottom; border-radius: 3px; }
@@ -295,3 +303,20 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-t
 #note.collapsed .grip-n, #note.collapsed .grip-s, #note.collapsed .grip-ne, #note.collapsed .grip-nw,
 #note.collapsed .grip-se, #note.collapsed .grip-sw { display: none; }
 :root.maximized .grip { display: none; }
+
+/* The find bar's All notes: the matches of every note, in place of the text. */
+.find-toggle.all { font: 600 11.5px var(--body); padding: 4px 7px; border-radius: 6px; color: #333; white-space: nowrap; }
+.find-toggle.all:hover { background: rgba(0, 0, 0, .09); }
+.find-toggle[hidden], .find-bar .bar-btn[hidden] { display: none; }
+.all-results { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 4px 6px; }
+.all-results[hidden], #scroll[hidden] { display: none; }
+.result { display: grid; grid-template-columns: 9px auto 1fr auto; gap: 8px; align-items: baseline;
+  padding: 4px 8px; border-radius: 6px; font-size: .95em; cursor: default; white-space: nowrap; }
+.result:hover { background: rgba(255, 255, 255, .5); }
+.result.sel { background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08); }
+.result .dot { width: 9px; height: 9px; border-radius: 50%; align-self: center; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2); }
+.result b { max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
+.result .snippet { overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #333; }
+.result mark { background: #FFD45C; color: inherit; border-radius: 2px; }
+.result .tag { font-size: 11px; color: #6B7280; border: 1px solid rgba(0, 0, 0, .15); border-radius: 99px; padding: 0 6px; }
+.no-results { padding: 10px 8px; color: rgba(0, 0, 0, .5); }

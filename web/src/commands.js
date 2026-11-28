@@ -203,7 +203,10 @@ export function insertExpand(state, dispatch) {
   return true;
 }
 
-export function insertTable(state, dispatch, rows = 3, cols = 3) {
+// A 3 × 3 table, its first row the header.
+const TABLE_ROWS = 3, TABLE_COLS = 3;
+export function insertTable(state, dispatch) {
+  const rows = TABLE_ROWS, cols = TABLE_COLS;
   if (isInTable(state)) return false;
   if (dispatch) {
     const row = type => table_row.create(null,

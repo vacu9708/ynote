@@ -309,3 +309,26 @@ so they may reach past the note.
 - T13 A match in a folded expand opens it
 - T14 A narrow note puts the end of the toolbar into ＋
 - T15 A tool's tooltip shows its name, the Markdown typed for it, and its keys, and only that
+
+## U. Editing in a 2.0 note
+
+Where 2.0 follows Confluence over 1.x, the item says so.
+
+- U1 A double click in a code block selects the line clicked, usually one command
+- U2 A triple click in a code block selects the whole block
+- U3 Bold in a heading is drawn bolder than the heading
+- U4 Bold turns off in a table's header, which is bold by its own format
+- U5 Typing in a new table's header starts bold, and Table inserts a 3 × 3 table
+- U6 Deleting a table's header row makes the next row its header
+- U7 /expand inserts an expand
+- U8 / opens a menu that what is typed after it narrows, and Enter inserts the first, such as the date
+- U9 A path typed after a space, as /var/log/syslog, stays as typed
+- U10 Esc closes the / menu and leaves what was typed
+- U11 Enter on an empty line of an expand makes another line in it, as in Confluence (1.x left the expand)
+- U12 Enter on an empty line of code makes another line of code, as in Confluence (1.x left the block)
+- U13 A note always ends with a line, so Down goes below a code block, an expand, or a table at its end
+- U14 Right at the end of a table's last cell, in an expand, then typing, makes a line below the table, in the expand, as in Confluence
+- U15 Ctrl+V pastes an image from the clipboard
+- U16 Find's All notes (Alt+A) lists the matches in every note, hidden ones too, and Enter shows the note chosen
+- U17 The note menu holds nothing a title bar button does
+- U18 Down from a table's last row in an expand goes below the expand, as in Confluence

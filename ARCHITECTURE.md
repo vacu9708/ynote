@@ -446,6 +446,25 @@ design. The GTK window stays, frameless, for what only a window can do.
 - **Opacity.** The window's opacity, so text and bars fade alike. With Solid
   while in use (`solid_in_use`), a note is solid while the mouse is on it,
   it is active, or its menu is open.
+- **The / menu.** `slash.js` notes a / typed where a word starts and what is
+  typed after it; `chrome.js` shows the matching actions (`actions.SLASH`) in
+  the popup, which then takes no keys: the editor passes it Up, Down, Enter,
+  and Tab. A space, Esc, or moving away ends it, so paths type as usual.
+- **Tables at the end of an expand.** As in Confluence, Down from a table's
+  last row leaves the expand, and Right at the end of its last cell puts the
+  cursor after the table, in the expand, where typing starts a line.
+- **Finding in every note.** The find bar's All notes asks the window for
+  the matches of the query in every note, hidden ones too
+  (`search.find_matches()` over each note's text), and lists them in place of
+  the note's text. A match chosen shows its note and opens its find bar on
+  the query.
+- **Rules of the content.** `structure.js` keeps, after every change and when
+  a note loads: a table's first row its header, and a line at the end of the
+  note, so the cursor can go below anything. Typing in an empty header cell
+  starts bold; a double click in code selects a line, a triple the block.
+- **Images.** Ctrl+V with an image on the clipboard is taken by the window
+  before the page sees it: the image is saved as a PNG in `images/` and put
+  at the cursor.
 - **Find.** A ProseMirror plugin (`find.js`) lights the matches of each block's
   text, plain or as a regular expression. The current match's folded
   expands open while it is current (not an undo step), and the others fold

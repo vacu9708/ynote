@@ -21,6 +21,7 @@ from gi.repository import Gdk, GLib, Gtk, WebKit2
 
 from .config import IMAGES_DIR, UNTITLED_LABEL
 from .convert import doc_text, note_doc
+from .search import find_matches
 from .models import normalize_note_data
 from .snap import snap_rect
 from .styles import PALETTE
@@ -328,11 +329,44 @@ class WebNoteWindow(Gtk.ApplicationWindow):
     def _do_popup_close(self, _message):
         self._close_my_popup()
 
+    def _do_popup_key(self, message):
+        if popup().owner is self:
+            popup().key(message.get('key', ''))
+
+    # --- finding in every note (the find bar's All notes) ----------------
+
+    def _do_search_all(self, message):
+        """The matches of a query in every note, this one first, then the
+        others shown, then the hidden ones, for the find bar's list."""
+        query = message.get('query', '')
+        notes = self.app.searchable_notes(first=self)
+        colors = {w.note_id: w._color for w in self.app.notes.values()}
+        matches = find_matches(notes, query)
+        call_js(self.view, 'ynote.allResults', query, [
+            {'id': m.note_id, 'title': m.title, 'hidden': m.hidden,
+             'color': colors.get(m.note_id, 'yellow'), 'snippet': m.snippet}
+            for m in matches])
+
+    def _do_open_match(self, message):
+        """Show the note of a match chosen in the list, finding the query in
+        it."""
+        note = self.app.notes.get(message.get('id'))
+        if note is None:
+            return
+        if note is not self:
+            self.app.show_note(note.note_id)
+        note.find(message.get('query', ''))
+
+    def find(self, query):
+        """Open the find bar on this note with a query."""
+        if self._ready:
+            call_js(self.view, 'ynote.find', query)
+
     def _close_my_popup(self):
         if popup().owner is self:
             popup().close()
 
-    def popup_pick(self, item_id):
+    def popup_pick(self, item_id, _value=None):
         call_js(self.view, 'ynote.popupPick', item_id)
 
     def popup_change(self, item_id, value):
@@ -373,6 +407,8 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         return True
 
     def _on_key_press(self, _window, event):
+        if self._paste_image(event):
+            return True
         # Alt + arrow snaps the note into a column (see snap.py).
         key = SNAP_KEYS.get(event.keyval)
         if key is None or not _alt_only(event):
@@ -381,6 +417,24 @@ class WebNoteWindow(Gtk.ApplicationWindow):
             self._snap_held.remove(key)
         self._snap_held.append(key)
         self._snap_to(self._snap_held)
+        return True
+
+    def _paste_image(self, event):
+        """Ctrl+V with an image on the clipboard, such as a screenshot, puts
+        a copy of it in the images folder and the image at the cursor."""
+        mods = event.state & Gtk.accelerator_get_default_mod_mask()
+        if mods != Gdk.ModifierType.CONTROL_MASK or event.keyval not in (Gdk.KEY_v, Gdk.KEY_V):
+            return False
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        if not clipboard.wait_is_image_available():
+            return False
+        pixbuf = clipboard.wait_for_image()
+        if pixbuf is None:
+            return False
+        name = str(uuid.uuid4()) + '.png'
+        os.makedirs(IMAGES_DIR, exist_ok=True)
+        pixbuf.savev(os.path.join(IMAGES_DIR, name), 'png', [], [])
+        call_js(self.view, 'ynote.insertImage', name, 'Pasted image')
         return True
 
     def _on_key_release(self, _window, event):

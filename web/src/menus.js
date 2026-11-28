@@ -26,10 +26,6 @@ export function noteMenu(ctx, props) {
     {sep: true},
     row('new-note'),
     row('rename'),
-    row('collapse', props.collapsed
-      ? {icon: 'right', label: 'Expand'} : {disabled: props.maximized}),
-    row('pin', {check: !!props.pinned}),
-    row('hide'),
     row('delete'),
     {sep: true},
     row('hidden-notes', {md: String(props.hiddenCount || 0)}),
@@ -69,5 +65,8 @@ export function contextMenu(state, {link, hasSelection}) {
 export const TABLE_ACTIONS = {
   'row-above': addRowBefore, 'row-below': addRowAfter,
   'col-left': addColumnBefore, 'col-right': addColumnAfter,
-  'delete-row': deleteRow, 'delete-col': deleteColumn, 'delete-table': deleteTable,
+  // Deleting the last row or column deletes the table, as in 1.x.
+  'delete-row': (s, d) => deleteRow(s, d) || deleteTable(s, d),
+  'delete-col': (s, d) => deleteColumn(s, d) || deleteTable(s, d),
+  'delete-table': deleteTable,
 };

@@ -49,7 +49,6 @@ kbd { font: 500 11px/16px var(--body); color: #4A5260; background: #fff; border:
 .chk .icon { stroke-width: 3; }
 .sep { height: 1px; background: var(--line); margin: 4px 6px; }
 .section { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); padding: 7px 8px 2px; }
-.footer { display: flex; gap: 12px; padding: 6px 8px 3px; border-top: 1px solid var(--line); margin-top: 4px; color: var(--dim); font-size: 11.5px; }
 
 .swatches { display: flex; gap: 7px; padding: 5px 8px 7px; }
 .swatch { width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18); }
@@ -65,3 +64,4 @@ input[type=range] { width: 110px; margin: 0; accent-color: var(--accent); }
 .stepper button { padding: 1px 8px; }
 .stepper button:hover { background: #F1F3F6; }
 .stepper .num { padding: 1px 8px; border-left: 1px solid #D5DAE1; border-right: 1px solid #D5DAE1; font-variant-numeric: tabular-nums; min-width: 2ch; text-align: center; }
+

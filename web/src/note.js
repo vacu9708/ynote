@@ -18,6 +18,7 @@ const editor = createEditor(document.getElementById('editor'), {
   onChange: doc => { if (!loading) post({type: 'changed', doc: doc.toJSON()}); },
   onOpenLink: url => post({type: 'open-link', url}),
   onCopy: text => post({type: 'copy-text', text}),
+  onSlashKey: key => chrome.slashKey(key),
 });
 const chrome = setupChrome(editor, post);
 
@@ -36,6 +37,8 @@ window.ynote = {
   popupChange(id, value) { chrome.change(id, value); },
   popupClosed() { chrome.closed(); },
   focus() { editor.view.focus(); },
+  find(query) { chrome.openFind(query); },
+  allResults(query, list) { chrome.allResults(query, list); },
   editTitle() { chrome.editTitle(); },
   insertImage(file, name) {
     editor.run((state, dispatch) => {

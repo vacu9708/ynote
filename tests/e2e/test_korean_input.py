@@ -82,7 +82,7 @@ def test_S2_enter_while_composing_in_a_list_starts_the_next_item(app, inp):
     inp.type('gksrmf')        # 한글
     inp.hangul()
     assert_saved(app, "bullet_list(list_item(paragraph('안녕')) "
-                      "list_item(paragraph('한글')))")
+                      "list_item(paragraph('한글'))) paragraph()")
 
 
 def test_S3_typed_markdown_around_korean_makes_its_format(app, inp):
@@ -117,9 +117,10 @@ def test_S5_korean_in_a_table_cell_stays_on_its_line(app, inp):
     inp.key('tab')            # the next cell, its text selected
     inp.type('dkssud')        # 안녕, in place of it
     inp.hangul()
-    assert_saved(app, "table(table_row(table_header(paragraph('한글')) "
-                      "table_header(paragraph('안녕'))) "
-                      "table_row(table_cell(paragraph()) table_cell(paragraph())))")
+    # A header cell's typing starts bold (U5).
+    assert_saved(app, "table(table_row(table_header(paragraph('한글'[strong])) "
+                      "table_header(paragraph('안녕'[strong]))) "
+                      "table_row(table_cell(paragraph()) table_cell(paragraph()))) paragraph()")
 
 
 def test_S6_korean_in_an_expand_stays_where_it_is_typed(app, inp):
@@ -132,4 +133,4 @@ def test_S6_korean_in_an_expand_stays_where_it_is_typed(app, inp):
     inp.key('end')
     inp.type('sodyd')         # 내용
     inp.hangul()
-    assert_saved(app, "expand(expand_title('T제목') paragraph('x내용'))")
+    assert_saved(app, "expand(expand_title('T제목') paragraph('x내용')) paragraph()")

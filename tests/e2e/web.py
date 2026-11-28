@@ -161,3 +161,55 @@ def saved_field(app, field, expected, note_id='test', timeout=5):
 
 __all__ = ['start', 'WebNote', 'menu', 'menu_open', 'menu_items', 'choose',
            'menu_button', 'brief', 'assert_saved', 'saved_field', '_children']
+
+
+def text_holding(note, needle):
+    """The innermost accessible whose own text holds needle, and where."""
+    from tests.e2e.driver import Atspi
+    best = None
+    for acc in find_all(note.frame, lambda a: a.get_text_iface() is not None, limit=40):
+        try:
+            text = Atspi.Text.get_text(acc, 0, Atspi.Text.get_character_count(acc))
+        except Exception:
+            continue
+        if needle in text:
+            best = (acc, text.index(needle))
+    if best is None:
+        raise TestError(f'no text {needle!r}')
+    return best
+
+
+def attrs_at(note, needle):
+    """The text attributes of needle's first character, as shown."""
+    from tests.e2e.driver import Atspi
+    acc, start = text_holding(note, needle)
+    attrs, _s, _e = Atspi.Text.get_attribute_run(acc, start, False)
+    return attrs
+
+
+def ink(note, needle):
+    """How dark the drawn needle is: the share of its box's pixels that are
+    dark, from the screen."""
+    from tests.e2e.driver import Atspi, screenshot
+    acc, start = text_holding(note, needle)
+    box = Atspi.Text.get_range_extents(acc, start, start + len(needle), Atspi.CoordType.SCREEN)
+    pb = screenshot('/tmp/ink.png', (box.x, box.y, box.width, box.height))
+    n, rowstride, data = pb.get_n_channels(), pb.get_rowstride(), pb.get_pixels()
+    dark = 0
+    for y in range(pb.get_height()):
+        for x in range(pb.get_width()):
+            i = y * rowstride + x * n
+            if (data[i] + data[i + 1] + data[i + 2]) / 3 < 110:
+                dark += 1
+    return dark / max(1, pb.get_width() * pb.get_height())
+
+
+def weights(note, needle):
+    """The font weight of each character of needle, as shown."""
+    from tests.e2e.driver import Atspi
+    acc, start = text_holding(note, needle)
+    out = []
+    for i in range(start, start + len(needle)):
+        attrs, _s, _e = Atspi.Text.get_attribute_run(acc, i, False)
+        out.append(int(attrs.get('weight', '400')))
+    return out

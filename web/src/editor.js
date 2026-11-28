@@ -1,21 +1,23 @@
 // A note's editor: ProseMirror with Ynote's content, keys, and typed
 // Markdown. The app talks to it through window.ynote (see bridge.js).
-import {EditorState, Plugin, TextSelection} from 'prosemirror-state';
+import {EditorState, Plugin, Selection, TextSelection} from 'prosemirror-state';
 import {EditorView, Decoration, DecorationSet} from 'prosemirror-view';
 import {Node} from 'prosemirror-model';
 import {keymap} from 'prosemirror-keymap';
-import {baseKeymap, chainCommands} from 'prosemirror-commands';
+import {baseKeymap, chainCommands, splitBlock} from 'prosemirror-commands';
 import {history, undo, redo} from 'prosemirror-history';
 import {inputRules, InputRule, wrappingInputRule, textblockTypeInputRule} from 'prosemirror-inputrules';
 import {findWrapping} from 'prosemirror-transform';
 import {tableEditing, goToNextCell} from 'prosemirror-tables';
-import {gapCursor} from 'prosemirror-gapcursor';
+import {gapCursor, GapCursor} from 'prosemirror-gapcursor';
 import {dropCursor} from 'prosemirror-dropcursor';
 import {schema} from './schema.js';
 import * as cmd from './commands.js';
 import {CodeBlockView, ExpandView, ListItemView} from './views.js';
 import {linksPlugin} from './links.js';
 import {findPlugin} from './find.js';
+import {structurePlugin, headerBoldPlugin, codeClicksPlugin, normalize} from './structure.js';
+import {slashPlugin} from './slash.js';
 
 const {paragraph, heading, code_block, blockquote, horizontal_rule, bullet_list,
   list_item, expand, expand_title} = schema.nodes;
@@ -69,38 +71,53 @@ const rules = inputRules({rules: [
 
 // --- Keys ------------------------------------------------------------------
 
-// Enter on the empty last line of an expand goes on below it.
-function leaveExpand(state, dispatch) {
+// Enter on an empty line of an expand makes another line in it, as in
+// Confluence; the default would take the line out of the expand.
+function enterInExpand(state, dispatch) {
   const {$cursor} = state.selection;
   if (!$cursor || $cursor.parent.type !== paragraph || $cursor.parent.content.size) return false;
-  const d = $cursor.depth - 1;
-  if (d < 1 || $cursor.node(d).type !== expand || $cursor.index(d) !== $cursor.node(d).childCount - 1) return false;
-  if ($cursor.node(d).childCount <= 2) return false;
-  if (dispatch) {
-    const after = $cursor.after(d);
-    const tr = state.tr.delete($cursor.before(), $cursor.after());
-    const pos = tr.mapping.map(after);
-    tr.insert(pos, paragraph.create());
-    tr.setSelection(TextSelection.create(tr.doc, pos + 1));
-    dispatch(tr.scrollIntoView());
-  }
-  return true;
+  if ($cursor.depth < 2 || $cursor.node(-1).type !== expand) return false;
+  return splitBlock(state, dispatch);
 }
 
-// Enter on an empty last line of code leaves the code block.
-function leaveCode(state, dispatch) {
+// Up and Down out of a code block's first or last line go to the line
+// above or below it, which WebKit does not do by itself.
+function outOfCode(dir) {
+  return (state, dispatch) => {
+    const {$cursor} = state.selection;
+    if (!$cursor || $cursor.parent.type !== code_block) return false;
+    const text = $cursor.parent.textContent;
+    const rest = dir === 'down' ? text.slice($cursor.parentOffset) : text.slice(0, $cursor.parentOffset);
+    if (rest.includes('\n')) return false;
+    const pos = dir === 'down' ? $cursor.after() : $cursor.before();
+    const $pos = state.doc.resolve(pos);
+    const sel = Selection.findFrom($pos, dir === 'down' ? 1 : -1, true);
+    if (!sel) return false;
+    if (dispatch) dispatch(state.tr.setSelection(sel).scrollIntoView());
+    return true;
+  };
+}
+
+// Right at the very end of a table, in its last cell, puts the cursor after
+// the table, where typing starts a line, as in Confluence: the way to go on
+// writing below a table at the end of an expand, as Down leaves the expand.
+function rightOutOfTable(state, dispatch, view) {
   const {$cursor} = state.selection;
-  if (!$cursor || $cursor.parent.type !== code_block) return false;
-  const text = $cursor.parent.textContent;
-  if ($cursor.parentOffset !== text.length || !text.endsWith('\n')) return false;
-  if (dispatch) {
-    const tr = state.tr.delete($cursor.pos - 1, $cursor.pos);
-    const after = tr.mapping.map($cursor.after());
-    tr.insert(after, paragraph.create());
-    tr.setSelection(TextSelection.create(tr.doc, after + 1));
-    dispatch(tr.scrollIntoView());
+  if (!$cursor || !view || !view.endOfTextblock('right')) return false;
+  for (let d = $cursor.depth; d > 0; d--) {
+    if ($cursor.node(d).type.name !== 'table') continue;
+    // Only at the end of the table's last cell's last line.
+    const last = Selection.findFrom(state.doc.resolve($cursor.end(d)), -1, true);
+    if (!last || last.head !== $cursor.pos) return false;
+    const $after = state.doc.resolve($cursor.after(d));
+    if (dispatch) {
+      const sel = GapCursor.valid($after) ? new GapCursor($after) : null;
+      if (sel) dispatch(state.tr.setSelection(sel).scrollIntoView());
+      else return cmd.leaveTable(state, dispatch);
+    }
+    return true;
   }
-  return true;
+  return false;
 }
 
 // Backspace at the start of an expand's title takes the expand away and
@@ -138,7 +155,10 @@ const keys = keymap({
   'Tab': chainCommands(cmd.nextCellOrRow, cmd.indentItem, insertTab),
   'Shift-Tab': chainCommands(goToNextCell(-1), cmd.outdentItem, () => true),
   'Escape': cmd.leaveTable,
-  'Enter': chainCommands(leaveCode, leaveExpand, cmd.splitItem),
+  'Enter': chainCommands(cmd.splitItem, enterInExpand),
+  'ArrowDown': outOfCode('down'),
+  'ArrowRight': rightOutOfTable,
+  'ArrowUp': outOfCode('up'),
   'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand),
 });
 
@@ -152,7 +172,7 @@ const placeholder = new Plugin({props: {decorations(state) {
   return DecorationSet.create(doc, [Decoration.node(0, doc.firstChild.nodeSize, {class: 'empty', 'data-placeholder': PLACEHOLDER})]);
 }}});
 
-export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy}) {
+export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy, onSlashKey}) {
   const changes = new Plugin({
     view: () => ({
       update(view, prev) {
@@ -161,9 +181,10 @@ export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy}) {
     }),
   });
   const plugins = [
-    rules, keys, keymap(baseKeymap),
+    slashPlugin(key => onSlashKey(key)), rules, keys, keymap(baseKeymap),
     history(), tableEditing(), gapCursor(), dropCursor({color: '#2D6BE0', width: 2}),
-    linksPlugin(onOpenLink), placeholder, findPlugin, changes,
+    linksPlugin(onOpenLink), placeholder, findPlugin, structurePlugin, headerBoldPlugin, codeClicksPlugin,
+    changes,
   ];
   const view = new EditorView(place, {
     state: EditorState.create({schema, plugins}),
@@ -187,6 +208,9 @@ export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy}) {
         doc = schema.node('doc', null, [paragraph.create()]);
       }
       view.updateState(EditorState.create({doc, plugins}));
+      // A note saved before a rule, or by 1.x, keeps it from the start.
+      const tr = normalize(view.state);
+      if (tr) view.updateState(view.state.apply(tr));
     },
     doc: () => view.state.doc,
     run(command) {

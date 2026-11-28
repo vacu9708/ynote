@@ -5,9 +5,10 @@
 // the window can do is asked of the app with post().
 import {el, strokeIcon} from './icons.js';
 import {PALETTE, DEFAULT_COLOR} from './palette.js';
-import {ACTION, TOOLBAR, perform, enabled} from './actions.js';
+import {ACTION, TOOLBAR, SLASH, perform, enabled, menuRow} from './actions.js';
 import * as menus from './menus.js';
 import {findKey, setFind, step, endFind} from './find.js';
+import {slashKey, slashMatches} from './slash.js';
 
 // A button of a bar: pressing it never takes the focus from the text, so the
 // cursor and the selection stay.
@@ -25,6 +26,7 @@ export function setupChrome(editor, post) {
   const titleText = document.getElementById('title');
   const titleBar = document.getElementById('titlebar');
   const bottomBar = document.getElementById('bottombar');
+  const scrollBox = document.getElementById('scroll');
   let props = {title: '', pinned: false, collapsed: false, hiddenCount: 0, color: DEFAULT_COLOR,
     opacity: 1, solidInUse: true, fontSize: 14, maximized: false, autostart: null};
   const ctx = () => ({state: editor.view.state, dispatch: editor.view.dispatch, view: editor.view, post, chrome});
@@ -173,14 +175,83 @@ export function setupChrome(editor, post) {
   const findCount = el('span', {class: 'find-count'});
   const caseBtn = el('button', {class: 'find-toggle', title: 'Match case (Alt+C)', tabindex: '-1'}, 'Aa');
   const regexBtn = el('button', {class: 'find-toggle', title: 'Regular expression (Alt+R)', tabindex: '-1'}, '.*');
+  const allBtn = el('button', {class: 'find-toggle all', title: 'Find in every note, hidden ones too (Alt+A)',
+    tabindex: '-1', 'aria-pressed': 'false'}, 'All notes');
+  const prevBtn = barButton(strokeIcon('up', 16), 'Previous match (Shift+Enter)', () => step(editor.view, -1));
+  const nextBtn = barButton(strokeIcon('down', 16), 'Next match (Enter)', () => step(editor.view, 1));
   const findBar = el('div', {class: 'find-bar', hidden: true},
     el('div', {class: 'find-box'}, strokeIcon('search', 14), findInput, findCount, caseBtn, regexBtn),
-    barButton(strokeIcon('up', 16), 'Previous match (Shift+Enter)', () => step(editor.view, -1)),
-    barButton(strokeIcon('down', 16), 'Next match (Enter)', () => step(editor.view, 1)),
+    allBtn, prevBtn, nextBtn,
     barButton(strokeIcon('cross', 16), 'Close (Esc)', () => closeFind()));
   titleBar.after(findBar);
+
+  // All notes: the matches in every note, listed in place of the text; a
+  // match chosen shows its note and finds the query there.
+  const results = el('div', {class: 'all-results', role: 'listbox', hidden: true});
+  scrollBox.before(results);
+  let allMode = false, resultRows = [], resultIndex = -1, searchTimer = null;
+  function setAllMode(on) {
+    allMode = on;
+    allBtn.classList.toggle('on', on);
+    allBtn.setAttribute('aria-pressed', String(on));
+    results.hidden = !on;
+    scrollBox.hidden = on;
+    caseBtn.hidden = regexBtn.hidden = prevBtn.hidden = nextBtn.hidden = on;
+    if (on) {
+      setFind(editor.view, {query: ''});
+      searchAll();
+    } else {
+      setFind(editor.view, {query: findInput.value, current: 0});
+    }
+    refreshFindCount();
+    findInput.focus();
+  }
+  allBtn.addEventListener('mousedown', event => event.preventDefault());
+  allBtn.addEventListener('click', () => setAllMode(!allMode));
+  function searchAll() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => post({type: 'search-all', query: findInput.value}), 80);
+  }
+  function lightResult(i) {
+    if (resultRows[resultIndex]) resultRows[resultIndex].classList.remove('sel');
+    resultIndex = i;
+    if (resultRows[i]) {
+      resultRows[i].classList.add('sel');
+      resultRows[i].scrollIntoView({block: 'nearest'});
+    }
+  }
+  function showResults(query, list) {
+    if (!allMode || query !== findInput.value) return;
+    resultRows = list.map(m => {
+      const row = el('div', {class: 'result', role: 'option'},
+        el('span', {class: 'dot', style: `background:${(PALETTE[m.color] || PALETTE[DEFAULT_COLOR]).paper}`}),
+        el('b', {}, m.title || 'Untitled'), el('span', {class: 'snippet'}, mark(m.snippet, query)),
+        m.hidden ? el('span', {class: 'tag'}, 'hidden') : null);
+      row.addEventListener('mousedown', event => event.preventDefault());
+      row.addEventListener('click', () => openMatch(m));
+      return row;
+    });
+    results.replaceChildren(...(resultRows.length ? resultRows
+      : [el('div', {class: 'no-results'}, query ? 'No note has this' : '')]));
+    resultIndex = -1;
+    lightResult(0);
+    findCount.textContent = query ? String(list.length) : '';
+  }
+  function mark(text, query) {
+    const i = text.toLowerCase().indexOf(query.toLowerCase());
+    if (!query || i < 0) return [text];
+    return [text.slice(0, i), el('mark', {}, text.slice(i, i + query.length)), text.slice(i + query.length)];
+  }
+  function openMatch(m) {
+    const query = findInput.value;
+    setAllMode(false);
+    post({type: 'open-match', id: m.id, query});
+  }
   const findState = () => findKey.getState(editor.view.state);
-  findInput.addEventListener('input', () => setFind(editor.view, {query: findInput.value, current: 0}));
+  findInput.addEventListener('input', () => {
+    if (allMode) searchAll();
+    else setFind(editor.view, {query: findInput.value, current: 0});
+  });
   const toggle = (button, key) => {
     button.addEventListener('mousedown', event => event.preventDefault());
     button.addEventListener('click', () => {
@@ -191,32 +262,39 @@ export function setupChrome(editor, post) {
   toggle(caseBtn, 'caseSensitive');
   toggle(regexBtn, 'regex');
   findInput.addEventListener('keydown', event => {
-    if (event.key === 'Enter') { event.preventDefault(); step(editor.view, event.shiftKey ? -1 : 1); }
+    if (allMode && event.key === 'ArrowDown') { event.preventDefault(); lightResult(Math.min(resultIndex + 1, resultRows.length - 1)); }
+    else if (allMode && event.key === 'ArrowUp') { event.preventDefault(); lightResult(Math.max(resultIndex - 1, 0)); }
+    else if (allMode && event.key === 'Enter') { event.preventDefault(); if (resultRows[resultIndex]) resultRows[resultIndex].click(); }
+    else if (event.altKey && (event.key === 'a' || event.key === 'A')) { event.preventDefault(); allBtn.click(); }
+    else if (event.key === 'Enter') { event.preventDefault(); step(editor.view, event.shiftKey ? -1 : 1); }
     else if (event.key === 'Escape') { event.preventDefault(); closeFind(); }
     else if (event.altKey && (event.key === 'c' || event.key === 'C')) { event.preventDefault(); caseBtn.click(); }
     else if (event.altKey && (event.key === 'r' || event.key === 'R')) { event.preventDefault(); regexBtn.click(); }
     event.stopPropagation();
   });
-  function openFind() {
+  function openFind(query) {
     if (props.collapsed) post({type: 'collapse'});
+    if (allMode && typeof query === 'string') setAllMode(false);
     findBar.hidden = false;
     findBtn.classList.add('open');
     const {from, to} = editor.view.state.selection;
     const selected = editor.view.state.doc.textBetween(from, to);
-    if (selected && !selected.includes('\n')) findInput.value = selected;
+    if (typeof query === 'string') findInput.value = query;
+    else if (selected && !selected.includes('\n')) findInput.value = selected;
     findInput.focus();
     findInput.select();
     setFind(editor.view, {query: findInput.value, current: 0});
   }
   function closeFind() {
     if (findBar.hidden) return;
+    if (allMode) setAllMode(false);
     findBar.hidden = true;
     findBtn.classList.remove('open');
     endFind(editor.view);
     editor.view.focus();
   }
   function refreshFindCount() {
-    if (findBar.hidden) return;
+    if (findBar.hidden || allMode) return;
     const {matches, current, error, query} = findState();
     findCount.textContent = error ? 'error' : query ? (matches.length ? `${current + 1}/${matches.length}` : '0/0') : '';
     findCount.title = error || '';
@@ -226,13 +304,37 @@ export function setupChrome(editor, post) {
   // --- Menus. One is open at a time; the app shows it and sends back the
   // id of the item chosen, to the handler kept here.
   let openMenu = null;
-  function popup(name, items, anchor, {side = 'below', button = null, byKeys = false} = {}) {
+  function popup(name, items, anchor, {side = 'below', button = null, byKeys = false, input = true} = {}) {
     closeMenu();
     hideTip();
     openMenu = {name, button};
     if (button) button.classList.add('open');
-    post({type: 'popup', spec: {items, byKeys}, anchor: rectOf(anchor), side, input: true});
+    post({type: 'popup', spec: {items, byKeys}, anchor: rectOf(anchor), side, input});
     return openMenu;
+  }
+
+  // --- The / menu follows the text: shown again as the query changes,
+  // closed when it ends. It takes no keys; the editor passes it these.
+  let slashQuery = null;
+  function refreshSlash() {
+    const s = slashKey.getState(editor.view.state);
+    const items = s.active
+      ? slashMatches(SLASH.map(id => ACTION[id]), s.query).filter(a => enabled(a, ctx())) : [];
+    if (!items.length) {
+      slashQuery = null;
+      if (openMenu && openMenu.name === 'slash') { closeMenu(); post({type: 'popup-close'}); }
+      return;
+    }
+    if (openMenu && openMenu.name === 'slash' && slashQuery === s.query) return;
+    slashQuery = s.query;
+    const at = editor.view.coordsAtPos(s.from);
+    const rows = items.map(a => menuRow(a, ctx()));
+    popup('slash', rows, {x: at.left, y: at.top, height: at.bottom - at.top}, {byKeys: true, input: false});
+  }
+  function slashKeyPressed(key) {
+    if (!openMenu || openMenu.name !== 'slash') return false;
+    post({type: 'popup-key', key});
+    return true;
   }
   function closeMenu() {
     if (!openMenu) return;
@@ -285,6 +387,16 @@ export function setupChrome(editor, post) {
     const menu = openMenu;
     closeMenu();
     if (!menu) return;
+    if (menu.name === 'slash') {
+      // The / and what was typed after it go; the action takes their place.
+      editor.run((state, dispatch) => {
+        const s = slashKey.getState(state);
+        if (s.active) dispatch(state.tr.delete(s.from, state.selection.from).setMeta(slashKey, 'end'));
+        return true;
+      });
+      run(id);
+      return;
+    }
     if (menu.name === 'context') {
       if (id === 'open-link') post({type: 'open-link', url: menu.link});
       else if (id === 'copy-link') post({type: 'copy-text', text: menu.link});
@@ -324,6 +436,7 @@ export function setupChrome(editor, post) {
   editor.view.setProps({dispatchTransaction(tr) {
     editor.view.updateState(editor.view.state.apply(tr));
     refreshTools();
+    refreshSlash();
   }});
 
   // --- Rename in place: Enter keeps it, Esc puts the old one back.
@@ -403,6 +516,6 @@ export function setupChrome(editor, post) {
 
   renderTitle();
   const chrome = {set, editTitle, confirmDelete, openFind, closeFind, pick, change, closed: closeMenu,
-    refresh: refreshTools};
+    refresh: refreshTools, slashKey: slashKeyPressed, allResults: showResults};
   return chrome;
 }

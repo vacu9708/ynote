@@ -66,8 +66,12 @@ class WebPopup(Gtk.Window):
         """Show a menu for a note. anchor is (x, y, width, height) on the
         screen; the menu hangs below it or above it (side), or flips to the
         other side where the monitor ends."""
-        if self._owner is not None:
+        # A new menu of the same note replaces its menu, which is not closed
+        # for it: the note already keeps the new one.
+        if self._owner is not None and self._owner is not owner:
             self.close()
+        else:
+            self._release()
         self._owner = owner
         self._anchor = anchor
         self._side = side
@@ -193,7 +197,7 @@ class WebPopup(Gtk.Window):
             # which would end the menu it was chosen from.
             owner = self._owner
             if owner is not None:
-                owner.popup_pick(message.get('id'))
+                owner.popup_pick(message.get('id'), message.get('value'))
             self.close()
         elif kind == 'change':
             if self._owner is not None:
@@ -211,3 +215,4 @@ def popup():
     if _popup is None:
         _popup = WebPopup()
     return _popup
+
