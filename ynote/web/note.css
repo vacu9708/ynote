@@ -342,3 +342,8 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-t
 /* Short inline code is kept on one line (structure.js shortCodePlugin). */
 /* pre, not nowrap: after nowrap text WebKit types a space as a no-break one. */
 .ProseMirror .short-code { white-space: pre; }
+
+/* Emoji larger than the text beside them, as in 1.x, without making the line
+   taller (structure.js emojiPlugin). */
+/* No height of its own in the line, so the line is as tall as the text's. */
+.ProseMirror .emoji { font-size: 1.3em; line-height: 0; }

@@ -157,6 +157,7 @@ two monitors (D4, D9: much effort for little).
 - J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports
 - J4 Emoji… (the right-click menu, ＋, /emoji, or Ctrl+.) finds emoji by name and puts one at the cursor; the ones used last come first
 - J5 Emoji are drawn in color, not in a text font's black and white, as DejaVu Sans drew 😀 [px]
+- J5b Emoji are drawn larger than the text, as in 1.x, without making their line taller [px]
 
 ## K. Images
 

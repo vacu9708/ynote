@@ -185,3 +185,25 @@ export const shortCodePlugin = new Plugin({
     },
   },
 });
+
+// Emoji are drawn larger than the text, as in 1.x, or they read small beside
+// it; without making their line taller (note.css .emoji).
+const EMOJI = /(?:\p{Regional_Indicator}{2}|\p{Extended_Pictographic}(?:\uFE0F|[\u{1F3FB}-\u{1F3FF}])?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|[\u{1F3FB}-\u{1F3FF}])?)*)/gu;
+export const emojiPlugin = new Plugin({
+  props: {
+    decorations(state) {
+      const decos = [];
+      state.doc.descendants((node, pos) => {
+        if (!node.isText) return true;
+        for (const m of node.text.matchAll(EMOJI)) {
+          // Not the plain symbols that only become emoji with U+FE0F, such as
+          // a digit or the copyright sign, written as text.
+          if (m[0].length === 1 && m[0].charCodeAt(0) < 0x2000) continue;
+          decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {class: 'emoji'}));
+        }
+        return false;
+      });
+      return decos.length ? DecorationSet.create(state.doc, decos) : null;
+    },
+  },
+});

@@ -513,3 +513,26 @@ def test_J5_emoji_are_drawn_in_color(app, inp, emoji):
     settle(0.5)
     area = box(note, emoji)
     assert colored_share(area) > 0.15, (emoji, colored_share(area))
+
+
+def test_J5b_emoji_are_drawn_larger_without_making_their_line_taller(app, inp):
+    # The cursor right of the second line's end, away from the letters
+    # measured below.
+    # Every line starts with an h, so each line's top is the same letter's.
+    note = start(app, 'hab\nhas 🚀 here\nhad\nhat', at=(250, 31))
+    from tests.e2e.web import attrs_at
+
+    def size(needle):
+        return float(''.join(c for c in attrs_at(note, needle).get('size', '0') if c in '0123456789.'))
+    assert size('🚀') >= size('has') * 1.2, (size('🚀'), size('has'))
+    # The lines' tops, from the pixels of their first letters: WebKit tells
+    # the line with the emoji at another height than it draws it.
+    x, y, w, h = note.box
+    pb = screenshot('/tmp/e2e-lines.png', (x, y + 34, 60, 110))
+    n, stride, data = pb.get_n_channels(), pb.get_rowstride(), pb.get_pixels()
+    dark = [yy for yy in range(pb.get_height())
+            if any(sum(data[yy * stride + xx * n:yy * stride + xx * n + 3]) < 360 for xx in range(10, 26))]
+    # A line's rows, as an i's dot, are a few pixels apart at most.
+    tops = [yy for i, yy in enumerate(dark) if i == 0 or yy - dark[i - 1] > 3][:4]
+    gaps = [b - a for a, b in zip(tops, tops[1:])]
+    assert len(tops) == 4 and max(gaps) - min(gaps) <= 1, tops
