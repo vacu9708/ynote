@@ -5,10 +5,9 @@ import os
 import pytest
 
 from tests.e2e.driver import settle, wait_until
-from tests.e2e.test_window import autostart_on
-from tests.e2e.web import WebNote, choose, menu_items, saved_field, saved_note
+from tests.e2e.web import WebNote, autostart_on, choose, menu_items, saved_field, saved_note
 
-pytestmark = [pytest.mark.web]
+
 
 SCREEN_W, SCREEN_H = 1600, 1000
 
@@ -33,7 +32,7 @@ def into(n):
     n.click_text(5, 8)
 
 
-def test_B1_web_a_new_note_opens_square_beside_the_current_one(app):
+def test_B1_a_new_note_opens_square_beside_the_current_one(app):
     (t,) = started(app, note('t'))
     into(t)
     app.inp.key('ctrl+n')
@@ -45,7 +44,7 @@ def test_B1_web_a_new_note_opens_square_beside_the_current_one(app):
     assert x >= tx + tw and x + w <= SCREEN_W
 
 
-def test_B2_web_hiding_a_note_puts_it_first_in_hidden_notes(app):
+def test_B2_hiding_a_note_puts_it_first_in_hidden_notes(app):
     a, b = started(app, note('a'), note('b', x=700))
     b.press('Hide note')
     a.press('Hide note')
@@ -56,7 +55,7 @@ def test_B2_web_hiding_a_note_puts_it_first_in_hidden_notes(app):
     assert saved['a']['sort_order'] < saved['b']['sort_order']
 
 
-def test_B3_web_closing_the_window_hides_the_note_and_ynote_runs_on(app):
+def test_B3_closing_the_window_hides_the_note_and_ynote_runs_on(app):
     a, b = started(app, note('a'), note('b', x=700))
     into(a)
     app.inp.key('alt+F4')
@@ -65,7 +64,7 @@ def test_B3_web_closing_the_window_hides_the_note_and_ynote_runs_on(app):
     saved_field(app, 'hidden', True, note_id='a')
 
 
-def test_B10_web_a_double_click_on_the_title_bar_maximizes_and_restores(app):
+def test_B10_a_double_click_on_the_title_bar_maximizes_and_restores(app):
     (t,) = started(app, note('t'))
     x, y, w, h = t.box
     app.inp.click(x + 150, y + 16, count=2)
@@ -81,7 +80,7 @@ def test_B10_web_a_double_click_on_the_title_bar_maximizes_and_restores(app):
     assert (saved['w'], saved['h']) == (w, h)
 
 
-def test_B11_D6_web_collapse_and_snap_do_nothing_while_maximized(app):
+def test_B11_D6_collapse_and_snap_do_nothing_while_maximized(app):
     (t,) = started(app, note('t'))
     x, y, w, h = t.box
     app.inp.click(x + 150, y + 16, count=2)
@@ -96,7 +95,7 @@ def test_B11_D6_web_collapse_and_snap_do_nothing_while_maximized(app):
     assert t.box == big
 
 
-def test_B12_web_dragging_an_edge_resizes_the_note(app):
+def test_B12_dragging_an_edge_resizes_the_note(app):
     (t,) = started(app, note('t', x=200, y=150, w=500, h=400))
     x, y, w, h = t.box
     app.inp.drag((x + w - 2, y + h // 2), (x + w + 120, y + h // 2))
@@ -107,14 +106,14 @@ def test_B12_web_dragging_an_edge_resizes_the_note(app):
     wait_until(lambda: t.box[3] >= h + 60, what='a taller note')
 
 
-def test_B13_web_always_on_top_is_saved(app):
+def test_B13_always_on_top_is_saved(app):
     (t,) = started(app, note('t'))
     t.press('Always on top')
     app.quit()
     assert saved_note(app, 't')['on_top'] is True
 
 
-def test_B15_web_start_at_login_turned_off_stays_off(app):
+def test_B15_start_at_login_turned_off_stays_off(app):
     (t,) = started(app, note('t'))
     entry = os.path.join(app.home, '.config', 'autostart', 'ynote.desktop')
     wait_until(lambda: autostart_on(entry), what='the autostart entry')
@@ -127,7 +126,7 @@ def test_B15_web_start_at_login_turned_off_stays_off(app):
     assert not autostart_on(entry)
 
 
-def test_C7_web_the_note_menu_tells_how_many_notes_are_hidden(app):
+def test_C7_the_note_menu_tells_how_many_notes_are_hidden(app):
     a, b, c = started(app, note('a', x=40, w=400), note('b', x=500, w=400), note('c', x=960, w=400))
     b.press('Hide note')
     c.press('Hide note')
@@ -136,7 +135,7 @@ def test_C7_web_the_note_menu_tells_how_many_notes_are_hidden(app):
     assert '2' in row.get_name(), row.get_name()
 
 
-def test_D1_web_alt_left_and_right_snap_to_half_the_screen(app):
+def test_D1_alt_left_and_right_snap_to_half_the_screen(app):
     (t,) = started(app, note('t', x=400, y=200))
     into(t)
     app.inp.key('alt+left')
@@ -145,7 +144,7 @@ def test_D1_web_alt_left_and_right_snap_to_half_the_screen(app):
     wait_until(lambda: t.box[0] == SCREEN_W // 2, what='the right half')
 
 
-def test_D2_web_alt_up_and_down_alone_move_the_note_up_and_down(app):
+def test_D2_alt_up_and_down_alone_move_the_note_up_and_down(app):
     (t,) = started(app, note('t', x=400, y=300, h=300))
     into(t)
     x, y, w, h = t.box
@@ -156,7 +155,7 @@ def test_D2_web_alt_up_and_down_alone_move_the_note_up_and_down(app):
     wait_until(lambda: t.box[1] == y, what='moving back down')
 
 
-def test_D3_web_two_arrows_send_a_note_to_a_corner(app):
+def test_D3_two_arrows_send_a_note_to_a_corner(app):
     (t,) = started(app, note('t', x=400, y=300, h=300))
     into(t)
     app.inp.chord(['alt'], ['right', 'down'])
@@ -164,7 +163,7 @@ def test_D3_web_two_arrows_send_a_note_to_a_corner(app):
                and t.box[1] + t.box[3] >= SCREEN_H - 2, what='the bottom right corner')
 
 
-def test_D5_web_a_collapsed_note_snaps_to_its_new_width(app):
+def test_D5_a_collapsed_note_snaps_to_its_new_width(app):
     (t,) = started(app, note('t', x=400, y=200, w=500))
     t.press('Collapse')
     wait_until(lambda: t.box[3] < 60, what='collapsing')
@@ -175,7 +174,7 @@ def test_D5_web_a_collapsed_note_snaps_to_its_new_width(app):
     assert t.box[3] < 60
 
 
-def test_B8b_web_a_note_without_a_title_shows_untitled(app):
+def test_B8b_a_note_without_a_title_shows_untitled(app):
     (t,) = started(app, note('t'))
     into(t)
     app.inp.key('F2')

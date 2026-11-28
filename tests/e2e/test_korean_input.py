@@ -9,7 +9,7 @@ import pytest
 
 from tests.e2e.driver import TestError, extents, quiet
 
-pytestmark = [pytest.mark.web, pytest.mark.ime]
+pytestmark = [pytest.mark.ime]
 
 EXPAND_OPEN = '▾ '
 EXPAND_END = '⁤'

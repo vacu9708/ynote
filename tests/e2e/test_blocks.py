@@ -8,10 +8,9 @@ import os
 import pytest
 
 from tests.e2e.driver import settle, wait_until
-from tests.e2e.test_misc import fake_browser
-from tests.e2e.web import WebNote, assert_saved, choose, start
+from tests.e2e.web import WebNote, assert_saved, choose, fake_browser, start
 
-pytestmark = [pytest.mark.web]
+
 
 B = '• '
 ANCHOR = '￼'
@@ -126,7 +125,7 @@ CASES = {
 
 
 @pytest.mark.parametrize('case', list(CASES))
-def test_web_blocks(app, inp, case):
+def test_blocks(app, inp, case):
     (text,), fields, steps, expected = CASES[case]
     start(app, text, at=(200, 10), **fields)
     for step in steps:
@@ -146,7 +145,7 @@ def in_table(app):
     return note
 
 
-def test_L10_web_insert_column_right_adds_a_column_that_takes_typing(app, inp):
+def test_L10_insert_column_right_adds_a_column_that_takes_typing(app, inp):
     in_table(app)
     choose(app, 'Insert column right')
     settle(0.3)
@@ -156,14 +155,14 @@ def test_L10_web_insert_column_right_adds_a_column_that_takes_typing(app, inp):
                  last_line=False)
 
 
-def test_L10_web_deleting_the_last_row_deletes_the_table(app, inp):
+def test_L10_deleting_the_last_row_deletes_the_table(app, inp):
     start(app, 'x\n' + ANCHOR, at=(200, 10), tables=[{'offset': 2, 'rows': [[{'text': 'k'}]]}])
     WebNote(app, app.note('test').frame).click_text(14, 40, button=3)
     choose(app, 'Delete row')
     assert_saved(app, "paragraph('x')", last_line=False)
 
 
-def test_L11_web_a_deleted_table_comes_back_with_ctrl_z_and_takes_clicks(app, inp):
+def test_L11_a_deleted_table_comes_back_with_ctrl_z_and_takes_clicks(app, inp):
     note = in_table(app)
     choose(app, 'Delete table')
     assert_saved(app, "paragraph('x')", last_line=False)
@@ -175,7 +174,7 @@ def test_L11_web_a_deleted_table_comes_back_with_ctrl_z_and_takes_clicks(app, in
     assert_saved(app, "paragraph('x') " + table(KV, [[p('aZ')], [p('b')]]), last_line=False)
 
 
-def test_L21_web_a_click_right_of_a_table_and_typing_goes_on_the_line_after(app, inp):
+def test_L21_a_click_right_of_a_table_and_typing_goes_on_the_line_after(app, inp):
     note = start(app, 'x\n' + ANCHOR, at=(200, 10), **TABLE)
     note.click_text(300, 40)
     inp.type('W')
@@ -185,7 +184,7 @@ def test_L21_web_a_click_right_of_a_table_and_typing_goes_on_the_line_after(app,
 # ---------------------------------------------------------------- links
 
 
-def test_J2_web_ctrl_click_opens_a_link_and_a_click_only_places_the_cursor(app, inp):
+def test_J2_ctrl_click_opens_a_link_and_a_click_only_places_the_cursor(app, inp):
     opened = fake_browser(app.home)
     note = start(app, 'see https://example.com/page now', at=(200, 10))
     note.click_text(80, 10)                  # on the link
@@ -202,7 +201,7 @@ def test_J2_web_ctrl_click_opens_a_link_and_a_click_only_places_the_cursor(app, 
         assert f.read().strip() == 'https://example.com/page'
 
 
-def test_J3_web_a_link_leaves_out_the_punctuation_after_it(app, inp):
+def test_J3_a_link_leaves_out_the_punctuation_after_it(app, inp):
     opened = fake_browser(app.home)
     note = start(app, 'at https://example.com:8080/a?b=(c), then', at=(200, 10))
     x, y = note.text_point(70, 10)
@@ -219,7 +218,7 @@ def test_J3_web_a_link_leaves_out_the_punctuation_after_it(app, inp):
 # ---------------------------------------------------------------- images
 
 
-def test_K2_web_an_image_no_note_uses_is_cleaned_up(app):
+def test_K2_an_image_no_note_uses_is_cleaned_up(app):
     images = os.path.join(app.conf, 'images')
     os.makedirs(images)
     for name in ('used.png', 'unused.png'):
@@ -234,7 +233,7 @@ def test_K2_web_an_image_no_note_uses_is_cleaned_up(app):
 # ---------------------------------------------------------------- emoji
 
 
-def test_J4_web_ctrl_dot_finds_an_emoji_by_name_and_puts_it_at_the_cursor(app, inp):
+def test_J4_ctrl_dot_finds_an_emoji_by_name_and_puts_it_at_the_cursor(app, inp):
     import json
     start(app, 'go', at=(200, 10))
     inp.key('ctrl+period')
@@ -247,7 +246,7 @@ def test_J4_web_ctrl_dot_finds_an_emoji_by_name_and_puts_it_at_the_cursor(app, i
         assert json.load(f)['emoji_recent'][0] == '🚀'
 
 
-def test_J4_web_emoji_comes_first_in_the_texts_right_click_menu(app, inp):
+def test_J4_emoji_comes_first_in_the_texts_right_click_menu(app, inp):
     from tests.e2e.web import menu_items
     note = start(app, 'go', at=(200, 10))
     note.click_text(100, 10, button=3)      # right of the text

@@ -17,16 +17,14 @@ holds what those don't: how the user wants the work done.
   a short list of features and the pictures, then install. Nothing in it is
   tedious to read. Say each thing once; fold a new feature into an existing
   line rather than adding a bullet; leave out what the UI shows (menus,
-  tooltips) and what Help lists. The one hidden thing it keeps is the way to
-  Help: right-click a note's title bar. Re-read the whole README after
-  editing it.
+  tooltips) and what the keyboard shortcuts list. The one hidden thing it
+  keeps is the way to them: F1. Re-read the whole README after editing it.
 - **The README pictures show as much of what Ynote does as they can**: every
-  element a note holds, colors, the right-click menu, search, hidden notes.
+  element a note holds, colors, the note menu, find, hidden notes.
   A new feature goes into them (`tools/readme_screenshot.py`).
-- **Help** (`ynote/help.py`) lists only what nothing on screen shows, and
-  everything that is so: the README does not list shortcuts. The Format and
-  Insert menus show each item's shortcut and Markdown, so those are not in
-  Help.
+- **The keyboard shortcuts** (F1, `menus.helpPage()`) are made from the
+  actions (`web/src/actions.js`): every action with keys or Markdown. The
+  README does not list shortcuts; tooltips and menus show each action's.
 - Update ARCHITECTURE.md when a mechanism changes. After a visible UI change,
   regenerate the README screenshots (see CONTRIBUTING.md).
 
@@ -90,19 +88,17 @@ the file to `notes.json.bak`, keeping where the note is and its size.
   window), never a window's own surface: that aborts inside cairo since a
   libxrender1 update.
 - Never write to the real `~/.config/ynote` (`tools/test_note.py` aside):
-  give the script a throwaway HOME, or point `ynote.note_window.IMAGES_DIR` at
-  a scratch folder before inserting images.
+  give the script a throwaway HOME.
 
 ## Design rules learned so far
 
-- Structure lives in the note's text when it can (list markers,
-  `TABLE_MARKER`, expand marks), so no saved field is needed, undo, search and
-  copying work as they are, and an older version still shows readable text.
-- Markdown shown in a menu must also work when typed.
-- Bar icons are drawn (`StrokeIcon`, 2px lines): the theme's symbolic icons
-  are 1px and too thin beside the bold labels.
-- Every key the note handles itself must keep the cursor in view
-  (`_on_tv_key_press` scrolls after any handled key).
+- Markdown shown in a menu or tooltip must also work when typed.
+- Icons are drawn with 2px strokes (`web/src/icons.js`), to stand beside the
+  bold labels.
+- Every command must keep the cursor in view (`scrollIntoView()` on its
+  transaction).
+- Where Ynote 1.x and Confluence differ, or what should happen is unclear,
+  try it in Confluence and do as it does.
 
 ## Branches, commits, and releases
 

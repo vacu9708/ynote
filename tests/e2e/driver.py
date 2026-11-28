@@ -559,13 +559,11 @@ class Note:
 class App:
     """The installed Ynote, started with a HOME of its own."""
 
-    def __init__(self, home, inp, command=('ynote',), web=False, ime=False):
+    def __init__(self, home, inp, command=('ynote',), ime=False):
         self.home = home
         self.inp = inp
         self.command = list(command)
-        # Ynote 2.0, whose notes are web pages (YNOTE_WEB), and typing
-        # through the input method, ibus with its Korean engine.
-        self.web = web
+        # Typing through the input method, ibus with its Korean engine.
         self.ime = ime
         self.proc = None
         self.log = os.path.join(home, 'ynote.log')
@@ -577,14 +575,13 @@ class App:
 
     @property
     def notes_file(self):
-        """Where the app saves its notes: 2.0 apart from 1.x."""
-        return os.path.join(self.conf, 'notes-2.json' if self.web else 'notes.json')
+        return os.path.join(self.conf, 'notes.json')
 
     def write_notes(self, notes):
-        """Notes for the app to open, as 1.x saves them: 2.0 opens them
-        converted on its first start."""
+        """Notes for the app to open: as 1.x saved them, which it opens
+        converted, or as it saves them, with their documents."""
         os.makedirs(self.conf, exist_ok=True)
-        with open(os.path.join(self.conf, 'notes.json'), 'w', encoding='utf-8') as f:
+        with open(self.notes_file, 'w', encoding='utf-8') as f:
             json.dump(notes, f, ensure_ascii=False)
 
     def saved(self):
@@ -600,8 +597,6 @@ class App:
     # process
     def start(self, wait_for_window=True):
         env = dict(os.environ, HOME=self.home)
-        if self.web:
-            env['YNOTE_WEB'] = '1'
         if self.ime:
             env['GTK_IM_MODULE'] = 'ibus'
         self.proc = subprocess.Popen(

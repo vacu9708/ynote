@@ -339,10 +339,6 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         width, _height = self.get_size()
         show_hidden_list(self.app, (x + max(0, width - 300), y + TITLE_BAR_HEIGHT, 0, 0))
 
-    def _do_help(self, _message):
-        from .help import show_help
-        show_help(self)
-
     def _do_autostart(self, _message):
         if getattr(self.app, 'autostart_available', False):
             self.app.set_autostart(not self.app.autostart_enabled())

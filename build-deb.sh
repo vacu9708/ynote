@@ -54,7 +54,6 @@ install -m 0644 "$ROOT_DIR/icon.png" "$BUILD_DIR/usr/share/ynote/icon.png"
 install -m 0644 "$ROOT_DIR/icon.png" "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/ynote.png"
 install -m 0644 "$ROOT_DIR/packaging/ynote.desktop" "$BUILD_DIR/usr/share/applications/ynote.desktop"
 # Ynote 2.0 while it is built, beside 1.x (see CONTRIBUTING.md).
-install -m 0644 "$ROOT_DIR/packaging/ynote-2-preview.desktop" "$BUILD_DIR/usr/share/applications/ynote-2-preview.desktop"
 
 cat > "$BUILD_DIR/usr/bin/ynote" <<'EOF'
 #!/usr/bin/env bash

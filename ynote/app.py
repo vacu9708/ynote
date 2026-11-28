@@ -10,7 +10,6 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
 from . import autostart, focus, tray
-from .app_fonts import register_fonts
 from .config import (
     APP_ID, AUTOSTART_FILE, CODE_ANCHOR, CODE_PAD_CHAR, CONF_DIR, EXPAND_END,
     ICON_PATH, IMAGES_DIR, NEW_NOTE_LABEL, NEW_NOTE_SIDE, NOTES_FILE,
@@ -21,18 +20,13 @@ from .images import (
     referenced_image_files,
     state_image_files,
 )
-from .note_manager_window import HiddenNotesWindow
-from .config import OTHER_NOTES_FILE, V1_NOTES_FILE, WEB
-if WEB:
-    from .web_note_window import WebNoteWindow as NoteWindow
-else:
-    from .note_window import NoteWindow
+from .config import OLD_NOTES_FILE
+from .web_note_window import WebNoteWindow as NoteWindow, show_hidden_list
 from .search import Note
 from .snap import center_at, keep_reachable, place_beside
 from .storage import (
     UnreadableNotesError, back_up, load_notes, save_notes, set_aside,
 )
-from .styles import BASE_CSS
 
 # How long Alt + scroll waits after bringing a note forward before the next.
 SWITCH_PAUSE_MS = 200
@@ -46,8 +40,6 @@ def _debug(text):
 
 class PostItApp(Gtk.Application):
     def __init__(self):
-        # Before any text is laid out, so Pango finds them.
-        register_fonts()
         super().__init__(
             application_id=APP_ID,
             flags=Gio.ApplicationFlags.FLAGS_NONE)
@@ -55,7 +47,6 @@ class PostItApp(Gtk.Application):
         self._indicator    = None
         self._tray_menu    = None
         self._menu_rebuild_id = None
-        self._hidden_notes_window = None
         self._current_note = None
         # Notes in the order they last had the focus, the latest first.
         self._recent = []
@@ -98,12 +89,6 @@ class PostItApp(Gtk.Application):
 
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         clipboard.connect('owner-change', self._on_clipboard_owner_change)
-
-        prov = Gtk.CssProvider()
-        prov.load_from_data(BASE_CSS)
-        Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(), prov,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         self._setup_status_icon()
 
@@ -251,30 +236,22 @@ class PostItApp(Gtk.Application):
             self._indicator.set_menu(menu)
         # A middle click raises the notes without opening the menu.
         self._indicator.set_secondary_activate_target(show_item)
-        self._refresh_hidden_notes_manager()
 
     # ------------------------------------------------------------------ notes
 
     def _load(self):
-        if WEB and not os.path.exists(NOTES_FILE):
-            # 2.0's first start: the notes of 1.x, which open converted. That
-            # file is only read, never set aside or written.
-            try:
-                saved = load_notes(V1_NOTES_FILE)
-            except UnreadableNotesError as e:
-                print(f'ynote: could not read {V1_NOTES_FILE} ({e})', file=sys.stderr)
-                saved = None
-            if not saved:
-                self.new_note(at_pointer=True)
-                return
-            self._open_saved(saved)
-            return
         try:
             saved = load_notes(NOTES_FILE)
             if saved:
                 # The notes as they were before this run opened them, to fall
                 # back on if opening or saving them goes wrong.
                 back_up(NOTES_FILE)
+                # Notes Ynote 1.x saved open converted, and are saved anew
+                # as 2.0 saves them. 1.x cannot read those: its file is kept
+                # as it was, for going back to it.
+                if any(isinstance(d, dict) and 'doc' not in d for d in saved):
+                    shutil.copy2(NOTES_FILE, OLD_NOTES_FILE)
+                    GLib.idle_add(self._save_converted)
         except UnreadableNotesError as e:
             # Never let the empty note below overwrite a file we could not
             # read: keep it aside and tell the user where it went.
@@ -288,6 +265,11 @@ class PostItApp(Gtk.Application):
             self.new_note(at_pointer=True)
             return
         self._open_saved(saved)
+
+    def _save_converted(self):
+        # Once open, the notes 1.x saved are saved as 2.0 saves them.
+        self.save_all(include_history=False)
+        return False
 
     def _open_saved(self, saved):
         areas, primary = self._work_areas()
@@ -405,10 +387,7 @@ class PostItApp(Gtk.Application):
             w.move(ax + (aw - size[0]) // 2 + (n * 30) % 90,
                    ay + (ah - size[1]) // 2 + (n * 25) % 75)
         self.notes[w.note_id] = w
-        if WEB:
-            w.grab_text_focus()
-        else:
-            w.tv.grab_focus()
+        w.grab_text_focus()
         focus.present_now(w)
         self.save_all()
         self._rebuild_indicator_menu()
@@ -624,15 +603,11 @@ class PostItApp(Gtk.Application):
             self.new_note(at_pointer=True)
         elif len(hidden) == 1:
             note_id, note = hidden[0]
-            # 2.0 shows it where it was: a note has its place. 1.x brought it
-            # to the pointer.
-            at = None if WEB else self._at_pointer(note.get_size())
-            if at is not None:
-                note.move(*at)
+            # It shows where it was: a note has its place.
             self.show_note(note_id)
         else:
-            self.show_hidden_notes_manager(
-                from_tray=True, at=self._at_pointer(HiddenNotesWindow.SIZE))
+            pointer = self._at_pointer((0, 0))
+            self.show_hidden_notes_manager(from_tray=True, at=pointer)
 
     def _at_pointer(self, size):
         """(x, y) that centers a window of size on the pointer, inside the
@@ -649,37 +624,15 @@ class PostItApp(Gtk.Application):
 
     def show_hidden_notes_manager(self, parent_note=None, from_tray=False,
                                   at=None):
+        """The hidden notes, in a menu: below the note, or at the pointer."""
         if parent_note is None and not from_tray:
             parent_note = self._current_note
-        if WEB:
-            # 2.0 lists them in a menu: below the note, or at the pointer.
-            from .web_note_window import show_hidden_list
-            if parent_note is not None and parent_note.get_visible():
-                parent_note.show_hidden_list()
-            else:
-                pointer = Gdk.Display.get_default().get_default_seat().get_pointer()
-                _screen, x, y = pointer.get_position()
-                show_hidden_list(self, (x, y, 0, 0))
+        if parent_note is not None and parent_note.get_visible():
+            parent_note.show_hidden_list()
             return
-        if self._hidden_notes_window is None:
-            self._hidden_notes_window = HiddenNotesWindow(self)
-            self._hidden_notes_window.connect(
-                'destroy', lambda *_: self._clear_hidden_notes_manager())
-        if at is not None:
-            self._hidden_notes_window.set_at(at)
-        elif from_tray:
-            self._hidden_notes_window.set_from_tray()
-        else:
-            self._hidden_notes_window.set_parent_note(parent_note)
-        self._hidden_notes_window.refresh()
-        focus.present_now(self._hidden_notes_window)
-
-    def _clear_hidden_notes_manager(self):
-        self._hidden_notes_window = None
-
-    def _refresh_hidden_notes_manager(self):
-        if self._hidden_notes_window is not None:
-            self._hidden_notes_window.refresh()
+        pointer = Gdk.Display.get_default().get_default_seat().get_pointer()
+        _screen, x, y = pointer.get_position()
+        show_hidden_list(self, (x, y, 0, 0))
 
     def set_rich_clipboard(self, state, text=None):
         """Keep state for a paste into a note, and put text, or the state's
@@ -778,11 +731,10 @@ class PostItApp(Gtk.Application):
         if self._keep_all_images:
             return
         referenced = self._referenced_image_files(data, include_history=include_history)
-        # The images folder is shared with the other version's notes file
-        # (config.OTHER_NOTES_FILE), whose images stay too. If it cannot be
-        # read, nothing is deleted.
+        # The notes of 1.x kept beside (config.OLD_NOTES_FILE) keep their
+        # images too. If that file cannot be read, nothing is deleted.
         try:
-            other = load_notes(OTHER_NOTES_FILE) or []
+            other = load_notes(OLD_NOTES_FILE) or []
         except UnreadableNotesError:
             return
         referenced |= referenced_image_files(other)

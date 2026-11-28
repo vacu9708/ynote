@@ -4,12 +4,35 @@ import json
 import os
 import subprocess
 
+import pytest
+
 from tests.e2e.driver import settle, wait_until
+from tests.e2e.web import WebNote, assert_saved, menu, menu_items, saved_note
+
+
 
 
 def note(title, text='', **fields):
-    return dict({'id': title, 'title': title, 'text': text, 'x': 100,
-                 'y': 80, 'w': 500, 'h': 400}, **fields)
+    """A note as 2.0 saves it, with one line of text."""
+    content = [{'type': 'text', 'text': text}] if text else []
+    return dict({'id': title, 'title': title, 'x': 100, 'y': 80, 'w': 500, 'h': 400,
+                 'doc': {'type': 'doc', 'content': [{'type': 'paragraph', 'content': content}]}},
+                **fields)
+
+
+def write(app, notes):
+    """notes.json as given, raw if a string."""
+    os.makedirs(app.conf, exist_ok=True)
+    with open(app.notes_file, 'w', encoding='utf-8') as f:
+        if isinstance(notes, str):
+            f.write(notes)
+        else:
+            json.dump(notes, f, ensure_ascii=False)
+
+
+def inside(box, x, y):
+    bx, by, bw, bh = box
+    return bx <= x <= bx + bw and by <= y <= by + bh
 
 
 def test_A1_with_no_notes_a_new_note_opens_at_the_pointer(app):
@@ -17,57 +40,67 @@ def test_A1_with_no_notes_a_new_note_opens_at_the_pointer(app):
     app.start()
     notes = app.notes()
     assert len(notes) == 1
-    x, y, w, h = notes[0].box()
-    assert x <= 700 <= x + w and y <= 500 <= y + h
+    assert inside(notes[0].box(), 700, 500)
 
 
-def test_A2_one_hidden_note_and_none_shown_opens_it_at_the_pointer(app):
-    app.write_notes([note('only', 'text', hidden=True)])
-    app.inp.move(900, 600)
+def test_A2_one_hidden_note_and_none_shown_opens_it_where_it_was(app):
+    write(app, [note('only', 'text', hidden=True, x=300, y=200)])
+    app.inp.move(1300, 800)
     app.start()
-    x, y, w, h = app.note('only').box()
-    assert x <= 900 <= x + w and y <= 600 <= y + h
+    assert app.note('only').box()[:2] == (300, 200)
 
 
 def test_A3_several_hidden_notes_and_none_shown_list_them(app):
-    app.write_notes([note('a', hidden=True), note('b', hidden=True)])
-    app.start()
-    app.window('Hidden Notes')
-    assert not app.notes() or all(n.title == 'Hidden Notes'
-                                  for n in app.notes())
+    write(app, [note('a', hidden=True), note('b', hidden=True)])
+    app.inp.move(800, 500)
+    app.start(wait_for_window=False)
+    menu(app, timeout=15)
+    names = [i.get_name() for i in menu_items(app)]
+    assert any(n.startswith('a') for n in names) and any(n.startswith('b') for n in names), names
+    assert not app.notes()
 
 
 def test_A4_a_change_is_saved_without_quitting(app):
-    app.write_notes([note('t')])
+    write(app, [note('t', 'x')])
     app.start()
-    app.note('t').body.click()
-    app.inp.type('saved text')
-    wait_until(lambda: 'saved text' in app.saved_note('t')['text'],
-               timeout=10, what='the note to be saved')
+    n = WebNote(app, app.note('t').frame)
+    n.click_text(0, 10)
+    app.inp.key('end')
+    app.inp.type(' saved text')
+    assert_saved(app, "paragraph('x saved text')", note_id='t', timeout=10)
 
 
 def test_A5_starting_keeps_a_copy_of_the_notes_as_the_backup(app):
-    app.write_notes([note('t', 'kept')])
+    write(app, [note('t', 'kept')])
     app.start()
     with open(app.notes_file + '.bak', encoding='utf-8') as f:
-        assert json.load(f)[0]['text'] == 'kept'
+        assert json.load(f)[0]['doc'] == note('t', 'kept')['doc']
+
+
+def test_A5b_notes_of_1x_open_converted_and_are_kept_as_notes_old(app):
+    app.write_notes([{'id': 'old', 'title': 'old', 'text': 'from 1.x',
+                      'x': 100, 'y': 80, 'w': 500, 'h': 400}])
+    with open(app.notes_file, encoding='utf-8') as f:
+        before = f.read()
+    app.start()
+    app.note('old')
+    # Saved as 2.0 saves them at once, the file of 1.x kept beside.
+    assert_saved(app, "paragraph('from 1.x')", note_id='old')
+    with open(os.path.join(app.conf, 'notes-old.json'), encoding='utf-8') as f:
+        assert f.read() == before
 
 
 def test_A6_an_empty_notes_file_does_not_replace_a_good_backup(app):
-    os.makedirs(app.conf)
+    write(app, [])
     with open(app.notes_file + '.bak', 'w') as f:
         json.dump([note('t', 'precious')], f)
-    with open(app.notes_file, 'w') as f:
-        json.dump([], f)
     app.start()
     with open(app.notes_file + '.bak') as f:
-        assert json.load(f)[0]['text'] == 'precious'
+        assert json.load(f)[0]['doc'] == note('t', 'precious')['doc']
 
 
 def test_A7_an_unreadable_notes_file_is_kept_aside_with_a_warning(app):
-    os.makedirs(app.conf)
-    with open(app.notes_file, 'w') as f:
-        f.write('{ not json')
+    write(app, '{ not json')
     app.start()
     dialog = app.dialog()
     assert any('could not read' in t for t in app.texts_in(dialog))
@@ -79,55 +112,43 @@ def test_A7_an_unreadable_notes_file_is_kept_aside_with_a_warning(app):
 
 def test_A8_a_note_that_fails_to_open_is_saved_back_unchanged(app):
     bad = note('bad', 'x', font_size='not a number')
-    app.write_notes([note('good', 'fine'), bad])
+    write(app, [note('good', 'fine'), bad])
     app.start()
     app.dialog()
     app.quit()
     saved = {n['title']: n for n in app.saved()}
     assert saved['bad'] == bad
-    assert saved['good']['text'] == 'fine'
+    assert saved['good']['doc'] == note('good', 'fine')['doc']
+
+
+def test_A9_notes_open_stacked_as_they_were_saved(app):
+    from tests.e2e.web import color_at
+    low = note('low', x=200, y=150, w=400, h=400, color='yellow', stack=1)
+    high = note('high', x=400, y=350, w=400, h=400, color='blue', stack=0)
+    write(app, [low, high])
+    app.start()
+    settle(0.5)
+    # Low was on top when saved, so the place they share shows it.
+    over = color_at(500, 500)
+    assert over == color_at(250, 300), 'the shared place shows low'
+    assert over != color_at(750, 700)
 
 
 def test_A10_notes_are_saved_readably_with_korean_as_it_is(app):
-    app.write_notes([note('t')])
+    write(app, [note('t', 'x')])
     app.start()
-    app.note('t').body.click()
-    app.inp.type('한글 **굵게**')
+    n = WebNote(app, app.note('t').frame)
+    n.click_text(0, 10)
+    app.inp.key('end')
+    app.inp.type(' 한글')
     app.quit()
     with open(app.notes_file, encoding='utf-8') as f:
         raw = f.read()
     assert '한글' in raw and '\\u' not in raw
-    assert any(line.strip().startswith('[') and line.strip().endswith(']')
-               and ',' in line for line in raw.splitlines())
-
-
-def test_A12_ynote_version_prints_the_version():
-    out = subprocess.run(['ynote', '--version'], capture_output=True,
-                         text=True, timeout=20)
-    assert out.stdout.startswith('Ynote ')
-
-
-def test_A13_quitting_with_a_dialog_open_quits_and_keeps_the_note(app):
-    app.write_notes([note('t', 'some text')])
-    app.start()
-    n = app.note('t')
-    n.open_menu()
-    n.press('Delete Note')
-    app.dialog()
-    app.quit()
-    assert app.proc.poll() is not None
-    assert app.saved_note('t')['text'] == 'some text'
-
-
-def test_A14_a_note_saved_off_screen_is_moved_onto_it(app):
-    app.write_notes([note('far', x=5000, y=4000)])
-    app.start()
-    x, y, w, h = app.note('far').box()
-    assert 0 <= x < 1600 and 0 <= y < 1000
 
 
 def test_A11_starting_ynote_again_keeps_one_running(app):
-    app.write_notes([note('t')])
+    write(app, [note('t')])
     app.start()
     env = dict(os.environ, HOME=app.home)
     second = subprocess.run(app.command, env=env, timeout=20)
@@ -135,3 +156,47 @@ def test_A11_starting_ynote_again_keeps_one_running(app):
     settle(0.5)
     assert len(app.notes()) == 1
     assert app.proc.poll() is None
+
+
+def test_A13_quitting_while_delete_asks_quits_and_keeps_the_note(app):
+    write(app, [note('t', 'some text')])
+    app.start()
+    n = WebNote(app, app.note('t').frame)
+    n.press('Note menu')
+    from tests.e2e.web import choose
+    choose(app, 'Delete')
+    n.button('Delete')
+    app.quit()
+    assert app.proc.poll() is not None
+    assert saved_note(app, 't')['doc'] == note('t', 'some text')['doc']
+
+
+def test_A14_a_note_saved_off_screen_is_moved_onto_it(app):
+    write(app, [note('far', x=5000, y=4000)])
+    app.start()
+    x, y, w, h = app.note('far').box()
+    assert 0 <= x < 1600 and 0 <= y < 1000
+
+
+def test_A17_a_moved_and_resized_note_opens_where_it_was(app):
+    write(app, [note('t', x=200, y=150, w=500, h=400)])
+    app.start()
+    t = app.note('t')
+    x, y, w, h = t.box()
+    # Drag the title bar, away from its buttons.
+    app.inp.drag((x + 120, y + 16), (x + 120 + 300, y + 16 + 200))
+    wait_until(lambda: t.box()[0] >= x + 250, what='the note to move')
+    mx, my, mw, mh = t.box()
+    app.inp.drag((mx + mw - 2, my + mh // 2), (mx + mw + 100, my + mh // 2))
+    wait_until(lambda: t.box()[2] >= mw + 80, what='the note to widen')
+    moved = t.box()
+    app.quit()
+    saved = saved_note(app, 't')
+    assert (saved['x'], saved['y'], saved['w'], saved['h']) == moved
+    app.start()
+    assert app.note('t').box() == moved
+
+
+def test_A12_ynote_version_prints_the_version():
+    out = subprocess.run(['ynote', '--version'], capture_output=True, text=True, timeout=20)
+    assert out.stdout.startswith('Ynote ')

@@ -9,11 +9,11 @@ import pytest
 
 from tests.e2e.driver import (
     Atspi, clipboard_text, find_all, name, role, screenshot, set_clipboard, settle, showing, wait_until)
-from tests.e2e.test_misc import put_image_on_clipboard
 from tests.e2e.web import (
-    WebNote, assert_saved, choose, ink, saved_blocks, saved_note, start, text_holding)
+    WebNote, assert_saved, choose, ink, put_image_on_clipboard, saved_blocks, saved_note, start,
+    text_holding)
 
-pytestmark = [pytest.mark.web]
+
 
 ANCHOR = '￼'
 B, Q = '• ', '▍ '
@@ -50,7 +50,7 @@ def pixels(area):
 # ---------------------------------------------------------------- E, H
 
 
-def test_E15_web_bold_in_a_heading_goes_out_and_comes_back_as_markdown(app, inp):
+def test_E15_bold_in_a_heading_goes_out_and_comes_back_as_markdown(app, inp):
     start(app, 'Title bold', heading_ranges=[[0, 10]], bold_ranges=[[6, 10]], at=(200, 10))
     inp.key('ctrl+a')
     assert copied(inp) == '# Title **bold**'
@@ -60,7 +60,7 @@ def test_E15_web_bold_in_a_heading_goes_out_and_comes_back_as_markdown(app, inp)
     assert_saved(app, "heading('Title ' 'bold'[strong]) heading('Again ' 'b'[strong])", last_line=False)
 
 
-def test_H3_web_a_wrapped_quotes_later_rows_start_as_far_in_as_its_text(app, inp):
+def test_H3_a_wrapped_quotes_later_rows_start_as_far_in_as_its_text(app, inp):
     words = ' '.join(['word'] * 30)
     note = start(app, Q + words, w=260, at=(5, 10))
     boxes = char_boxes(note, words)
@@ -72,7 +72,7 @@ def test_H3_web_a_wrapped_quotes_later_rows_start_as_far_in_as_its_text(app, inp
 # ---------------------------------------------------------------- I
 
 
-def test_I2_web_a_code_lines_do_not_wrap_and_the_block_scrolls_sideways(app, inp):
+def test_I2_a_code_lines_do_not_wrap_and_the_block_scrolls_sideways(app, inp):
     line = 'echo ' + 'x' * 150
     note = start(app, line + '\nb', code_ranges=[[0, len(line)]], w=300)
     boxes = char_boxes(note, 'echo')
@@ -84,14 +84,14 @@ def test_I2_web_a_code_lines_do_not_wrap_and_the_block_scrolls_sideways(app, inp
     assert end.y == boxes[0].y, (end.y, boxes[0].y)
 
 
-def test_I8_web_lines_already_code_stay_as_they_are(app, inp):
+def test_I8_lines_already_code_stay_as_they_are(app, inp):
     start(app, 'ls -l\nb', code_ranges=[[0, 5]], at=(200, 10))
     inp.key('ctrl+a')
     inp.key('ctrl+shift+c')
     assert_saved(app, "code_block('ls -l\\nb')", last_line=False)
 
 
-def test_I8_web_lines_with_an_image_are_not_made_code(app, inp):
+def test_I8_lines_with_an_image_are_not_made_code(app, inp):
     os.makedirs(os.path.join(app.conf, 'images'))
     with open(os.path.join(app.conf, 'images', 'i.png'), 'wb') as f:
         f.write(b'\x89PNG\r\n\x1a\n')
@@ -111,7 +111,7 @@ def test_I8_web_lines_with_an_image_are_not_made_code(app, inp):
     assert 'code_block' not in blocks and 'image' in blocks, blocks
 
 
-def test_I10_web_a_find_match_in_a_code_block_is_lit(app, inp):
+def test_I10_a_find_match_in_a_code_block_is_lit(app, inp):
     note = start(app, 'top\nkubectl get pods', code_ranges=[[4, 20]], at=(200, 10))
     area = box(note, 'pods')
     before = pixels(area)
@@ -121,7 +121,7 @@ def test_I10_web_a_find_match_in_a_code_block_is_lit(app, inp):
     assert pixels(area) != before
 
 
-def test_I11_web_a_long_code_block_opens_fast_and_types_fast(app, inp):
+def test_I11_a_long_code_block_opens_fast_and_types_fast(app, inp):
     lines = '\n'.join(f'line {i} echo something long enough to count' for i in range(3000))
     app.write_notes([{'id': 'test', 'title': 'test', 'text': lines, 'code_ranges': [[0, len(lines)]],
                       'x': 100, 'y': 80, 'w': 500, 'h': 500}])
@@ -147,7 +147,7 @@ def test_I11_web_a_long_code_block_opens_fast_and_types_fast(app, inp):
 # ---------------------------------------------------------------- K
 
 
-def test_K3_web_an_image_removed_stays_while_undo_can_bring_it_back(app, inp):
+def test_K3_an_image_removed_stays_while_undo_can_bring_it_back(app, inp):
     start(app, 'x', at=(200, 10))
     put_image_on_clipboard()
     inp.key('ctrl+v')
@@ -163,7 +163,7 @@ def test_K3_web_an_image_removed_stays_while_undo_can_bring_it_back(app, inp):
     assert os.listdir(images) == files
 
 
-def test_K4_web_an_image_in_a_table_cell_counts_as_in_use(app):
+def test_K4_an_image_in_a_table_cell_counts_as_in_use(app):
     images = os.path.join(app.conf, 'images')
     os.makedirs(images)
     for n in ('cell.png', 'unused.png'):
@@ -189,7 +189,7 @@ def in_table(app, **fields):
     return start(app, 'x\n' + ANCHOR, at=(200, 10), **(fields or TABLE))
 
 
-def test_L2_web_a_click_right_of_a_cells_text_puts_the_cursor_at_its_end(app, inp):
+def test_L2_a_click_right_of_a_cells_text_puts_the_cursor_at_its_end(app, inp):
     note = in_table(app)
     x, y, w, h = box(note, 'a')
     app.inp.click(x + w + 4, y + h // 2)
@@ -198,7 +198,7 @@ def test_L2_web_a_click_right_of_a_cells_text_puts_the_cursor_at_its_end(app, in
                       "table_row(table_cell(paragraph('aZ')) table_cell(paragraph('b'))))", last_line=False)
 
 
-def test_L3_web_a_double_click_in_a_cell_selects_a_word(app, inp):
+def test_L3_a_double_click_in_a_cell_selects_a_word(app, inp):
     note = in_table(app, tables=[{'offset': 2, 'rows': [[{'text': 'k'}], [{'text': 'hello world'}]]}])
     x, y, w, h = box(note, 'world')
     app.inp.click(x + w // 2, y + h // 2, count=2)
@@ -207,7 +207,7 @@ def test_L3_web_a_double_click_in_a_cell_selects_a_word(app, inp):
                       "table_row(table_cell(paragraph('hello X'))))", last_line=False)
 
 
-def test_L13_web_a_cell_holds_quotes_and_code_blocks(app, inp):
+def test_L13_a_cell_holds_quotes_and_code_blocks(app, inp):
     note = in_table(app)
     x, y, w, h = box(note, 'a')
     app.inp.click(x + w + 4, y + h // 2)
@@ -228,7 +228,7 @@ def cell_widths(note):
     return [c.get_extents(Atspi.CoordType.SCREEN).width for c in cells]
 
 
-def test_L15_web_a_column_is_as_wide_as_its_text(app, inp):
+def test_L15_a_column_is_as_wide_as_its_text(app, inp):
     note = in_table(app, tables=[{'offset': 2, 'rows': [[{'text': 'id'}, {'text': 'description of it'}],
                                                        [{'text': '1'}, {'text': 'a much longer line of text'}]]}])
     narrow = box(note, 'id')[2]
@@ -239,7 +239,7 @@ def test_L15_web_a_column_is_as_wide_as_its_text(app, inp):
     assert x2 - x1 < narrow + 60, (x1, x2, narrow, wide)
 
 
-def test_L16_web_short_inline_code_does_not_wrap_in_a_narrow_column(app, inp):
+def test_L16_short_inline_code_does_not_wrap_in_a_narrow_column(app, inp):
     rows = [[{'text': 'flag'}, {'text': 'what it does, said at some length so the column is wide'}],
             [{'text': 'x | y', 'backtick': [[0, 5]]}, {'text': 'pipe x into y, said at length too, wide'}]]
     note = in_table(app, tables=[{'offset': 2, 'rows': rows}], w=320)
@@ -247,7 +247,7 @@ def test_L16_web_short_inline_code_does_not_wrap_in_a_narrow_column(app, inp):
     assert all(abs(b.y - boxes[0].y) <= 1 for b in boxes), [b.y for b in boxes]
 
 
-def test_L18_web_a_note_has_one_selection(app, inp):
+def test_L18_a_note_has_one_selection(app, inp):
     note = in_table(app, tables=[{'offset': 2, 'rows': [[{'text': 'k'}], [{'text': 'hello world'}]]}])
     x, y, w, h = box(note, 'world')
     app.inp.click(x + w // 2, y + h // 2, count=2)
@@ -269,7 +269,7 @@ TABLE_AB = ("table(table_row(table_header(paragraph('k')) table_header(paragraph
             "table_row(table_cell(paragraph('a')) table_cell(paragraph('b'))))")
 
 
-def test_L21b_web_enter_beside_a_table_opens_a_line_after_it(app, inp):
+def test_L21b_enter_beside_a_table_opens_a_line_after_it(app, inp):
     beside_table(app)
     inp.key('enter')
     inp.type('W')
@@ -278,21 +278,21 @@ def test_L21b_web_enter_beside_a_table_opens_a_line_after_it(app, inp):
     assert saved_blocks(app).startswith("paragraph('x') " + TABLE_AB + " "), blocks
 
 
-def test_L21b_web_backspace_beside_a_table_goes_into_its_last_cell(app, inp):
+def test_L21b_backspace_beside_a_table_goes_into_its_last_cell(app, inp):
     beside_table(app)
     inp.key('backspace')
     inp.type('Z')
     assert_saved(app, "paragraph('x') " + TABLE_AB.replace("paragraph('b')", "paragraph('bZ')"), last_line=False)
 
 
-def test_L21b_web_left_beside_a_table_goes_into_it(app, inp):
+def test_L21b_left_beside_a_table_goes_into_it(app, inp):
     beside_table(app)
     inp.key('left')
     inp.type('Z')
     assert_saved(app, "paragraph('x') " + TABLE_AB.replace("paragraph('b')", "paragraph('bZ')"), last_line=False)
 
 
-def test_L22_web_find_finds_text_in_a_cell_and_selects_it_there(app, inp):
+def test_L22_find_finds_text_in_a_cell_and_selects_it_there(app, inp):
     in_table(app, tables=[{'offset': 2, 'rows': [[{'text': 'k'}], [{'text': 'needle here'}]]}])
     inp.key('ctrl+f')
     inp.type('needle')
@@ -302,7 +302,7 @@ def test_L22_web_find_finds_text_in_a_cell_and_selects_it_there(app, inp):
                       "table_row(table_cell(paragraph('X here'))))", last_line=False)
 
 
-def test_L23_web_a_folded_expand_hides_a_table_in_it(app, inp):
+def test_L23_a_folded_expand_hides_a_table_in_it(app, inp):
     text = '\n'.join(['top', CLOSED + 'T', ANCHOR, END])
     note = start(app, text, at=(200, 10), tables=[{'offset': text.index(ANCHOR),
                                                    'rows': [[{'text': 'hiddencell'}]]}])
@@ -313,7 +313,7 @@ def test_L23_web_a_folded_expand_hides_a_table_in_it(app, inp):
     assert w == 0 or h == 0, (x, y, w, h)
 
 
-def test_L24_web_a_table_copies_as_a_github_markdown_table(app, inp):
+def test_L24_a_table_copies_as_a_github_markdown_table(app, inp):
     rows = [[{'text': 'Name', 'bold': [[0, 4]]}, {'text': 'Cmd'}],
             [{'text': 'two\nlines'}, {'text': 'a|b', 'backtick': [[0, 3]]}]]
     start(app, ANCHOR, tables=[{'offset': 0, 'rows': rows}], at=(5, 10))
@@ -321,7 +321,7 @@ def test_L24_web_a_table_copies_as_a_github_markdown_table(app, inp):
     assert copied(inp) == '| Name | Cmd |\n| --- | --- |\n| two<br>lines | `a\\|b` |'
 
 
-def test_L25_web_a_pasted_markdown_table_becomes_a_table(app, inp):
+def test_L25_a_pasted_markdown_table_becomes_a_table(app, inp):
     start(app, '', at=(5, 10))
     set_clipboard('| k | v |\n| --- | --- |\n| one<br>two | **b** |')
     inp.key('ctrl+v')
@@ -330,7 +330,7 @@ def test_L25_web_a_pasted_markdown_table_becomes_a_table(app, inp):
                       "table_cell(paragraph('b'[strong]))))", last_line=False)
 
 
-def test_L26_web_markdown_pasted_into_a_cell_keeps_its_formats(app, inp):
+def test_L26_markdown_pasted_into_a_cell_keeps_its_formats(app, inp):
     note = in_table(app)
     x, y, w, h = box(note, 'a')
     app.inp.click(x + w + 4, y + h // 2)
@@ -341,7 +341,7 @@ def test_L26_web_markdown_pasted_into_a_cell_keeps_its_formats(app, inp):
                       "table_cell(paragraph('b'))))", last_line=False)
 
 
-def test_L26_web_a_table_is_not_put_in_a_cell(app, inp):
+def test_L26_a_table_is_not_put_in_a_cell(app, inp):
     note = in_table(app)
     x, y, w, h = box(note, 'a')
     app.inp.click(x + w + 4, y + h // 2)
@@ -358,7 +358,7 @@ def test_L26_web_a_table_is_not_put_in_a_cell(app, inp):
 # ---------------------------------------------------------------- M
 
 
-def test_M1_web_insert_expand_puts_the_selected_lines_in_it(app, inp):
+def test_M1_insert_expand_puts_the_selected_lines_in_it(app, inp):
     note = start(app, 'a\nb\nc', at=(200, 10))
     inp.key('shift+down')
     inp.key('shift+end')
@@ -368,7 +368,7 @@ def test_M1_web_insert_expand_puts_the_selected_lines_in_it(app, inp):
     assert_saved(app, "expand(expand_title('T') paragraph('a') paragraph('b')) paragraph('c')", last_line=False)
 
 
-def test_M1_web_an_expand_on_the_last_line_leaves_a_line_after_it(app, inp):
+def test_M1_an_expand_on_the_last_line_leaves_a_line_after_it(app, inp):
     note = start(app, 'a\n', at=(200, 10))
     inp.key('ctrl+end')
     note.press('More to insert')
@@ -376,7 +376,7 @@ def test_M1_web_an_expand_on_the_last_line_leaves_a_line_after_it(app, inp):
     assert_saved(app, "paragraph('a') expand(expand_title() paragraph()) paragraph()")
 
 
-def test_M3_web_an_expand_holds_code_lists_tables_and_expands(app):
+def test_M3_an_expand_holds_code_lists_tables_and_expands(app):
     text = '\n'.join([OPEN + 'Outer', 'ls', B + 'item', ANCHOR, OPEN + 'Inner', 'deep', END, END])
     app.write_notes([{'id': 'test', 'title': 'test', 'text': text, 'code_ranges': [[text.index('ls'), text.index('ls') + 2]],
                       'tables': [{'offset': text.index(ANCHOR), 'rows': [[{'text': 'k'}]]}],
@@ -392,8 +392,8 @@ def test_M3_web_an_expand_holds_code_lists_tables_and_expands(app):
 # ---------------------------------------------------------------- N, O, P, Q
 
 
-def test_N9_web_copying_out_and_pasting_back_as_markdown_gives_the_same_note(app, inp):
-    from tests.e2e.test_web_clipboard import FIELDS, TEXT, two_notes
+def test_N9_copying_out_and_pasting_back_as_markdown_gives_the_same_note(app, inp):
+    from tests.e2e.test_clipboard import FIELDS, TEXT, two_notes
     first, other = two_notes(app, TEXT, **FIELDS)
     first.click_text(200, 10)
     inp.key('ctrl+a')
@@ -410,20 +410,24 @@ def test_N9_web_copying_out_and_pasting_back_as_markdown_gives_the_same_note(app
     assert after.removesuffix(' paragraph()') == before.removesuffix(' paragraph()')
 
 
-def test_O3_web_after_undo_the_bold_button_follows_the_cursor(app, inp):
+def test_O3_after_undo_the_bold_button_follows_the_cursor(app, inp):
     note = start(app, 'ab', at=(200, 10))
     inp.key('ctrl+b')
     inp.type('cd')
     settle(0.6)
-    bold = note.button('Bold')
-    wait_until(lambda: bold.get_state_set().contains(Atspi.StateType.PRESSED)
-               or bold.get_state_set().contains(Atspi.StateType.CHECKED), what='Bold on')
+
+    def bold_on():
+        # Found anew each time: WebKit 2.50 leaves a state kept from before.
+        bold = note.button('Bold')
+        bold.clear_cache()
+        states = bold.get_state_set()
+        return states.contains(Atspi.StateType.PRESSED) or states.contains(Atspi.StateType.CHECKED)
+    wait_until(bold_on, what='Bold on')
     inp.key('ctrl+z')
-    wait_until(lambda: not (bold.get_state_set().contains(Atspi.StateType.PRESSED)
-                            or bold.get_state_set().contains(Atspi.StateType.CHECKED)), what='Bold off')
+    wait_until(lambda: not bold_on(), what='Bold off')
 
 
-def test_P4_web_all_notes_shows_each_match_with_its_note_and_line(app, inp):
+def test_P4_all_notes_shows_each_match_with_its_note_and_line(app, inp):
     long = 'start of a long line that goes on and on until the match ' + 'needle' + ' and after'
     app.write_notes([
         {'id': 'test', 'title': 'test', 'text': 'here', 'x': 100, 'y': 80, 'w': 500, 'h': 400},
@@ -443,7 +447,7 @@ def test_P4_web_all_notes_shows_each_match_with_its_note_and_line(app, inp):
     assert 'start of a long' not in joined, 'the line is cut around the match'
 
 
-def test_P7_web_highlights_go_when_find_closes(app, inp):
+def test_P7_highlights_go_when_find_closes(app, inp):
     note = start(app, 'top needle', at=(200, 10))
     area = box(note, 'needle')
     before = pixels(area)
@@ -457,7 +461,7 @@ def test_P7_web_highlights_go_when_find_closes(app, inp):
     assert pixels(area) == before
 
 
-def test_Q1_web_a_long_line_wraps_at_the_notes_width(app, inp):
+def test_Q1_a_long_line_wraps_at_the_notes_width(app, inp):
     words = ' '.join(['word'] * 40)
     note = start(app, words, w=260, at=(5, 10))
     boxes = char_boxes(note, words)
@@ -466,14 +470,14 @@ def test_Q1_web_a_long_line_wraps_at_the_notes_width(app, inp):
     assert all(b.x + b.width <= x + w for b in boxes)
 
 
-def test_Q2_web_in_a_note_with_korean_every_line_is_as_far_from_the_next(app, inp):
+def test_Q2_in_a_note_with_korean_every_line_is_as_far_from_the_next(app, inp):
     note = start(app, 'abc\n한글 줄\ndef\nghi', at=(200, 10))
     ys = [box(note, t)[1] for t in ('abc', '한글', 'def', 'ghi')]
     gaps = [b - a for a, b in zip(ys, ys[1:])]
     assert max(gaps) - min(gaps) <= 1, gaps
 
 
-def test_Q11_web_bold_in_a_heading_is_drawn_bolder_in_korean_too(app, inp):
+def test_Q11_bold_in_a_heading_is_drawn_bolder_in_korean_too(app, inp):
     note = start(app, '한글제목 한글제목', heading_ranges=[[0, 9]], bold_ranges=[[5, 9]], at=(200, 10))
     plain = ink(note, '한글제목 ')
     bold = ink(note, ' 한글제목')

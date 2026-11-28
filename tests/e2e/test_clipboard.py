@@ -1,146 +1,126 @@
-"""N. Clipboard, O. undo and redo, P. search: see BEHAVIORS.md."""
-from tests.e2e.driver import (
-    TextArea, clipboard_text, find_all, name, role, set_clipboard, settle,
-    wait_until)
+"""V. Copy and paste in a 2.0 note, as in 1.x (N): see BEHAVIORS.md."""
+import pytest
+
+from tests.e2e.driver import clipboard_text, set_clipboard, settle, wait_until
+from tests.e2e.web import WebNote, assert_saved, brief, start
+from ynote.convert import note_doc
+from ynote.config import (BULLET_MARKER, CHECKBOX_MARKER, EXPAND_END, EXPAND_OPEN,
+                          IMAGE_ANCHOR, QUOTE_MARKER)
+from ynote.markdown import to_markdown
 
 
-def lines(note):
-    return note.body.text().rstrip('\n').split('\n')
+
+# A note with every kind of content, as 1.x saved it.
+TEXT = '\n'.join(['Title', 'a b c', BULLET_MARKER + 'item', '\t' + BULLET_MARKER + 'sub',
+                  CHECKBOX_MARKER + 'todo', QUOTE_MARKER + 'q', '---', 'ls',
+                  EXPAND_OPEN + 'More', 'inside', EXPAND_END, IMAGE_ANCHOR])
+FIELDS = dict(heading_ranges=[[0, 5]], bold_ranges=[[8, 9]], backtick_ranges=[[10, 11]],
+              code_ranges=[[TEXT.index('ls'), TEXT.index('ls') + 2]],
+              tables=[{'offset': len(TEXT) - 1, 'rows': [[{'text': 'k'}, {'text': 'v'}],
+                                                        [{'text': 'a|b'}, {'text': 'c'}]]}])
 
 
-def copy_all(note, app):
-    note.body.click()
-    app.inp.key('ctrl+a')
-    app.inp.key('ctrl+c')
-    return wait_until(clipboard_text)
+def blocks_of_note():
+    """The blocks the test note opens with, a line after them."""
+    doc = note_doc(dict(text=TEXT, **FIELDS))
+    return ' '.join(brief(b) for b in doc['content']) + ' paragraph()'
 
 
-def test_N1_copied_text_goes_out_as_markdown(write, app):
-    md = ('# Title\n\nsee `ls` and **bold**\n\n- item\n  - [ ] task\n\n'
-          '> quote\n\n---\n\n```\nls -l\n```')
-    note = write(md + '\n')
-    out = copy_all(note, app)
-    for part in ('# Title', '`ls`', '**bold**', '- item', '  - [ ] task',
-                 '> quote', '---', '```\nls -l\n```'):
-        assert part in out, (part, out)
+def copied(app, inp, keys='ctrl+c'):
+    set_clipboard('-')
+    inp.key(keys)
+    return wait_until(lambda: (clipboard_text() or '-') != '-' and clipboard_text(), what='a copy')
 
 
-def test_N2_code_alone_is_copied_without_fences(write, app):
-    note = write('```\nsudo apt update\n```\n')
-    note.body.click_text('update', at='middle', count=2)
-    app.inp.key('ctrl+c')
-    assert wait_until(clipboard_text) == 'sudo apt update'
+def test_V1_copied_text_goes_to_other_apps_as_the_markdown_of_1x(app, inp):
+    start(app, TEXT, **FIELDS)
+    inp.key('ctrl+a')
+    expected = to_markdown(dict(text=TEXT, bold=FIELDS['bold_ranges'], heading=FIELDS['heading_ranges'],
+                                code=FIELDS['code_ranges'], backtick=FIELDS['backtick_ranges'],
+                                tables=FIELDS['tables']))
+    assert copied(app, inp) == expected
 
 
-def test_N3_a_paste_between_notes_keeps_formats_tables_exactly(write, app):
-    note = write('**b** `c`\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n')
-    note.body.click()
-    app.inp.key('ctrl+a')
-    app.inp.key('ctrl+c')
-    settle(0.3)
-    app.inp.key('ctrl+end')
-    app.inp.key('enter')
-    app.inp.key('ctrl+v')
-    settle(0.8)
-    assert len(note.tables()) == 2
-    assert note.body.formats('b', occurrence=1) == {'bold'}
+def test_V2_code_alone_is_copied_as_it_is(app, inp):
+    note = start(app, 'ls -l\npwd', code_ranges=[[0, 9]])
+    x, y = note.text_point(26, 30)
+    inp.click(x, y, count=3)
+    assert copied(app, inp) == 'ls -l\npwd'
 
 
-def test_N4_once_another_app_takes_the_clipboard_its_text_is_pasted(write, app):
-    note = write('**bold**\n')
-    note.body.click()
-    app.inp.key('ctrl+a')
-    app.inp.key('ctrl+c')
-    settle(0.3)
-    set_clipboard('plain words')
-    app.inp.key('ctrl+end')
-    app.inp.key('ctrl+v')
-    settle(0.5)
-    assert 'plain words' in note.body.text()
-
-
-def test_N5_pasted_markdown_keeps_its_formats_and_links(write, app):
-    note = write('**b** and [site](https://example.com)\n')
-    assert note.body.formats('b') == {'bold'}
-    assert note.body.text().startswith('b and site (https://example.com)')
-
-
-def test_N6_a_list_pasted_after_text_starts_its_own_line(write, app):
-    note = write('text\n')
-    note.body.click_text('text', at='end')
-    set_clipboard('- item')
-    app.inp.key('ctrl+v')
-    settle(0.5)
-    assert lines(note)[:2] == ['text', '• item']
-
-
-def test_N7_ctrl_shift_v_pastes_the_text_alone(write, app):
-    note = write('x\n')
-    note.body.click_text('x', at='end')
-    set_clipboard(' **raw** `t`')
-    app.inp.key('ctrl+shift+v')
-    settle(0.5)
-    assert '**raw** `t`' in note.body.text()
-
-
-def test_N8_cut_and_paste_brings_a_table_back(write, app):
-    note = write('a\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\nz\n')
-    note.body.click()
-    app.inp.key('ctrl+a')
-    app.inp.key('ctrl+x')
-    wait_until(lambda: not note.tables(), what='the cut')
-    app.inp.key('ctrl+v')
-    wait_until(lambda: note.tables(), what='the table back')
-
-
-def test_N10_names_with_underscores_and_lone_stars_stay_text(write, app):
-    note = write('my_var_name and 2 * 3\n')
-    assert note.body.text().startswith('my_var_name and 2 * 3')
-    assert note.body.formats('var') == set()
-
-
-def test_O1_undo_and_redo(note, app):
-    app.inp.type('one')
-    settle(1.0)
-    app.inp.type(' two')
-    settle(1.0)
-    app.inp.key('ctrl+z')
-    wait_until(lambda: note.body.text().rstrip() == 'one', what='undo')
-    app.inp.key('ctrl+shift+z')
-    wait_until(lambda: note.body.text().rstrip() == 'one two', what='redo')
-
-
-def test_P1_search_lists_matches_in_every_note_and_opens_one(app):
+def two_notes(app, text='', **fields):
     app.write_notes([
-        {'id': 'a', 'title': 'first', 'x': 100, 'y': 80, 'w': 500, 'h': 400,
-         'text': 'nothing here'},
-        {'id': 'b', 'title': 'second', 'x': 650, 'y': 80, 'w': 500, 'h': 400,
-         'text': 'the needle is here', 'hidden': True}])
+        dict({'id': 'test', 'title': 'test', 'text': text, 'x': 100, 'y': 80, 'w': 420, 'h': 420}, **fields),
+        {'id': 'other', 'title': 'other', 'text': '', 'x': 560, 'y': 80, 'w': 420, 'h': 420}])
     app.start()
-    first = app.note('first')
-    first.body.click()
-    first.search('NEEDLE')
-    app.inp.key('enter')
-    second = app.note('second')
-    text = second.body.text()
-    wait_until(lambda: second.body.selection() == (
-        text.index('needle'), text.index('needle') + 6), what='the match')
+    return WebNote(app, app.note('test').frame), WebNote(app, app.note('other').frame)
 
 
-def test_P5_the_arrows_pick_a_match_and_keep_the_cursor_in_the_entry(app):
-    app.write_notes([
-        {'id': 'a', 'title': 'one', 'x': 100, 'y': 80, 'w': 500, 'h': 400,
-         'text': 'apple\napple pie'},
-        {'id': 'b', 'title': 'two', 'x': 650, 'y': 80, 'w': 500, 'h': 400,
-         'text': 'apple tree'}])
-    app.start()
-    one = app.note('one')
-    one.body.click()
-    one.search('apple')
-    app.inp.key('down')
-    app.inp.key('down')
-    app.inp.type('s')
+def test_V3_a_paste_into_another_note_keeps_everything(app, inp):
+    first, other = two_notes(app, TEXT, **FIELDS)
+    first.click_text(10, 8)
+    inp.key('ctrl+a')
+    copied(app, inp)
+    other.click_text(10, 8)
+    inp.key('ctrl+v')
+    assert_saved(app, blocks_of_note(), note_id='other')
+
+
+def test_V4_once_another_app_copies_its_text_is_pasted(app, inp):
+    start(app, 'mine')
+    inp.key('ctrl+a')
+    copied(app, inp)
+    set_clipboard('theirs')
+    inp.key('end')
+    inp.key('ctrl+v')
+    assert_saved(app, "paragraph('minetheirs')")
+
+
+def test_V5_markdown_from_another_app_pastes_in_with_its_formats(app, inp):
+    start(app, '')
+    set_clipboard('# Head\n\n**b** and `c`\n\n- [x] done\n\n| k |\n| --- |\n| v |')
+    inp.key('ctrl+v')
+    # The blank lines between blocks stay, as in 1.x.
+    assert_saved(app, "heading('Head') paragraph() paragraph('b'[strong] ' and ' 'c'[code]) paragraph() "
+                      "bullet_list(done(paragraph('done'))) paragraph() "
+                      "table(table_row(table_header(paragraph('k'))) table_row(table_cell(paragraph('v')))) "
+                      "paragraph()")
+
+
+def test_V6_a_list_pasted_after_text_starts_a_line_of_its_own(app, inp):
+    start(app, 'text ')
+    set_clipboard('- one\n- two')
+    inp.key('ctrl+v')
+    assert_saved(app, "paragraph('text ') bullet_list(list_item(paragraph('one')) "
+                      "list_item(paragraph('two'))) paragraph()")
+
+
+def test_V7_ctrl_shift_v_pastes_the_text_alone(app, inp):
+    start(app, '')
+    set_clipboard('**not bold**\n- not a list')
+    inp.key('ctrl+shift+v')
+    assert_saved(app, "paragraph('**not bold**') paragraph('- not a list')")
+
+
+def test_V8_cut_and_paste_brings_everything_back(app, inp):
+    start(app, TEXT, **FIELDS)
+    inp.key('ctrl+a')
+    copied(app, inp, 'ctrl+x')
+    assert_saved(app, 'paragraph()')
+    inp.key('ctrl+v')
+    assert_saved(app, blocks_of_note())
+
+
+def test_V9_markdown_pasted_into_code_stays_as_it_is(app, inp):
+    note = start(app, 'x', code_ranges=[[0, 1]])
+    note.click_text(30, 8)
+    inp.key('end')
+    set_clipboard('**a** `b`')
+    inp.key('ctrl+v')
     settle(0.3)
-    entry = TextArea(find_all(one.frame, lambda a: role(a) == 'text'
-                              and name(a) == 'Search')[0], app.inp)
-    assert entry.focused() and entry.text() == 'apples'
+    assert_saved(app, "code_block('x**a** `b`') paragraph()")
+
+
+def test_V10_copy_as_markdown_copies_the_whole_note(app, inp):
+    start(app, 'Title\nbody', heading_ranges=[[0, 5]])
+    assert copied(app, inp, 'ctrl+shift+m') == '# Title\nbody'

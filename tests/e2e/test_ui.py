@@ -5,7 +5,7 @@ from tests.e2e.driver import center, clipboard_text, extents, find_all, name, ro
 from tests.e2e.web import (
     assert_saved, choose, menu, menu_button, menu_items, menu_open, saved_field, saved_note, start)
 
-pytestmark = [pytest.mark.web]
+
 
 EXPAND_CLOSED = '▸ '
 EXPAND_END = '⁤'

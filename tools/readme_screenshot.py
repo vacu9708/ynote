@@ -12,9 +12,9 @@ they can, since the README is mostly them:
   element a note holds: headings, a code block, an image, lists, a
   checklist, inline code, a table, expands open and folded, a quote, a link,
   emoji, and a divider, in three colors, one pinned.
-- assets/ynote-hidden.png: a note with its right-click menu open, a note
-  searching All notes, which lists matches in the hidden sample notes, and
-  the Hidden Notes window.
+- assets/ynote-hidden.png: a note with its menu open, a note finding in
+  All notes, which lists matches in the hidden sample notes, and the hidden
+  notes' list.
 
 Rerun it after a visible UI change so the README images stay current.
 dbus-run-session keeps it apart from a running Ynote.
@@ -42,6 +42,8 @@ gi.require_version('PangoCairo', '1.0')
 from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 
 from ynote.app import PostItApp  # noqa: E402
+from ynote.web_popup import popup  # noqa: E402
+from ynote.web_view import run_js  # noqa: E402
 from ynote.config import (  # noqa: E402
     EXPAND_CLOSED, EXPAND_END, EXPAND_OPEN, IMAGE_ANCHOR, TABLE_MARKER)
 
@@ -214,19 +216,39 @@ def setup_home():
         json.dump(sample_notes(), f)
 
 
-def capture(window):
-    """Crop a window out of the screen instead of reading its own surface.
+def capture_rect(x, y, width, height):
+    """Crop a rectangle out of the screen. Reading a window's own surface
+    aborts inside cairo on some GTK/cairo builds (an assertion on a surface
+    with MIME data), as it has since an update of libxrender1 on Ubuntu
+    22.04, while reading the screen works. The windows are placed apart, so
+    a crop shows one window alone."""
+    return Gdk.pixbuf_get_from_window(Gdk.get_default_root_window(), x, y, width, height)
 
-    Reading a window's own surface aborts inside cairo on some GTK/cairo
-    builds (an assertion on a surface with MIME data), as it has since an
-    update of libxrender1 on Ubuntu 22.04, while reading the screen works.
-    The windows are placed apart, so a crop shows one window alone.
-    """
+
+def window_rect(window):
     gdk_win = window.get_window()
-    origin_x, origin_y = gdk_win.get_origin()[1:]
-    return Gdk.pixbuf_get_from_window(
-        Gdk.get_default_root_window(), origin_x, origin_y,
-        gdk_win.get_width(), gdk_win.get_height())
+    x, y = gdk_win.get_origin()[1:]
+    return x, y, gdk_win.get_width(), gdk_win.get_height()
+
+
+def capture(*windows):
+    """The windows, such as a note and its menu, each cropped out of the
+    screen and laid where they are on the background, which shows between
+    them instead of what else is on the screen."""
+    rects = [window_rect(w) for w in windows]
+    x = min(r[0] for r in rects)
+    y = min(r[1] for r in rects)
+    width = max(r[0] + r[2] for r in rects) - x
+    height = max(r[1] + r[3] for r in rects) - y
+    # The screen is read at SCALE pixels a point.
+    surface = cairo.ImageSurface(cairo.FORMAT_RGB24, width * SCALE, height * SCALE)
+    cr = cairo.Context(surface)
+    cr.set_source_rgb(*BACKGROUND)
+    cr.paint()
+    for rx, ry, rw, rh in rects:
+        Gdk.cairo_set_source_pixbuf(cr, capture_rect(rx, ry, rw, rh), (rx - x) * SCALE, (ry - y) * SCALE)
+        cr.paint()
+    return Gdk.pixbuf_get_from_surface(surface, 0, 0, width * SCALE, height * SCALE)
 
 
 def compose(shots, output):
@@ -240,13 +262,6 @@ def compose(shots, output):
     cr.paint()
     left = m
     for pb in shots:
-        # A soft drop shadow made of a few widening translucent rectangles.
-        for spread in range(1, 7):
-            cr.set_source_rgba(0, 0, 0, 0.035)
-            cr.rectangle(left - spread, m - spread + 4,
-                         pb.get_width() + 2 * spread,
-                         pb.get_height() + 2 * spread)
-            cr.fill()
         Gdk.cairo_set_source_pixbuf(cr, pb, left, m)
         cr.paint()
         left += pb.get_width() + gap
@@ -260,20 +275,14 @@ def main():
     setup_home()
     app = PostItApp()
 
+    def js(note, code):
+        run_js(note.view, code)
+
     def hide_cursors():
         # A blinking text cursor would land in the picture at random.
         for w in app.notes.values():
-            w.tv.set_cursor_visible(False)
-            # At the start of the first line where no format is on, so the
-            # Format button is not lit.
-            buf = w.tv.get_buffer()
-            for line in range(buf.get_line_count()):
-                buf.place_cursor(buf.get_iter_at_line(line))
-                w._sync_format_state()
-                if not (w._bold_active or w._heading_active
-                        or w._code_active):
-                    break
-        GLib.timeout_add(300, capture_notes)
+            js(w, 'document.activeElement && document.activeElement.blur()')
+        GLib.timeout_add(500, capture_notes)
         return False
 
     def capture_notes():
@@ -284,47 +293,37 @@ def main():
                           and w.note_id not in (SEARCH_NOTE, MENU_NOTE)),
                          key=lambda w: w.get_window().get_origin()[1])
         compose([capture(w) for w in windows], OUTPUT)
-
-        menu_note = app.notes[MENU_NOTE]
-        event = Gdk.Event.new(Gdk.EventType.BUTTON_PRESS)
-        # Toward the right, so the notes' text stays in view beside it.
-        event.button.x, event.button.y = 300.0, 10.0
-        menu_note._show_ctx_menu(menu_note._title_box, event.button)
-        GLib.timeout_add(800, capture_menu)
+        js(app.notes[MENU_NOTE], "document.querySelector('.bar-btn.more').click()")
+        GLib.timeout_add(1000, capture_menu)
         return False
 
     def capture_menu():
-        shots.append(capture(app.notes[MENU_NOTE]))
+        note = app.notes[MENU_NOTE]
+        shots.append(capture(note, popup()))
+        popup().close()
         note = app.notes[SEARCH_NOTE]
-        note._toggle_search()
-        note._search_entry.set_text(SEARCH_QUERY)
-        note._all_notes_check.set_active(True)
-        GLib.timeout_add(800, capture_search)
+        js(note, "document.querySelector('.find-btn').click();"
+                 "document.querySelector('.find-toggle.all').click();"
+                 "const input = document.querySelector('.find-input');"
+                 f"input.value = '{SEARCH_QUERY}';"
+                 "input.dispatchEvent(new Event('input'));")
+        GLib.timeout_add(1200, capture_search)
         return False
 
     def capture_search():
         note = app.notes[SEARCH_NOTE]
-        # Show the query as typed, without the selection set_text() leaves.
-        end = len(SEARCH_QUERY)
-        note._search_entry.select_region(end, end)
-        GLib.timeout_add(300, lambda: capture_search_now(note))
-        return False
-
-    def capture_search_now(note):
         shots.append(capture(note))
         app.show_hidden_notes_manager(parent_note=note)
-        manager = app._hidden_notes_window
-        manager._tree.get_selection().select_path(Gtk.TreePath(0))
-        GLib.timeout_add(500, lambda: capture_hidden(shots, manager))
+        GLib.timeout_add(1000, capture_hidden)
         return False
 
-    def capture_hidden(shots, manager):
-        compose(shots + [capture(manager)], HIDDEN_OUTPUT)
+    def capture_hidden():
+        compose(shots + [capture(popup())], HIDDEN_OUTPUT)
         app.quit_app()
         return False
 
     shots = []
-    GLib.timeout_add(2500, hide_cursors)
+    GLib.timeout_add(3500, hide_cursors)
     app.run([sys.argv[0]])
 
 

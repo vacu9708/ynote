@@ -29,9 +29,8 @@ def gnome(app):
     g.stop()
 
 
-@pytest.fixture(params=['1.x', '2.0'])
-def desk(app, gnome, request):
-    app.web = request.param == '2.0'
+@pytest.fixture
+def desk(app, gnome):
     started(app, gnome, NOTES)
     gnome.move(*POINTER)
     return gnome

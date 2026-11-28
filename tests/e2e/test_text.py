@@ -8,7 +8,7 @@ import pytest
 
 from tests.e2e.web import assert_saved, start
 
-pytestmark = [pytest.mark.web]
+
 
 B, TODO, DONE, Q = '• ', '☐ ', '☑ ', '▍ '
 CODE_ANCHOR = '⁠'
@@ -164,7 +164,7 @@ CASES = {
 
 
 @pytest.mark.parametrize('case', list(CASES))
-def test_web_text(app, inp, case):
+def test_text(app, inp, case):
     (text,), ranges, steps, expected = CASES[case]
     # Right of the first line's text, away from a to-do's box.
     start(app, text, at=(200, 10), **ranges)
@@ -176,7 +176,7 @@ def test_web_text(app, inp, case):
     assert_saved(app, expected.removesuffix(' paragraph()'), last_line=False)
 
 
-def test_G8_web_a_click_on_a_box_checks_it_without_moving_the_cursor(app, inp):
+def test_G8_a_click_on_a_box_checks_it_without_moving_the_cursor(app, inp):
     note = start(app, TODO + 'a\n' + TODO + 'b', at=(200, 10))
     inp.key('down')
     note.click_text(0, 10)              # the first item's box

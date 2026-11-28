@@ -12,7 +12,7 @@ from tests.e2e.driver import Gdk, Gtk, pump, settle, wait_until
 from tests.e2e.web import (
     WebNote, assert_saved, attrs_at, choose, ink, menu, menu_items, menu_open, saved_note, start, weights)
 
-pytestmark = [pytest.mark.web]
+
 
 EXPAND_OPEN = '▾ '
 EXPAND_END = '⁤'

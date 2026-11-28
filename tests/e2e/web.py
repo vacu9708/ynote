@@ -1,6 +1,6 @@
 """Driving a note of Ynote 2.0, whose window is a web page: its buttons and
 editor as the page shows them through AT-SPI, the popup window that shows
-its menus, and the content it saves (notes-2.json)."""
+its menus, and the content it saves (notes.json)."""
 import time
 
 from tests.e2e.driver import (
@@ -218,3 +218,51 @@ def weights(note, needle):
         attrs, _s, _e = Atspi.Text.get_attribute_run(acc, i, False)
         out.append(int(attrs.get('weight', '400')))
     return out
+
+
+# ---------------------------------------------------------------- helpers
+
+
+def fake_browser(home):
+    """A browser for http links that writes down what it was asked to open."""
+    import os
+    apps = os.path.join(home, '.local', 'share', 'applications')
+    os.makedirs(apps, exist_ok=True)
+    opened = os.path.join(home, 'opened')
+    with open(os.path.join(apps, 'fake-browser.desktop'), 'w') as f:
+        f.write('[Desktop Entry]\nType=Application\nName=Fake\n'
+                f"Exec=sh -c 'echo \"$1\" >> {opened}' sh %u\n"
+                'MimeType=x-scheme-handler/http;x-scheme-handler/https;\n')
+    conf = os.path.join(home, '.config')
+    os.makedirs(conf, exist_ok=True)
+    with open(os.path.join(conf, 'mimeapps.list'), 'w') as f:
+        f.write('[Default Applications]\n'
+                'x-scheme-handler/http=fake-browser.desktop\n'
+                'x-scheme-handler/https=fake-browser.desktop\n')
+    return opened
+
+
+def put_image_on_clipboard():
+    from gi.repository import GdkPixbuf
+    from tests.e2e.driver import Gdk, Gtk, pump
+    pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, 80, 40)
+    pb.fill(0x3366ccff)
+    Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_image(pb)
+    pump()
+
+
+def color_at(x, y):
+    from tests.e2e.driver import pixel, screenshot
+    pb = screenshot('/tmp/e2e-pixel.png', (x, y, 1, 1))
+    return pixel(pb, 0, 0)
+
+
+def autostart_on(entry):
+    """Whether the desktop starts Ynote at login from this entry."""
+    import os
+    if not os.path.exists(entry):
+        return False
+    with open(entry) as f:
+        text = f.read()
+    return ('Hidden=true' not in text
+            and 'X-GNOME-Autostart-enabled=false' not in text)

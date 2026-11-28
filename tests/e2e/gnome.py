@@ -154,8 +154,6 @@ def started(app, gnome, notes):
     as saved, which moves the focus to the top one."""
     app.write_notes(notes)
     env = dict(os.environ, HOME=app.home, YNOTE_DEBUG='1', **gnome.env)
-    if app.web:
-        env['YNOTE_WEB'] = '1'
     app.proc = subprocess.Popen(app.command, env=env, stdout=open(app.log, 'w'),
                                 stderr=subprocess.STDOUT, start_new_session=True)
     gnome.wait_for_windows([n['title'] for n in notes])
