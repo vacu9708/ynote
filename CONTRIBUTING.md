@@ -45,6 +45,9 @@ runs only with `YNOTE_WEB` set, beside a running 1.x. Its notes are in
 YNOTE_WEB=1 python3 ynote.py
 ```
 
+The installed package opens it as Ynote 2.0 Preview, a launcher of its own
+(`packaging/ynote-2-preview.desktop`).
+
 The page's code is in `web/src/`, bundled into `ynote/web/note.js`, which is
 committed, so building the package needs no Node.js. After changing
 `web/src/`, rebuild the bundle:

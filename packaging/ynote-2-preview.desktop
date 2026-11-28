@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ynote 2.0 Preview
+Comment=The next Ynote, while it is built: notes drawn by a web page
+Exec=env YNOTE_WEB=1 ynote
+Icon=ynote
+Terminal=false
+StartupNotify=false
+StartupWMClass=Ynote
+Categories=Utility;
