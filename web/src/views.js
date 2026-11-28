@@ -90,17 +90,21 @@ export class CodeBlockView {
     const pre = document.createElement('pre');
     this.contentDOM = document.createElement('code');
     pre.appendChild(this.contentDOM);
+    // An icon alone, as in Confluence and Obsidian; a check for a moment
+    // says it is copied.
     this.copy = inertButton('code-copy', () => {
       onCopy(this.node.textContent);
       this.copy.classList.add('done');
-      this.copyLabel.textContent = 'Copied';
+      this.copy.replaceChildren(strokeIcon('check', 15));
       clearTimeout(this.timer);
-      this.timer = setTimeout(() => { this.copy.classList.remove('done'); this.copyLabel.textContent = 'Copy'; }, 1200);
+      this.timer = setTimeout(() => {
+        this.copy.classList.remove('done');
+        this.copy.replaceChildren(strokeIcon('copy', 15));
+      }, 1200);
     });
-    this.copyLabel = document.createElement('span');
-    this.copyLabel.textContent = 'Copy';
-    this.copy.append(strokeIcon('copy', 13), this.copyLabel);
-    this.copy.title = 'Copy the whole block';
+    this.copy.append(strokeIcon('copy', 15));
+    this.copy.title = 'Copy';
+    this.copy.setAttribute('aria-label', 'Copy');
     this.dom.append(pre, this.copy);
   }
   update(node) {

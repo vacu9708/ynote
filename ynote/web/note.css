@@ -186,8 +186,8 @@ td > :first-child, th > :first-child, blockquote > :first-child { margin-top: 0;
 }
 .code-copy {
   justify-self: end; align-self: start; margin: 4px; z-index: 1;
-  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px;
-  font: 500 12px var(--body); color: #333; background: #fff; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px;
+  color: #444; background: #fff; cursor: pointer;
   border: 1px solid rgba(0, 0, 0, .14); border-radius: 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
   opacity: 0; transition: opacity .12s; user-select: none;
 }
