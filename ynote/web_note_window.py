@@ -675,8 +675,10 @@ def show_hidden_list(app, anchor):
     all."""
     items = []
     for note_id, window in app.hidden_notes():
-        items.append({'id': 'note:' + note_id, 'label': window.title or UNTITLED_LABEL,
-                      'md': window.first_text(40) or None, 'colorName': window._color})
+        # The title alone; an untitled note goes by its first line.
+        items.append({'id': 'note:' + note_id,
+                      'label': window.title or window.first_text(40) or UNTITLED_LABEL,
+                      'colorName': window._color})
     if not items:
         items.append({'id': 'none', 'label': 'No hidden notes', 'disabled': True})
     items += [{'sep': True},

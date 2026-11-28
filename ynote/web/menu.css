@@ -81,7 +81,4 @@ input[type=range] { width: 110px; margin: 0; accent-color: var(--accent); }
    and lit by an outline, as its color is its background. */
 .row.colored { grid-template-columns: 1fr auto auto; margin: 2px 0; padding: 7px 10px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }
 .row.colored .ic { display: none; }
-.row.colored .label { font-weight: 700; }
-.row.colored .md { font: 12.5px var(--body); background: none; padding: 0; color: rgba(0, 0, 0, .55);
-  max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .row.colored.sel { box-shadow: inset 0 0 0 2px var(--accent); }
