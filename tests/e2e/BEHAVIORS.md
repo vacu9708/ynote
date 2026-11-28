@@ -149,58 +149,58 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 ## I. Code blocks
 
-- I1 Insert > Code block, or ` ``` ` on an empty line
+- I1 Insert > Code block, or ` ``` ` on an empty line (2.0: F5) [2.0]
 - I2 The box is as wide as the longest line, and follows edits; lines do not wrap, the block scrolls sideways [px]
-- I3 A double click in a code block selects the line without its line break; a triple click, the whole block
-- I4 Empty lines in a code block stay in it, through pastes and replaced selections too
-- I5 Text pasted or typed over a selection in a code block stays code, as over a line selected by a double click
-- I6 A paste into code takes the text as it is, without reading Markdown
-- I7 Lines with formats made a code block show their Markdown (`# Title`, `**bold**`, `- item`) in one block; Ctrl+Z brings them back in one step
+- I3 A double click in a code block selects the line without its line break; a triple click, the whole block (2.0: U1, U2) [2.0]
+- I4 Empty lines in a code block stay in it, through pastes and replaced selections too (2.0: U12) [2.0]
+- I5 Text pasted or typed over a selection in a code block stays code, as over a line selected by a double click (2.0: U1) [2.0]
+- I6 A paste into code takes the text as it is, without reading Markdown (2.0: V9) [2.0]
+- I7 Lines with formats made a code block show their Markdown (`# Title`, `**bold**`, `- item`) in one block; Ctrl+Z brings them back in one step [2.0]
 - I8 Lines already code stay as they are; a line with an image is left out
-- I9 A code block made plain again keeps the Markdown as text
+- I9 A code block made plain again keeps the Markdown as text [2.0]
 - I10 A search match in a code block is highlighted [px]
 - I11 A long code block (3000 lines) opens fast and typing in it stays fast
 - I12 A selection over several lines of a code block looks like GTK's, out to the right edge
 
 ## J. Dividers, links, emoji
 
-- J1 A `---` line is drawn as a line, and the cursor skips it either way
-- J2 http and https addresses are underlined links: Ctrl+click opens one, a click only places the cursor, and a tooltip says so
-- J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports
-- J4 Insert Emoji comes first in the text's right-click menu
+- J1 A `---` line is drawn as a line, and the cursor skips it either way [2.0]
+- J2 http and https addresses are underlined links: Ctrl+click opens one, a click only places the cursor, and a tooltip says so [2.0]
+- J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports [2.0]
+- J4 Insert Emoji comes first in the text's right-click menu (not in 2.0, which shows no emoji picker yet)
 - J5 Emoji are drawn larger without making their line taller [px]
 
 ## K. Images
 
-- K1 Ctrl+V pastes an image; Insert > Image inserts a file
-- K2 Image files are saved in images/, and one no note uses is cleaned up
+- K1 Ctrl+V pastes an image; Insert > Image inserts a file (2.0: U15, pasting) [2.0]
+- K2 Image files are saved in images/, and one no note uses is cleaned up [2.0]
 - K3 Images still in the undo history or Ynote's clipboard are not cleaned up
 - K4 An image in a table cell counts as in use
 
 ## L. Tables
 
-- L1 Insert > Table adds a table with a header row and the cursor in its first cell
+- L1 Insert > Table adds a table with a header row and the cursor in its first cell (2.0: U5) [2.0]
 - L2 A click in a cell puts the cursor where it was clicked, also right of or below the text
 - L3 A drag selects in a cell, and a double click selects a word
-- L4 Tab and Shift+Tab go to the next or previous cell; Tab past the last cell adds a row and goes to its first cell, which shows and takes typing
-- L5 Tab on a list item in a cell indents it
-- L6 Enter makes a new line in a cell, not a row, and the table grows
-- L7 Up and Down at a cell's first or last row go to the cell above or below, or out of the table; Esc leaves it
-- L8 The arrows go into a table from the lines around it: the first cell from above, the last from below
-- L9 Esc or Down from a table last in an expand goes past it, not back into the table
-- L10 A cell's right-click menu: Add Row Below, Add Column Right, Delete Row, Delete Column, Delete Table; cells added show and take typing; deleting the last row or column deletes the table
-- L10a Deleting the header row makes the next row the header, in bold. Unlike Confluence the table keeps a header, which a Markdown table must have
-- L11 A deleted table comes back with Ctrl+Z, and takes clicks
-- L12 Ctrl+Z in a cell undoes that cell's edits
+- L4 Tab and Shift+Tab go to the next or previous cell; Tab past the last cell adds a row and goes to its first cell, which shows and takes typing [2.0]
+- L5 Tab on a list item in a cell indents it [2.0]
+- L6 Enter makes a new line in a cell, not a row, and the table grows [2.0]
+- L7 Up and Down at a cell's first or last row go to the cell above or below, or out of the table; Esc leaves it [2.0]
+- L8 The arrows go into a table from the lines around it: the first cell from above, the last from below [2.0]
+- L9 Esc or Down from a table last in an expand goes past it, not back into the table (2.0: U18) [2.0]
+- L10 A cell's right-click menu: Add Row Below, Add Column Right, Delete Row, Delete Column, Delete Table; cells added show and take typing; deleting the last row or column deletes the table [2.0]
+- L10a Deleting the header row makes the next row the header, in bold. Unlike Confluence the table keeps a header, which a Markdown table must have (2.0: U6) [2.0]
+- L11 A deleted table comes back with Ctrl+Z, and takes clicks [2.0]
+- L12 Ctrl+Z in a cell undoes that cell's edits [2.0]
 - L13 A cell holds lists, quotes, code blocks, inline formats, and images
-- L14 The Format and Insert menus and the shortcuts act on the cell with the cursor; Insert > Table is off in a cell
+- L14 The Format and Insert menus and the shortcuts act on the cell with the cursor; Insert > Table is off in a cell [2.0]
 - L15 A column is as wide as its text, measured in its fonts (bold, inline code); in a note too narrow, narrow columns keep their width and wide ones share the rest
 - L16 Short inline code, as `x | y`, does not wrap in a narrow column
-- L17 The header row is shaded and bold, and its bold turns off; an empty header cell, and a line after Enter in one, start bold
+- L17 The header row is shaded and bold, and its bold turns off; an empty header cell, and a line after Enter in one, start bold (2.0: U4, U5) [2.0]
 - L18 A note has one selection: a double click in a cell, then a click elsewhere, leaves no selection behind
-- L19 Typing or Backspace over a selection across a table removes it without a crash, and Ctrl+Z brings it back
-- L20 Backspace at the start of the line below a table goes into its last cell, or takes that line away when empty; Delete at the end of the line above does nothing
-- L21 A click right of a table puts the cursor beside it, not in a cell; typing there goes on the line after it, as in Confluence
+- L19 Typing or Backspace over a selection across a table removes it without a crash, and Ctrl+Z brings it back [2.0]
+- L20 Backspace at the start of the line below a table goes into its last cell, or takes that line away when empty; Delete at the end of the line above does nothing [2.0]
+- L21 A click right of a table puts the cursor beside it, not in a cell; typing there goes on the line after it, as in Confluence [2.0]
 - L21b Beside a table, Enter opens a line after it (or goes to the empty one there), Backspace goes into the last cell, Delete does nothing, and the arrows go into the table
 - L22 Text in cells is found by search, in the note and across all notes; Enter on a match selects it in its cell
 - L23 A folded expand hides a table in it
@@ -214,15 +214,15 @@ placing notes across two monitors (D4, D9: much effort for little).
 ## M. Expands
 
 - M1 Insert > Expand puts the selected lines in it; inserted on the empty last line, it leaves a line after it
-- M2 A click on the arrow, or Ctrl+Enter on the title, folds or opens it; folding moves a cursor inside to the title
+- M2 A click on the arrow, or Ctrl+Enter on the title, folds or opens it; folding moves a cursor inside to the title [2.0]
 - M3 An expand holds code blocks, lists, tables, and other expands
-- M4 Enter on its empty last line goes on below the expand
-- M5 Backspace after an expand takes an empty line into it; Delete never joins a line to its end
-- M6 Backspace at the title's start keeps what it holds
+- M4 Enter on its empty last line goes on below the expand (2.0 follows Confluence instead: U11)
+- M5 Backspace after an expand takes an empty line into it; Delete never joins a line to its end [2.0]
+- M6 Backspace at the title's start keeps what it holds [2.0]
 - M7 An expand never ended gets an end, and an end without one is taken out
-- M8 A search match in a folded expand shows it open until the search closes
-- M9 An expand copies as `<details>` and pastes back as an expand
-- M10 The cursor does not rest on an expand's end line
+- M8 A search match in a folded expand shows it open until the search closes (2.0: T13) [2.0]
+- M9 An expand copies as `<details>` and pastes back as an expand (2.0: V8) [2.0]
+- M10 The cursor does not rest on an expand's end line (1.x only: 2.0 has no end line)
 
 ## N. Clipboard
 

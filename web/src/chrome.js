@@ -388,6 +388,12 @@ export function setupChrome(editor, post) {
     const link = target && target.closest && target.closest('.link');
     return link ? link.dataset.url : null;
   }
+  // A right click does not select the word under it, as WebKit would: the
+  // selection kept through a table's change from the menu broke the keys
+  // after it. It only moves the cursor, below, as in 1.x.
+  editor.view.dom.addEventListener('mousedown', event => {
+    if (event.button === 2) event.preventDefault();
+  }, true);
   editor.view.dom.addEventListener('contextmenu', event => {
     event.preventDefault();
     // A right click outside the selection moves the cursor there first.

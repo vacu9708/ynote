@@ -163,15 +163,16 @@ const keys = keymap({
   'Mod-9': cmd.toggleChecklist,
   'Shift-Mod-c': cmd.toggleCodeBlock,
   'Mod-Enter': chainCommands(cmd.toggleTodos, cmd.toggleExpandAtTitle),
-  'Tab': chainCommands(cmd.nextCellOrRow, cmd.indentItem, insertTab),
-  'Shift-Tab': chainCommands(goToNextCell(-1), cmd.outdentItem, () => true),
+  'Tab': chainCommands(cmd.indentItemInCell, cmd.nextCellOrRow, cmd.indentItem, insertTab),
+  'Shift-Tab': chainCommands(cmd.outdentItemInCell, goToNextCell(-1), cmd.outdentItem, () => true),
   'Escape': cmd.leaveTable,
   'Enter': chainCommands(cmd.splitItem, enterInExpand),
-  'ArrowDown': outOfCode('down'),
-  'ArrowRight': rightOutOfTable,
-  'ArrowUp': outOfCode('up'),
-  'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand),
-  'Delete': cmd.deleteInItem,
+  'ArrowDown': chainCommands(outOfCode('down'), cmd.skipDivider('down')),
+  'ArrowRight': chainCommands(rightOutOfTable, cmd.skipDivider('right')),
+  'ArrowUp': chainCommands(outOfCode('up'), cmd.skipDivider('up')),
+  'ArrowLeft': cmd.skipDivider('left'),
+  'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand, cmd.backspaceAfterTable),
+  'Delete': chainCommands(cmd.deleteInItem, cmd.deleteBeforeBlock),
 });
 
 // --- The view --------------------------------------------------------------

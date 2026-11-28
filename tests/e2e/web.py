@@ -110,6 +110,8 @@ def brief(node):
         return repr(node['text']) + (f'[{marks}]' if marks else '')
     if kind == 'list_item' and (node.get('attrs') or {}).get('checked') is not None:
         kind = 'done' if node['attrs']['checked'] else 'todo'
+    if kind == 'expand' and (node.get('attrs') or {}).get('open') is False:
+        kind = 'expand[closed]'
     inner = ' '.join(brief(c) for c in node.get('content', []))
     return f'{kind}({inner})'
 

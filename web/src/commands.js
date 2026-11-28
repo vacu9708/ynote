@@ -3,7 +3,7 @@
 import {setBlockType, toggleMark, wrapIn, lift} from 'prosemirror-commands';
 import {wrapInList, liftListItem, sinkListItem, splitListItem} from 'prosemirror-schema-list';
 import {goToNextCell, addRowAfter, isInTable} from 'prosemirror-tables';
-import {TextSelection} from 'prosemirror-state';
+import {Selection, TextSelection} from 'prosemirror-state';
 import {schema} from './schema.js';
 
 const {paragraph, heading, code_block, blockquote, horizontal_rule, bullet_list,
@@ -34,23 +34,74 @@ export function toggleHeading(state, dispatch) {
   return setBlockType(heading)(state, dispatch);
 }
 
-export function toggleCodeBlock(state, dispatch) {
-  if (state.selection.$from.parent.type === code_block) return setBlockType(paragraph)(state, dispatch);
-  const {from, to} = state.selection;
-  // Lines selected over several blocks become one block of code, a line each.
-  if (state.selection.$from.sameParent(state.selection.$to) || !dispatch) {
-    return setBlockType(code_block)(state, dispatch);
-  }
-  const range = state.selection.$from.blockRange(state.selection.$to);
-  if (!range) return false;
-  const lines = [];
-  state.doc.nodesBetween(from, to, node => {
-    if (node.isTextblock) { lines.push(node.textContent); return false; }
-    return true;
+// A line as Markdown, with the marks of its text, as 1.x showed lines made
+// code: **bold**, `code`.
+function inlineMarkdown(block) {
+  let out = '';
+  block.forEach(child => {
+    if (!child.isText) return;
+    let text = child.text;
+    if (child.marks.some(m => m.type === schema.marks.code)) text = '`' + text + '`';
+    if (child.marks.some(m => m.type === schema.marks.strong)) text = '**' + text + '**';
+    out += text;
   });
-  const tr = state.tr.replaceWith(range.start, range.end,
-    code_block.create(null, lines.join('\n') ? schema.text(lines.join('\n')) : null));
-  tr.setSelection(TextSelection.create(tr.doc, range.start + 1 + lines.join('\n').length));
+  return out;
+}
+
+// The lines of the blocks between from and to as Markdown: headings,
+// list items at their levels, to-dos, quotes; code as it is.
+function markdownLines(doc, from, to) {
+  const lines = [];
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isTextblock) return true;
+    const $pos = doc.resolve(pos);
+    if (node.type === code_block) { lines.push(...node.textContent.split('\n')); return false; }
+    let prefix = '';
+    let levels = 0;
+    for (let d = $pos.depth; d > 0; d--) {
+      const anc = $pos.node(d);
+      if (anc.type === bullet_list) levels++;
+      if (anc.type === blockquote) prefix = '> ' + prefix;
+    }
+    const item = $pos.depth > 0 && $pos.parent.type === list_item && $pos.index() === 0 ? $pos.parent : null;
+    if (item) {
+      const box = item.attrs.checked === null ? '' : item.attrs.checked ? '[x] ' : '[ ] ';
+      prefix += '  '.repeat(Math.max(0, levels - 1)) + '- ' + box;
+    } else if (levels) {
+      prefix += '  '.repeat(levels);
+    }
+    if (node.type === heading) prefix += '# ';
+    lines.push(prefix + inlineMarkdown(node));
+    return false;
+  });
+  return lines;
+}
+
+export function toggleCodeBlock(state, dispatch) {
+  const {$from, $to, from, to} = state.selection;
+  // A block of code made plain again: a line for each of its lines, the
+  // Markdown in them kept as text.
+  if ($from.parent.type === code_block && $from.sameParent($to)) {
+    if (!dispatch) return true;
+    const block = $from.parent;
+    const lines = block.textContent.split('\n').map(line =>
+      paragraph.create(null, line ? schema.text(line) : null));
+    const start = $from.before();
+    const tr = state.tr.replaceWith(start, start + block.nodeSize, lines);
+    tr.setSelection(TextSelection.near(tr.doc.resolve(start + 1)));
+    dispatch(tr.scrollIntoView());
+    return true;
+  }
+  // Within one line: that line becomes code.
+  if ($from.parent.isTextblock && $from.sameParent($to)) return setBlockType(code_block)(state, dispatch);
+  // Lines selected over several blocks become one block of code, a line
+  // each, their formats as Markdown, as in 1.x.
+  const range = $from.blockRange($to);
+  if (!range) return false;
+  if (!dispatch) return true;
+  const text = markdownLines(state.doc, from, to).join('\n');
+  const tr = state.tr.replaceWith(range.start, range.end, code_block.create(null, text ? schema.text(text) : null));
+  tr.setSelection(TextSelection.create(tr.doc, range.start + 1 + text.length));
   dispatch(tr.scrollIntoView());
   return true;
 }
@@ -258,6 +309,81 @@ export function leaveTable(state, dispatch) {
 
 export function indentItem(state, dispatch) { return sinkListItem(list_item)(state, dispatch); }
 export function outdentItem(state, dispatch) { return liftListItem(list_item)(state, dispatch); }
+
+// In a table, Tab and Shift+Tab indent and outdent a list item in a cell, as
+// in 1.x; on a first item, which cannot go in, or a top one, which cannot go
+// out, they go on to the next or the cell before.
+function itemInCell(state) {
+  const {$from} = state.selection;
+  let item = -1;
+  for (let d = $from.depth; d > 0; d--) {
+    const type = $from.node(d).type;
+    if (type === list_item && item < 0) item = d;
+    if (type === table_cell || type === table_header) return item > 0 ? {depth: item, cell: d} : null;
+  }
+  return null;
+}
+
+export function indentItemInCell(state, dispatch) {
+  return itemInCell(state) ? sinkListItem(list_item)(state, dispatch) : false;
+}
+
+export function outdentItemInCell(state, dispatch) {
+  const found = itemInCell(state);
+  // Only a nested item: a top one's list is the cell's own.
+  if (!found || found.depth - 2 <= found.cell) return false;
+  return liftListItem(list_item)(state, dispatch);
+}
+
+// Backspace at the start of the line after a table goes into its last cell,
+// as in 1.x, taking the line away when it is empty; the default selected
+// the whole table, and typing then emptied every cell.
+export function backspaceAfterTable(state, dispatch) {
+  const {$cursor} = state.selection;
+  if (!$cursor || $cursor.parentOffset || $cursor.depth < 1) return false;
+  const before = state.doc.resolve($cursor.before()).nodeBefore;
+  if (!before || before.type !== table) return false;
+  if (dispatch) {
+    const tr = state.tr;
+    const line = $cursor.before();
+    if (!$cursor.parent.content.size) tr.delete(line, $cursor.after());
+    tr.setSelection(Selection.findFrom(tr.doc.resolve(line - 1), -1, true) || tr.selection);
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+// Delete at the end of a line does nothing before a table, which it would
+// select, nor at the end of an expand's last line, which it would join the
+// line after into: as in 1.x.
+export function deleteBeforeBlock(state) {
+  const {$cursor} = state.selection;
+  if (!$cursor || $cursor.parentOffset !== $cursor.parent.content.size || $cursor.depth < 1) return false;
+  const after = state.doc.resolve($cursor.after()).nodeAfter;
+  if (after && after.type === table) return true;
+  const parent = $cursor.node(-1);
+  return parent.type === expand && $cursor.index(-1) === parent.childCount - 1;
+}
+
+// Up and Down, Left and Right, over a divider go on past it, as in 1.x,
+// rather than selecting it, where typing would replace it.
+export function skipDivider(dir) {
+  return (state, dispatch, view) => {
+    const {$head, empty} = state.selection;
+    if (!empty || !$head.parent.isTextblock || $head.depth < 1) return false;
+    if (view && !view.endOfTextblock(dir)) return false;
+    const forward = dir === 'down' || dir === 'right';
+    const edge = forward ? $head.after() : $head.before();
+    const $edge = state.doc.resolve(edge);
+    const next = forward ? $edge.nodeAfter : $edge.nodeBefore;
+    if (!next || next.type !== horizontal_rule) return false;
+    const beyond = forward ? edge + next.nodeSize : edge - next.nodeSize;
+    const sel = Selection.findFrom(state.doc.resolve(beyond), forward ? 1 : -1, true);
+    if (!sel) return true;
+    if (dispatch) dispatch(state.tr.setSelection(sel).scrollIntoView());
+    return true;
+  };
+}
 
 // Enter in a list: a new item of the same kind, an open to-do after a done
 // one. An empty item ends the list (splitListItem lifts it).
