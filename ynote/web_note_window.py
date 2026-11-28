@@ -369,7 +369,9 @@ class WebNoteWindow(Gtk.ApplicationWindow):
     def paste(self, plain=False):
         rich = None if plain else self.app.rich_clipboard_state()
         if rich and rich.get('slice'):
-            call_js(self.view, 'ynote.pasteSlice', rich['slice'], None)
+            # Code takes the text other apps get: a table as a Markdown
+            # table, not each cell's text on a line of its own.
+            call_js(self.view, 'ynote.pasteSlice', rich['slice'], self.app.rich_clipboard_text())
             return
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         if not plain and self._paste_clipboard_image(clipboard):

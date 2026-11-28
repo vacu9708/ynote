@@ -60,6 +60,7 @@ class PostItApp(Gtk.Application):
         # amount for (scroll_amount()).
         self._last_scroll = 1
         self._rich_clipboard = None
+        self._rich_clipboard_text = None
         self._rich_clipboard_owned = False
         self._ignore_next_clipboard_owner_change = False
         # Set when notes.json could not be read. Its images must survive until
@@ -646,6 +647,7 @@ class PostItApp(Gtk.Application):
             text = state.get('text', '').replace(CODE_ANCHOR, '')
             text = text.replace(CODE_PAD_CHAR, '').replace(TABLE_MARKER, '')
             text = text.replace(EXPAND_END, '')
+        self._rich_clipboard_text = text
         clipboard.set_text(text, -1)
         GLib.idle_add(self._finish_rich_clipboard_claim)
 
@@ -658,12 +660,19 @@ class PostItApp(Gtk.Application):
             self._ignore_next_clipboard_owner_change = False
             return
         self._rich_clipboard = None
+        self._rich_clipboard_text = None
         self._rich_clipboard_owned = False
 
     def rich_clipboard_state(self):
         if not self._rich_clipboard_owned:
             return None
         return self._rich_clipboard
+
+    def rich_clipboard_text(self):
+        """The text other apps get for what a note copied."""
+        if not self._rich_clipboard_owned:
+            return None
+        return getattr(self, '_rich_clipboard_text', None)
 
     def _warn_unreadable_notes(self, kept):
         open_folder = 1

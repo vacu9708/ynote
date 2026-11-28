@@ -55,8 +55,9 @@ window.ynote = {
   },
   // A fragment of a note, or Markdown read into blocks. Into code it goes as
   // its text alone, as code takes no formats.
-  // raw, when given, is the text the fragment was read from, which code
-  // takes as it is.
+  // raw, when given, is the text the fragment was read from, or the
+  // Markdown other apps get for what a note copied, which code takes as it
+  // is: a table goes in as a Markdown table.
   pasteSlice(json, raw) {
     editor.run((state, dispatch) => {
       const slice = Slice.fromJSON(schema, json);

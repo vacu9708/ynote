@@ -121,6 +121,25 @@ def test_V9_markdown_pasted_into_code_stays_as_it_is(app, inp):
     assert_saved(app, "code_block('x**a** `b`') paragraph()")
 
 
+def test_V11_a_table_copied_in_a_note_pastes_into_code_as_markdown(app, inp):
+    rows = [[{'text': 'k'}, {'text': 'v'}], [{'text': 'a'}, {'text': 'b'}]]
+    app.write_notes([
+        {'id': 'test', 'title': 'test', 'text': '\ufffc', 'tables': [{'offset': 0, 'rows': rows}],
+         'x': 100, 'y': 80, 'w': 420, 'h': 420},
+        {'id': 'other', 'title': 'other', 'text': 'x', 'code_ranges': [[0, 1]],
+         'x': 560, 'y': 80, 'w': 420, 'h': 420}])
+    app.start()
+    first, other = WebNote(app, app.note('test').frame), WebNote(app, app.note('other').frame)
+    first.click_text(10, 8)
+    inp.key('ctrl+a')
+    table = copied(app, inp)
+    assert table == '| k | v |\n| --- | --- |\n| a | b |'
+    other.click_text(30, 8)
+    inp.key('end')
+    inp.key('ctrl+v')
+    assert_saved(app, f"code_block({'x' + table!r}) paragraph()", note_id='other')
+
+
 def test_V10_copy_as_markdown_copies_the_whole_note(app, inp):
     start(app, 'Title\nbody', heading_ranges=[[0, 5]])
     assert copied(app, inp, 'ctrl+shift+m') == '# Title\nbody'

@@ -146,7 +146,7 @@ two monitors (D4, D9: much effort for little).
 - I3 A double click in a code block selects its line; a triple click, the whole block (U1, U2)
 - I4 Enter on an empty line of code makes another line of code, as in Confluence (U12)
 - I5 Text typed over a selection in a code block stays code (U1)
-- I6 A paste into code takes the text as it is, without reading Markdown (V9)
+- I6 A paste into code takes the text as it is, without reading Markdown (V9); what a note copied goes in as its Markdown (V11)
 - I7 Lines with formats made one code block show their Markdown (`# Title`, `**bold**`, `- item`); Ctrl+Z brings them back in one step
 - I8 Lines already code stay as they are; lines with an image are not made code, which would lose it
 - I9 A code block made plain again keeps its lines, the Markdown in them as text
@@ -351,6 +351,7 @@ Markdown on the clipboard; the right-click menu does the same.
 - V8 Cut and paste brings everything back, tables and expands included
 - V9 Markdown pasted into code goes in as it is
 - V10 Copy as Markdown (Ctrl+Shift+M, or the note menu) copies the whole note as Markdown, wherever the cursor is
+- V11 What a note copied pastes into code as the Markdown other apps get: a table as a Markdown table, not a line for each cell
 
 ## X. A note among other windows
 
