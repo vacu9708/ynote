@@ -25,6 +25,6 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends locales
 ENV LANG=en_US.UTF-8
 # GNOME's window manager, headless with Xwayland, for what only it does
 # (gnome.py), and xprop to read what it did: python-xlib fails on a second
-# display.
-RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends mutter xwayland x11-utils \
+# display. xcompmgr composites the README pictures (tools/readme_screenshot.sh).
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends mutter xwayland x11-utils xcompmgr \
     && rm -rf /var/lib/apt/lists/*

@@ -19,9 +19,10 @@ holds what those don't: how the user wants the work done.
   line rather than adding a bullet; leave out what the UI shows (menus,
   tooltips) and what the keyboard shortcuts list. The one hidden thing it
   keeps is the way to them: F1. Re-read the whole README after editing it.
-- **The README pictures show as much of what Ynote does as they can**: every
-  element a note holds, colors, the note menu, find, hidden notes.
-  A new feature goes into them (`tools/readme_screenshot.py`).
+- **The README pictures show as much of what Ynote does as they can, in few
+  pictures, none repeating another**: every element a note holds, colors,
+  find across notes, Markdown out. Show what notes hold, not menus. A new
+  feature goes into them (`tools/readme_screenshot.py`).
 - **The keyboard shortcuts** (F1, `menus.helpPage()`) are made from the
   actions (`web/src/actions.js`): every action with keys or Markdown. The
   README does not list shortcuts; tooltips and menus show each action's.

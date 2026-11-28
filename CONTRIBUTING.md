@@ -110,15 +110,17 @@ also what the keyboard shortcuts (F1) and `ynote --version` show.
 
 ## README Pictures
 
-`assets/ynote-screenshot.png` and `assets/feature-*.png` are rendered from
+`assets/ynote-screenshot.png` and `assets/ynote-features.png` are rendered from
 the real app, so regenerate them after any visible UI change:
 
 ```bash
-dbus-run-session -- xvfb-run -a -s "-screen 0 5200x4000x24" \
-    python3 tools/readme_screenshot.py
+tools/readme_screenshot.sh
 ```
+
+It runs `tools/readme_screenshot.py` in the end-to-end test image, under a
+compositing manager, so a see-through note shows what is behind it.
 
 The sample notes, and what each picture opens, are defined in
 `tools/readme_screenshot.py`. They show as much of what Ynote does as they
-can: a new feature goes into them. The README and the project page,
-`docs/index.html`, show the same pictures.
+can, and none repeats another: a new feature goes into them. The README and
+the project page, `docs/index.html`, show the same pictures.

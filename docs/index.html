@@ -98,13 +98,8 @@ pre {
 }
 code { font-family: "Ubuntu Mono", "DejaVu Sans Mono", ui-monospace, monospace; }
 footer { padding: 32px 0 56px; color: var(--muted); border-top: 1px solid var(--border); font-size: 0.95rem; }
-.gallery { display: grid; gap: 20px; }
-.gallery figure { margin: 0; }
-.gallery figcaption strong { color: var(--text); }
 @media (min-width: 720px) {
   ul.features { grid-template-columns: 1fr 1fr; }
-  .gallery { grid-template-columns: 1fr 1fr; }
-  .gallery .wide { grid-column: 1 / -1; }
 }
 </style>
 </head>
@@ -125,34 +120,27 @@ footer { padding: 32px 0 56px; color: var(--muted); border-top: 1px solid var(--
       <figure>
         <img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/ynote-screenshot.png"
              alt="Three Ynote notes: a pinned note debugging a 502 error with a code block and a log screenshot, a note with a table and expands, and a to-do list with a link">
-        <figcaption>Headings, code blocks, images, lists, tables, expands, quotes, links, and emoji, in notes of seven colors.</figcaption>
+        <figcaption>Headings, code blocks, images, lists, tables, expands, quotes, links, and emoji.</figcaption>
       </figure>
     </section>
 
     <section>
-      <h2>What it does</h2>
-      <div class="gallery">
-        <figure><img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/feature-slash.png" alt="The / menu open in a note, listing everything that can be inserted with its Markdown and keys">
-          <figcaption><strong>Type / to insert anything</strong>, or Markdown such as <code>**bold**</code>, <code>- </code>, and <code>```</code>.</figcaption></figure>
-        <figure><img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/feature-table.png" alt="A table in a note with its right-click menu of rows and columns">
-          <figcaption><strong>Tables</strong> whose cells hold lists, code, and formats; right-click for rows and columns.</figcaption></figure>
-        <figure><img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/feature-find.png" alt="Find in a note with All notes on, listing matches in hidden notes">
-          <figcaption><strong>Find in every note</strong>, hidden ones too, plain or as a regular expression.</figcaption></figure>
-        <figure><img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/feature-hidden.png" alt="The hidden notes listed below a note, each a card of its color">
-          <figcaption><strong>Hidden notes</strong> stay out of the way until you need them.</figcaption></figure>
-        <figure><img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/feature-menu.png" alt="A note's menu with colors, opacity, and font size">
-          <figcaption><strong>Seven colors, opacity, and font size</strong>; pin a note on top or collapse it to its title bar.</figcaption></figure>
-        <figure><img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/feature-emoji.png" alt="The emoji picker with a field to find emoji by name">
-          <figcaption><strong>Emoji</strong> found by name, the ones you use first.</figcaption></figure>
-        <figure class="wide"><img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/feature-shortcuts.png" alt="The keyboard shortcuts in two columns">
-          <figcaption><strong>Every action has a key</strong>: press F1 in a note for the list.</figcaption></figure>
-      </div>
+      <ul class="features">
+        <li><strong>Everything a note needs</strong><span>Code blocks you copy one command at a time (double-click its line), tables whose cells hold lists and code, expands that fold away, checklists, headings, links, emoji, and pasted images.</span></li>
+        <li><strong>Type / to insert anything</strong><span>Or Markdown such as <code>**bold**</code> and <code>- </code>; Ctrl+. finds an emoji by name, and F1 lists every key.</span></li>
+      </ul>
     </section>
 
     <section>
+      <figure>
+        <img src="https://raw.githubusercontent.com/vacu9708/ynote/main/assets/ynote-features.png"
+             alt="Find with All notes on, listing matches in hidden notes; a note beside the Markdown it copies as; the / menu open; a collapsed note; and a see-through note over a terminal">
+        <figcaption>Find in every note, Markdown out, the / menu, a collapsed note, and a see-through one.</figcaption>
+      </figure>
       <ul class="features">
-        <li><strong>Markdown in and out</strong><span>Copied text goes to other apps as Markdown, and code alone as it is, ready for a terminal. Pasted Markdown keeps its formats.</span></li>
-        <li><strong>Code blocks</strong><span>Copy one command at a time: double-click its line, or use the block's Copy button.</span></li>
+        <li><strong>Find in every note</strong><span>Hidden ones too, plain or as a regular expression: hidden notes stay out of the way and work as runbooks.</span></li>
+        <li><strong>Markdown in and out</strong><span>Copy to other apps as Markdown, and code alone as it is, ready for a terminal. Pasted Markdown keeps its formats.</span></li>
+        <li><strong>Colors and always on top</strong><span>Seven colors, see-through down to the title bar; pin a note on top, or collapse it to its title bar.</span></li>
         <li><strong>Arrange from the keyboard</strong><span>Snap notes into half-screen columns with Alt and the arrows, and step through them with Alt and the wheel.</span></li>
         <li><strong>Local and private</strong><span>Notes save as you type, in <code>~/.config/ynote/</code>. Nothing is uploaded.</span></li>
       </ul>
