@@ -332,3 +332,19 @@ Where 2.0 follows Confluence over 1.x, the item says so.
 - U16 Find's All notes (Alt+A) lists the matches in every note, hidden ones too, and Enter shows the note chosen
 - U17 The note menu holds nothing a title bar button does
 - U18 Down from a table's last row in an expand goes below the expand, as in Confluence
+
+## V. Copy and paste in a 2.0 note
+
+As in 1.x (N). Ctrl+C, X, and V in the text are the window's, which puts
+Markdown on the clipboard; the right-click menu does the same.
+
+- V1 Copied text goes to other apps as the Markdown 1.x gives the same note: headings, bold, inline code, code, lists and their levels, to-dos, quotes, dividers, expands, tables
+- V2 Code alone is copied as it is, without fences
+- V3 A paste into another note keeps everything as it was
+- V4 Once another app takes the clipboard, its text is pasted, not Ynote's copy
+- V5 Markdown from another app pastes in with its formats: headings, bold, code, to-dos, tables
+- V6 A list pasted after text starts a line of its own
+- V7 Ctrl+Shift+V pastes the text alone, a line for each line, without reading Markdown
+- V8 Cut and paste brings everything back, tables and expands included
+- V9 Markdown pasted into code goes in as it is
+- V10 Copy as Markdown (Ctrl+Shift+M, or the note menu) copies the whole note as Markdown, wherever the cursor is

@@ -400,7 +400,7 @@ export function setupChrome(editor, post) {
     if (menu.name === 'context') {
       if (id === 'open-link') post({type: 'open-link', url: menu.link});
       else if (id === 'copy-link') post({type: 'copy-text', text: menu.link});
-      else if (['cut', 'copy', 'paste', 'paste-plain'].includes(id)) post({type: 'edit', command: id});
+      else if (['cut', 'copy', 'paste', 'paste-plain'].includes(id)) window.ynote.clipboard(id);
       else if (menus.TABLE_ACTIONS[id]) editor.run(menus.TABLE_ACTIONS[id]);
       return;
     }
@@ -423,6 +423,7 @@ export function setupChrome(editor, post) {
     else if (ctrl && !event.shiftKey && key === 'n') id = 'new-note';
     else if (ctrl && !event.shiftKey && key === 'w') id = 'hide';
     else if (ctrl && !event.shiftKey && key === 'f') id = 'find';
+    else if (ctrl && event.shiftKey && key === 'm') id = 'copy-markdown';
     else if (event.key === 'Escape' && !findBar.hidden) { event.preventDefault(); closeFind(); return; }
     else if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
       event.preventDefault();

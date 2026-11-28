@@ -326,3 +326,134 @@ def doc_text(doc):
 
     walk(doc, None)
     return '\n'.join(lines)
+
+
+# --- From a 2.0 document back to a rich state, for markdown.py --------------
+
+_WRAP = {'list_item': 'bullet_list', 'table_row': 'table', 'table_cell': 'table_row',
+         'table_header': 'table_row'}
+
+
+def _blocks_of(nodes):
+    """Top-level nodes of a fragment as blocks: a list item, a row, or a cell
+    copied alone is wrapped as in a note, and an expand's title is a line."""
+    out = []
+    for node in nodes:
+        kind = node.get('type')
+        while kind in _WRAP:
+            node = {'type': _WRAP[kind], 'content': [node]}
+            kind = node['type']
+        if kind == 'expand_title':
+            node = dict(node, type='paragraph')
+        if kind == 'text' or kind == 'image':
+            node = {'type': 'paragraph', 'content': [node]}
+        out.append(node)
+    return out
+
+
+class _StateBuilder:
+    """The text, ranges, images, and tables of a rich state, line by line."""
+
+    def __init__(self, allow_tables=True):
+        self.text = ''
+        self.bold, self.heading, self.code, self.backtick = [], [], [], []
+        self.images, self.tables = [], []
+        self.allow_tables = allow_tables
+        self.lines = 0
+
+    def _newline(self):
+        if self.lines:
+            self.text += '\n'
+        self.lines += 1
+
+    def inline(self, nodes):
+        for node in nodes or []:
+            if node.get('type') == 'image':
+                attrs = node.get('attrs') or {}
+                self.images.append({'file': attrs.get('file', ''),
+                                    'original_name': attrs.get('name', ''),
+                                    'offset': len(self.text)})
+                self.text += IMAGE_ANCHOR
+                continue
+            text = node.get('text', '')
+            start, end = len(self.text), len(self.text) + len(text)
+            self.text += text
+            marks = {m.get('type') for m in node.get('marks') or []}
+            if 'strong' in marks:
+                self.bold.append([start, end])
+            if 'code' in marks:
+                self.backtick.append([start, end])
+
+    def line(self, prefix='', nodes=(), heading=False):
+        self._newline()
+        start = len(self.text)
+        self.text += prefix
+        self.inline(nodes)
+        if heading and len(self.text) > start:
+            self.heading.append([start, len(self.text)])
+
+    def block(self, node, level=0, quote=False):
+        kind = node.get('type')
+        content = node.get('content') or []
+        if kind in ('paragraph', 'expand_title'):
+            self.line(('\t' * level + QUOTE_MARKER) if quote else '', content)
+        elif kind == 'heading':
+            self.line('', content, heading=True)
+        elif kind == 'code_block':
+            text = ''.join(c.get('text', '') for c in content)
+            for code_line in text.split('\n'):
+                self._newline()
+                start = len(self.text)
+                self.text += code_line or CODE_ANCHOR
+                self.code.append([start, len(self.text)])
+        elif kind == 'horizontal_rule':
+            self.line(DIVIDER_TEXT)
+        elif kind == 'blockquote':
+            for child in content:
+                self.block(child, level, quote=True)
+        elif kind == 'bullet_list':
+            for item in content:
+                checked = (item.get('attrs') or {}).get('checked')
+                marker = BULLET_MARKER if checked is None else (
+                    CHECKED_MARKER if checked else CHECKBOX_MARKER)
+                for i, child in enumerate(item.get('content') or []):
+                    if child.get('type') == 'paragraph':
+                        self.line('\t' * level + (marker if i == 0 else BULLET_MARKER),
+                                  child.get('content'))
+                    elif child.get('type') == 'bullet_list':
+                        self.block(child, level + 1)
+                    else:
+                        self.block(child, level)
+        elif kind == 'expand':
+            is_open = (node.get('attrs') or {}).get('open', True)
+            title, *body = content or [{}]
+            self.line(EXPAND_OPEN if is_open else EXPAND_CLOSED, title.get('content'))
+            for child in body:
+                self.block(child)
+            self.line(EXPAND_END)
+        elif kind == 'table':
+            rows = []
+            for row in content:
+                rows.append([state_of(cell.get('content') or [], allow_tables=False)
+                             for cell in row.get('content') or []])
+            self._newline()
+            if self.allow_tables:
+                self.tables.append({'offset': len(self.text), 'rows': rows})
+                self.text += IMAGE_ANCHOR
+        else:
+            for child in content:
+                self.block(child, level, quote)
+
+    def state(self):
+        return {'text': self.text, 'bold': self.bold, 'heading': self.heading,
+                'code': self.code, 'backtick': self.backtick,
+                'images': self.images, 'tables': self.tables}
+
+
+def state_of(nodes, allow_tables=True):
+    """The rich state of a list of blocks, or of a fragment's top nodes, as
+    1.x's clipboard and markdown.py take it."""
+    builder = _StateBuilder(allow_tables)
+    for node in _blocks_of(nodes):
+        builder.block(node)
+    return builder.state()

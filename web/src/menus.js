@@ -26,6 +26,7 @@ export function noteMenu(ctx, props) {
     {sep: true},
     row('new-note'),
     row('rename'),
+    row('copy-markdown'),
     row('delete'),
     {sep: true},
     row('hidden-notes', {md: String(props.hiddenCount || 0)}),

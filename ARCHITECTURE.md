@@ -407,7 +407,7 @@ design. The GTK window stays, frameless, for what only a window can do.
 | `ynote/web_popup.py`, `ynote/web/menu.html` | The popup window that shows every note's menus, so a menu may reach past its note. Opened by a click or key, it takes the mouse and keyboard as a GTK menu does. |
 | `ynote/web_view.py` | Makes the web views: one web process for all, a content manager each, nothing navigating away. |
 | `web/src/` | The pages' code, bundled by `web/build.sh` into `ynote/web/note.js` and `menu.js`: `actions.js` (every action once: name, icon, Markdown, keys), `schema.js` (what a note holds), `editor.js` (keys, typed Markdown), `commands.js` (editing), `views.js` (expand, to-do, and code block buttons), `links.js`, `find.js` (Ctrl+F), `menus.js` (what each menu holds), `chrome.js` (the bars, the find bar, the menus' coming and going), `note.js` (`window.ynote`), `menu.js` (the menu page). |
-| `ynote/convert.py` | Turns a 1.x note, text with ranges, into a 2.0 document, and a document into plain text for search. |
+| `ynote/convert.py` | Turns a 1.x note, text with ranges, into a 2.0 document, a document into plain text for search, and a document's blocks back into a 1.x rich state for `markdown.py`. |
 
 - **Content.** A note is saved as its ProseMirror document's JSON, in its
   `doc` field, in place of `text` and the ranges. A note without `doc` is a
@@ -462,9 +462,18 @@ design. The GTK window stays, frameless, for what only a window can do.
   a note loads: a table's first row its header, and a line at the end of the
   note, so the cursor can go below anything. Typing in an empty header cell
   starts bold; a double click in code selects a line, a triple the block.
-- **Images.** Ctrl+V with an image on the clipboard is taken by the window
-  before the page sees it: the image is saved as a PNG in `images/` and put
-  at the cursor.
+- **Copy and paste.** As in 1.x, the window keeps the clipboard. The page
+  takes Ctrl+C, X, V, and Shift+V in its keymap, in turn with the keys
+  before them, and posts `clipboard` with what is selected, as a ProseMirror
+  slice. The window turns it into a 1.x rich state (`convert.state_of()`),
+  puts its Markdown on the clipboard (`markdown.to_markdown()`), or its text
+  when it is all code, and keeps the slice, which a paste into a note uses
+  while Ynote still owns the clipboard. Text from another app is read as
+  Markdown (`markdown.from_markdown()`, then `convert.state_blocks()`) and
+  pasted as a slice, open at a paragraph at either end so it joins the line;
+  into code it goes as it is. Shift+V pastes a line for each line.
+- **Images.** A paste with an image on the clipboard saves it as a PNG in
+  `images/` and puts it at the cursor.
 - **Find.** A ProseMirror plugin (`find.js`) lights the matches of each block's
   text, plain or as a regular expression. The current match's folded
   expands open while it is current (not an undo step), and the others fold

@@ -83,6 +83,13 @@ export const ACTIONS = [
   {id: 'new-note', group: 'Notes', label: 'New note', icon: 'plus', keys: ['Ctrl', 'N'], window: true},
   {id: 'rename', group: 'Notes', label: 'Rename', icon: 'rename', keys: ['F2'],
     run: ({chrome}) => { chrome.editTitle(); return true; }, enabled: () => true},
+  // The whole note, for a pull request, a ticket, or a chat.
+  {id: 'copy-markdown', group: 'Notes', label: 'Copy as Markdown', icon: 'markdown', keys: ['Ctrl', '⇧', 'M'],
+    run: ({state, post}) => {
+      post({type: 'clipboard', command: 'copy', slice: state.doc.slice(0, state.doc.content.size).toJSON()});
+      return true;
+    },
+    enabled: () => true},
   {id: 'find', group: 'Notes', label: 'Find', icon: 'search', keys: ['Ctrl', 'F'],
     run: ({chrome}) => { chrome.openFind(); return true; }, enabled: () => true},
   {id: 'collapse', group: 'Notes', label: 'Collapse', icon: 'down', window: true},

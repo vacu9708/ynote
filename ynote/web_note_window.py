@@ -27,6 +27,8 @@ from .snap import snap_rect
 from .styles import PALETTE
 from .web_popup import popup
 from .web_view import call_js, new_web_view, page_uri, run_js, unhandled
+from .convert import state_blocks, state_of
+from .markdown import from_markdown, is_all_code, to_markdown
 
 PAGE_URI = page_uri('note.html')
 IMAGES_URI = GLib.filename_to_uri(IMAGES_DIR, None) + '/'
@@ -34,14 +36,6 @@ IMAGES_URI = GLib.filename_to_uri(IMAGES_DIR, None) + '/'
 # As tall as the page's title bar (--bar-h in note.css): a collapsed note.
 TITLE_BAR_HEIGHT = 34
 
-# What the context menu's editing items ask of WebKit, which runs them as the
-# keys would, through the page's own copy and paste.
-EDITING = {
-    'cut': WebKit2.EDITING_COMMAND_CUT,
-    'copy': WebKit2.EDITING_COMMAND_COPY,
-    'paste': WebKit2.EDITING_COMMAND_PASTE,
-    'paste-plain': WebKit2.EDITING_COMMAND_PASTE_AS_PLAIN_TEXT,
-}
 
 # The page's resize edges, by the names it sends.
 EDGES = {
@@ -278,10 +272,45 @@ class WebNoteWindow(Gtk.ApplicationWindow):
     def _do_quit(self, _message):
         self.app.quit_app()
 
-    def _do_edit(self, message):
-        command = EDITING.get(message.get('command'))
-        if command:
-            self.view.execute_editing_command(command)
+    def _do_clipboard(self, message):
+        command = message.get('command')
+        if command in ('copy', 'cut'):
+            self.copy(message.get('slice') or {})
+        elif command in ('paste', 'paste-plain'):
+            self.paste(plain=command == 'paste-plain')
+
+    # --- the clipboard, as in 1.x: other apps get Markdown, or code as it
+    # is; a note gets what was copied exactly, while Ynote still owns the
+    # clipboard. Markdown from another app pastes in with its formats.
+
+    def copy(self, fragment):
+        """Keep what the page copied for a paste into a note, and put it on
+        the clipboard as Markdown, or as it is when it is all code."""
+        state = state_of(fragment.get('content') or [])
+        markdown = None if is_all_code(state) else to_markdown(state).rstrip('\n')
+        self.app.set_rich_clipboard(dict(state, slice=fragment), markdown)
+
+    def paste(self, plain=False):
+        rich = None if plain else self.app.rich_clipboard_state()
+        if rich and rich.get('slice'):
+            call_js(self.view, 'ynote.pasteSlice', rich['slice'], None)
+            return
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        if not plain and self._paste_clipboard_image(clipboard):
+            return
+        text = clipboard.wait_for_text()
+        if not text:
+            return
+        if plain:
+            call_js(self.view, 'ynote.pasteText', text)
+            return
+        blocks = state_blocks(from_markdown(text)) or [{'type': 'paragraph'}]
+        # A paragraph at either end joins the line it is pasted into; a list,
+        # heading, or code block there starts a line of its own.
+        open_start = 1 if blocks[0]['type'] == 'paragraph' else 0
+        open_end = 1 if blocks[-1]['type'] == 'paragraph' else 0
+        call_js(self.view, 'ynote.pasteSlice',
+                {'content': blocks, 'openStart': open_start, 'openEnd': open_end}, text)
 
     def _do_copy_text(self, message):
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
@@ -407,8 +436,6 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         return True
 
     def _on_key_press(self, _window, event):
-        if self._paste_image(event):
-            return True
         # Alt + arrow snaps the note into a column (see snap.py).
         key = SNAP_KEYS.get(event.keyval)
         if key is None or not _alt_only(event):
@@ -419,13 +446,9 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self._snap_to(self._snap_held)
         return True
 
-    def _paste_image(self, event):
-        """Ctrl+V with an image on the clipboard, such as a screenshot, puts
-        a copy of it in the images folder and the image at the cursor."""
-        mods = event.state & Gtk.accelerator_get_default_mod_mask()
-        if mods != Gdk.ModifierType.CONTROL_MASK or event.keyval not in (Gdk.KEY_v, Gdk.KEY_V):
-            return False
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+    def _paste_clipboard_image(self, clipboard):
+        """An image on the clipboard, such as a screenshot: a copy of it goes
+        in the images folder and the image at the cursor."""
         if not clipboard.wait_is_image_available():
             return False
         pixbuf = clipboard.wait_for_image()

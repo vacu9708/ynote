@@ -174,3 +174,52 @@ def test_doc_text_for_search():
 def test_doc_text_puts_table_cells_on_one_line():
     tables = [{'offset': 0, 'rows': [[{'text': 'a'}, {'text': 'b\nc'}]]}]
     assert doc_text(note_doc({'text': IMAGE_ANCHOR, 'tables': tables})) == 'a\tb c'
+
+
+# ---------------------------------------------------------------- state_of
+
+from ynote.convert import state_blocks, state_of  # noqa: E402
+from ynote.markdown import from_markdown, to_markdown  # noqa: E402
+
+
+def roundtrip(text, **ranges):
+    note = {'text': text}
+    note.update(ranges)
+    return state_of(note_doc(note)['content'])
+
+
+def test_state_of_gives_back_text_and_ranges():
+    state = roundtrip('Title\na bold x', heading_ranges=[[0, 5]], bold_ranges=[[8, 12]])
+    assert state['text'] == 'Title\na bold x'
+    assert state['heading'] == [[0, 5]] and state['bold'] == [[8, 12]]
+
+
+def test_state_of_lists_quotes_code_and_expands():
+    text = '\n'.join([BULLET_MARKER + 'a', '\t' + CHECKBOX_MARKER + 'b', QUOTE_MARKER + 'q',
+                      EXPAND_OPEN + 'T', 'in', EXPAND_END])
+    assert roundtrip(text)['text'] == text
+    state = roundtrip('ls\n' + CODE_ANCHOR, code_ranges=[[0, 4]])
+    assert state['text'] == 'ls\n' + CODE_ANCHOR and state['code'] == [[0, 2], [3, 4]]
+
+
+def test_state_of_wraps_a_lone_list_item_and_row():
+    item = {'type': 'list_item', 'attrs': {'checked': True},
+            'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': 'x'}]}]}
+    assert state_of([item])['text'] == CHECKED_MARKER + 'x'
+
+
+def test_markdown_out_and_back_in():
+    text = '\n'.join(['Title', BULLET_MARKER + 'item', CHECKED_MARKER + 'done'])
+    doc = note_doc({'text': text, 'heading_ranges': [[0, 5]]})
+    markdown = to_markdown(state_of(doc['content']))
+    assert markdown == '# Title\n- item\n- [x] done'
+    back = state_blocks(from_markdown(markdown))
+    assert [b['type'] for b in back] == ['heading', 'bullet_list']
+    assert [i['attrs']['checked'] for i in back[1]['content']] == [None, True]
+
+
+def test_a_table_goes_out_as_a_markdown_table():
+    tables = [{'offset': 0, 'rows': [[{'text': 'k', 'bold': [[0, 1]]}, {'text': 'v'}],
+                                     [{'text': 'a|b'}, {'text': 'c'}]]}]
+    doc = note_doc({'text': IMAGE_ANCHOR, 'tables': tables})
+    assert to_markdown(state_of(doc['content'])) == '| k | v |\n| --- | --- |\n| a\\|b | c |'

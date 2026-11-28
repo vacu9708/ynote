@@ -172,7 +172,16 @@ const placeholder = new Plugin({props: {decorations(state) {
   return DecorationSet.create(doc, [Decoration.node(0, doc.firstChild.nodeSize, {class: 'empty', 'data-placeholder': PLACEHOLDER})]);
 }}});
 
-export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy, onSlashKey}) {
+export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy, onSlashKey, onClipboard}) {
+  // Copy, cut, and paste go to the app, which puts Markdown on the
+  // clipboard; handled here, in turn with the keys before them, so a copy
+  // right after Ctrl+A copies what it selected.
+  const clipboardKeys = keymap({
+    'Mod-c': () => { onClipboard('copy'); return true; },
+    'Mod-x': () => { onClipboard('cut'); return true; },
+    'Mod-v': () => { onClipboard('paste'); return true; },
+    'Shift-Mod-v': () => { onClipboard('paste-plain'); return true; },
+  });
   const changes = new Plugin({
     view: () => ({
       update(view, prev) {
@@ -181,7 +190,7 @@ export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy, onSl
     }),
   });
   const plugins = [
-    slashPlugin(key => onSlashKey(key)), rules, keys, keymap(baseKeymap),
+    slashPlugin(key => onSlashKey(key)), clipboardKeys, rules, keys, keymap(baseKeymap),
     history(), tableEditing(), gapCursor(), dropCursor({color: '#2D6BE0', width: 2}),
     linksPlugin(onOpenLink), placeholder, findPlugin, structurePlugin, headerBoldPlugin, codeClicksPlugin,
     changes,
