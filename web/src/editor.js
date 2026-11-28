@@ -189,7 +189,7 @@ const keys = keymap({
   'ArrowDown': outOfCode('down'),
   'ArrowRight': chainCommands(rightOutOfCode, rightOutOfTable),
   'ArrowUp': outOfCode('up'),
-  'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand, cmd.backspaceAfterTable),
+  'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand, cmd.backspaceAfterList, cmd.backspaceAfterTable),
   'Delete': cmd.deleteInItem,
 });
 

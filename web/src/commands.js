@@ -339,6 +339,28 @@ export function outdentItemInCell(state, dispatch) {
   return liftListItem(list_item)(state, dispatch);
 }
 
+// Backspace at the start of the line after a list joins the line to its
+// last item's text, as in Confluence. ProseMirror's own made the line an
+// item again, which the next Backspace took back out, and so on: an empty
+// last item came and went while Backspace was held.
+export function backspaceAfterList(state, dispatch) {
+  const {$cursor} = state.selection;
+  if (!$cursor || $cursor.parentOffset || $cursor.depth < 1 || $cursor.parent.type !== paragraph) return false;
+  const start = $cursor.before();
+  const before = state.doc.resolve(start).nodeBefore;
+  if (!before || before.type !== bullet_list) return false;
+  const target = Selection.findFrom(state.doc.resolve(start), -1, true);
+  if (!target) return false;
+  if (dispatch) {
+    const at = target.from;
+    const tr = state.tr.delete(start, $cursor.after());
+    tr.insert(at, $cursor.parent.content);
+    tr.setSelection(TextSelection.create(tr.doc, at));
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
 // Backspace at the start of the line after a table goes into its last cell,
 // as in 1.x, taking the line away when it is empty; the default selected
 // the whole table, and typing then emptied every cell.

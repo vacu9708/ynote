@@ -141,6 +141,14 @@ CASES = {
     'G6 Backspace at a nested item start outdents it': (
         (B + 'a\n\t' + B + 'b',), {}, ['^down', '^home', '^backspace'],
         "bullet_list(" + item("'a'") + " " + item("'b'") + ") paragraph()"),
+    'G6b Backspace on an empty last item, held, ends the list once and goes to the item before': (
+        (B + 'one\n' + B + 'tw',), {}, ['^down', '^end', '^backspace', '^backspace', '^backspace', '^backspace', 'X'],
+        "bullet_list(" + item("'oneX'") + ") paragraph()"),
+    'G6b the same in a checklist': (
+        (TODO + 'one\n' + TODO + 'tw',), {}, ['^down', '^end', '^backspace', '^backspace', '^backspace', '^backspace', 'X'],
+        "bullet_list(" + item("'oneX'", 'todo') + ") paragraph()"),
+    'G6b Backspace at the start of the line after a list joins it to the last item': (
+        (B + 'one\nx',), {}, ['^down', '^home', '^backspace', 'Y'], "bullet_list(" + item("'oneYx'") + ")"),
     'G7 Delete at an item end joins the next item text': (
         (B + 'a\n' + B + 'b',), {}, ['^delete'], "bullet_list(" + item("'ab'") + ") paragraph()"),
     'G9 Ctrl+Enter checks the to-dos on the selected lines only': (
