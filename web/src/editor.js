@@ -167,12 +167,11 @@ const keys = keymap({
   'Shift-Tab': chainCommands(cmd.outdentItemInCell, goToNextCell(-1), cmd.outdentItem, () => true),
   'Escape': cmd.leaveTable,
   'Enter': chainCommands(cmd.splitItem, enterInExpand),
-  'ArrowDown': chainCommands(outOfCode('down'), cmd.skipDivider('down')),
-  'ArrowRight': chainCommands(rightOutOfTable, cmd.skipDivider('right')),
-  'ArrowUp': chainCommands(outOfCode('up'), cmd.skipDivider('up')),
-  'ArrowLeft': cmd.skipDivider('left'),
+  'ArrowDown': outOfCode('down'),
+  'ArrowRight': rightOutOfTable,
+  'ArrowUp': outOfCode('up'),
   'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand, cmd.backspaceAfterTable),
-  'Delete': chainCommands(cmd.deleteInItem, cmd.deleteBeforeBlock),
+  'Delete': cmd.deleteInItem,
 });
 
 // --- The view --------------------------------------------------------------
@@ -204,7 +203,7 @@ export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy, onSl
   });
   const plugins = [
     slashPlugin(key => onSlashKey(key)), clipboardKeys, rules, keys, keymap(baseKeymap),
-    history(), tableEditing(), gapCursor(), dropCursor({color: '#2D6BE0', width: 2}),
+    history(), tableEditing({allowTableNodeSelection: true}), gapCursor(), dropCursor({color: '#2D6BE0', width: 2}),
     linksPlugin(onOpenLink), placeholder, findPlugin, structurePlugin, headerBoldPlugin, codeClicksPlugin, dragAcrossTablesPlugin,
     changes,
   ];

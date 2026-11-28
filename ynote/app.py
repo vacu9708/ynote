@@ -624,7 +624,9 @@ class PostItApp(Gtk.Application):
             self.new_note(at_pointer=True)
         elif len(hidden) == 1:
             note_id, note = hidden[0]
-            at = self._at_pointer(note.get_size())
+            # 2.0 shows it where it was: a note has its place. 1.x brought it
+            # to the pointer.
+            at = None if WEB else self._at_pointer(note.get_size())
             if at is not None:
                 note.move(*at)
             self.show_note(note_id)

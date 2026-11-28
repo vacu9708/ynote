@@ -37,8 +37,8 @@ CASES = {
         "bullet_list(" + item("'xab'[strong]") + ")"),
     'E5 at the left edge of bold within a line, bold is off': (
         ('abc',), {'bold_ranges': [[1, 3]]}, ['^home', '^right', 'x'], P("'ax' 'bc'[strong]")),
-    'E6 Ctrl+B on a selection partly bold makes all of it bold': (
-        ('abcd',), {'bold_ranges': [[0, 2]]}, ['^shift+home', '^ctrl+b'], P("'abcd'[strong]")),
+    'E6 Ctrl+B on a selection partly bold takes the bold off, as in Confluence': (
+        ('abcd',), {'bold_ranges': [[0, 2]]}, ['^shift+home', '^ctrl+b'], P("'abcd'")),
     'E7 bold turned off in bold text types plain there': (
         ('abcd',), {'bold_ranges': [[0, 4]]}, ['^home', '^right', '^right', '^ctrl+b', 'x'],
         P("'ab'[strong] 'x' 'cd'[strong]")),

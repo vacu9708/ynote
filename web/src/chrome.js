@@ -316,13 +316,24 @@ export function setupChrome(editor, post) {
   // --- Menus. One is open at a time; the app shows it and sends back the
   // id of the item chosen, to the handler kept here.
   let openMenu = null;
-  function popup(name, items, anchor, {side = 'below', button = null, byKeys = false, input = true} = {}) {
+  function popup(name, items, anchor, {side = 'below', button = null, byKeys = false, input = true, extra = {}} = {}) {
     closeMenu();
     hideTip();
     openMenu = {name, button};
     if (button) button.classList.add('open');
-    post({type: 'popup', spec: {items, byKeys}, anchor: rectOf(anchor), side, input});
+    post({type: 'popup', spec: {items, byKeys, ...extra}, anchor: rectOf(anchor), side, input});
     return openMenu;
+  }
+
+  // The emoji picker, at the cursor: typing in it finds emoji by name.
+  // Opened a moment later: chosen from a menu, it opens after that menu
+  // has closed, which would otherwise close it too.
+  function openEmoji() {
+    setTimeout(() => {
+      const at = editor.view.coordsAtPos(editor.view.state.selection.head);
+      popup('emoji', [], {x: at.left, y: at.top, height: at.bottom - at.top},
+        {extra: {emoji: {recent: props.emojiRecent || []}}});
+    }, 60);
   }
 
   // --- The / menu follows the text: shown again as the query changes,
@@ -408,10 +419,16 @@ export function setupChrome(editor, post) {
     openContextMenu({x: event.clientX, y: event.clientY});
   });
 
-  function pick(id) {
+  function pick(id, value) {
     const menu = openMenu;
     closeMenu();
     if (!menu) return;
+    if (menu.name === 'emoji') {
+      if (!value) return;
+      editor.run((state, dispatch) => { dispatch(state.tr.insertText(value).scrollIntoView()); return true; });
+      post({type: 'emoji-used', emoji: value});
+      return;
+    }
     if (menu.name === 'slash') {
       // The / and what was typed after it go; the action takes their place.
       editor.run((state, dispatch) => {
@@ -423,7 +440,8 @@ export function setupChrome(editor, post) {
       return;
     }
     if (menu.name === 'context') {
-      if (id === 'open-link') post({type: 'open-link', url: menu.link});
+      if (id === 'emoji') openEmoji();
+      else if (id === 'open-link') post({type: 'open-link', url: menu.link});
       else if (id === 'copy-link') post({type: 'copy-text', text: menu.link});
       else if (['cut', 'copy', 'paste', 'paste-plain'].includes(id)) window.ynote.clipboard(id);
       else if (menus.TABLE_ACTIONS[id]) editor.run(menus.TABLE_ACTIONS[id]);
@@ -449,6 +467,7 @@ export function setupChrome(editor, post) {
     else if (ctrl && !event.shiftKey && key === 'w') id = 'hide';
     else if (ctrl && !event.shiftKey && key === 'f') id = 'find';
     else if (ctrl && event.shiftKey && key === 'm') id = 'copy-markdown';
+    else if (ctrl && !event.shiftKey && key === '.') id = 'emoji';
     else if (event.key === 'Escape' && !findBar.hidden) { event.preventDefault(); closeFind(); return; }
     else if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
       event.preventDefault();
@@ -543,6 +562,6 @@ export function setupChrome(editor, post) {
 
   renderTitle();
   const chrome = {set, editTitle, confirmDelete, openFind, closeFind, pick, change, closed: closeMenu,
-    refresh: refreshTools, slashKey: slashKeyPressed, allResults: showResults, openHelp};
+    refresh: refreshTools, slashKey: slashKeyPressed, allResults: showResults, openHelp, openEmoji};
   return chrome;
 }

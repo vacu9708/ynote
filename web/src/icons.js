@@ -43,6 +43,7 @@ export const ICONS = {
   colRight: ['M4 4h7v16H4z', 'M14 12h6M17 9v6'],
   check: 'M5 12l5 5 9-10',
   codeblock: ['M4 5h16v14H4z', 'M9 10l-2 2 2 2M15 10l2 2-2 2'],
+  emoji: ['M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z', 'M8.5 14a4.5 4.5 0 0 0 7 0', 'M9 9.5h.01M15 9.5h.01'],
   calendar: ['M4 6h16v14H4z', 'M4 10h16', 'M8 3v4M16 3v4'],
   clock: ['M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z', 'M12 7v5l3 2'],
   markdown: ['M3 6h18v12H3z', 'M6 15V9l2.5 3L11 9v6', 'M15 9v6M13 13l2 2 2-2'],

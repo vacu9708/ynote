@@ -63,6 +63,8 @@ export const ACTIONS = [
   {id: 'expand', group: 'Insert', label: 'Expand', icon: 'expand', md: '/expand', ...edit(cmd.insertExpand)},
   {id: 'image', group: 'Insert', label: 'Image…', icon: 'image', keys: ['Ctrl', 'V'],
     run: ({post}) => { post({type: 'choose-image'}); return true; }, enabled: () => true},
+  {id: 'emoji', group: 'Insert', label: 'Emoji…', icon: 'emoji', md: '/emoji', keys: ['Ctrl', '.'],
+    run: ({chrome}) => { chrome.openEmoji(); return true; }, enabled: () => true},
   // Typed as // where a word starts, as in Confluence (editor.js).
   {id: 'date', group: 'Insert', label: 'Date', icon: 'calendar', md: '//', ...insertText(today)},
 
@@ -130,11 +132,11 @@ export function menuRow(action, ctx, extra = {}) {
 // last before ＋ go into ＋'s menu first.
 export const TOOLBAR = ['heading', 'bold', 'code', '|', 'bullet', 'checklist', 'codeblock', 'table'];
 // ＋'s menu, after any of the toolbar's that did not fit.
-export const MORE = ['quote', 'divider', 'expand', 'image', 'date'];
+export const MORE = ['quote', 'divider', 'expand', 'image', 'emoji', 'date'];
 
 // The / menu: every insertable thing and the text formats that make a block.
 export const SLASH = ['heading', 'bullet', 'checklist', 'codeblock', 'table', 'quote', 'divider', 'expand',
-  'image', 'date'];
+  'image', 'emoji', 'date'];
 
 export function inTable(state) { return isInTable(state); }
 export {TextSelection};

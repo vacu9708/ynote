@@ -12,8 +12,13 @@
 //   {toggle: {id, label, value}}
 // Choosing an item sends {type: 'pick', id}; a swatch, slider, or stepper
 // sends {type: 'change', id, value} and leaves the menu open.
+//
+// {emoji: {recent}} shows the emoji picker instead: a field that finds them
+// by name, the recent ones, and every group; choosing one sends
+// {type: 'pick', id: 'emoji', value}.
 import {el, strokeIcon} from './icons.js';
 import {PALETTE} from './palette.js';
+import {EMOJI} from './emoji-data.js';
 
 function post(message) {
   const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ynote;
@@ -150,12 +155,76 @@ function sendSize() {
   post({type: 'size', width: Math.ceil(box.width), height: Math.ceil(box.height)});
 }
 
+// --- The emoji picker --------------------------------------------------
+
+const COLUMNS = 9;
+const NAMES = new Map(EMOJI.flatMap(([, list]) => list));
+
+function showEmoji(recent) {
+  const field = el('input', {class: 'emoji-find', type: 'text', placeholder: 'Find emoji', spellcheck: 'false'});
+  const grid = el('div', {class: 'emoji-grid'});
+  const name = el('div', {class: 'emoji-name'});
+  root.replaceChildren(field, grid, name);
+  let cells = [];
+  let at = 0;
+  const choose = ch => post({type: 'pick', id: 'emoji', value: ch});
+  function mark(i) {
+    if (cells[at]) cells[at].classList.remove('sel');
+    at = Math.max(0, Math.min(i, cells.length - 1));
+    const cell = cells[at];
+    if (!cell) { name.textContent = 'No emoji found'; return; }
+    cell.classList.add('sel');
+    cell.scrollIntoView({block: 'nearest'});
+    name.textContent = cell.title;
+  }
+  function fill(query) {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const groups = words.length
+      ? [['', EMOJI.flatMap(([, list]) => list).filter(([, n]) => words.every(w => n.includes(w)))]]
+      : [['Recent', recent.filter(ch => NAMES.has(ch)).map(ch => [ch, NAMES.get(ch)])], ...EMOJI];
+    cells = [];
+    at = 0;
+    grid.replaceChildren(...groups.filter(([, list]) => list.length).flatMap(([title, list]) => [
+      title ? el('div', {class: 'emoji-group'}, title) : null,
+      el('div', {class: 'emoji-cells'}, list.map(([ch, n]) => {
+        const cell = el('button', {class: 'emoji-cell', title: n, tabindex: '-1'}, ch);
+        const i = cells.push(cell) - 1;
+        cell.addEventListener('mousedown', event => event.preventDefault());
+        cell.addEventListener('mouseenter', () => mark(i));
+        cell.addEventListener('click', () => choose(ch));
+        return cell;
+      })),
+    ].filter(Boolean)));
+    grid.scrollTop = 0;
+    mark(0);
+  }
+  field.addEventListener('input', () => fill(field.value));
+  field.addEventListener('keydown', event => {
+    const move = {ArrowLeft: -1, ArrowRight: 1, ArrowUp: -COLUMNS, ArrowDown: COLUMNS}[event.key];
+    if (move) { event.preventDefault(); mark(at + move); }
+    else if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      if (cells[at]) choose(cells[at].textContent);
+    }
+  });
+  fill('');
+  field.focus();
+}
+
 window.menu = {
   // Shows a menu: lights its first row when opened by keys, and says how
   // large it is, as the window is made to fit it.
   show(spec) {
     document.documentElement.classList.toggle('flat', !!spec.flat);
     root.classList.toggle('columns', !!spec.columns);
+    root.classList.toggle('emoji', !!spec.emoji);
+    if (spec.emoji) {
+      rows = [];
+      current = -1;
+      showEmoji(spec.emoji.recent || []);
+      sendSize();
+      return;
+    }
     render(spec.items || []);
     // In columns, a section stays whole in one column.
     if (spec.columns) {

@@ -44,11 +44,11 @@ def test_A1_web_with_no_notes_a_new_note_opens_at_the_pointer(app):
     assert inside(notes[0].box(), 700, 500)
 
 
-def test_A2_web_one_hidden_note_and_none_shown_opens_it_at_the_pointer(app):
-    write(app, [note('only', 'text', hidden=True)])
-    app.inp.move(900, 600)
+def test_A2_web_one_hidden_note_and_none_shown_opens_it_where_it_was(app):
+    write(app, [note('only', 'text', hidden=True, x=300, y=200)])
+    app.inp.move(1300, 800)
     app.start()
-    assert inside(app.note('only').box(), 900, 600)
+    assert app.note('only').box()[:2] == (300, 200)
 
 
 def test_A3_web_several_hidden_notes_and_none_shown_list_them(app):

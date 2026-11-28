@@ -9,10 +9,10 @@ import {schema} from './schema.js';
 const {paragraph, heading, code_block, blockquote, horizontal_rule, bullet_list,
   list_item, expand, expand_title, table, table_row, table_cell, table_header} = schema.nodes;
 
-// A selection only partly bold (or code) is made so all over, as in 1.x and
-// Confluence: the format shows on only when all of it has it.
-export const toggleBold = toggleMark(schema.marks.strong, null, {removeWhenPresent: false});
-export const toggleInlineCode = toggleMark(schema.marks.code, null, {removeWhenPresent: false});
+// On a selection only partly bold (or code), the format comes off, as in
+// Confluence (1.x put it on all of it).
+export const toggleBold = toggleMark(schema.marks.strong);
+export const toggleInlineCode = toggleMark(schema.marks.code);
 
 // The nearest ancestor of the selection's start of a type, as {node, pos, depth}.
 export function ancestor(state, type) {
@@ -353,37 +353,6 @@ export function backspaceAfterTable(state, dispatch) {
   return true;
 }
 
-// Delete at the end of a line does nothing before a table, which it would
-// select, nor at the end of an expand's last line, which it would join the
-// line after into: as in 1.x.
-export function deleteBeforeBlock(state) {
-  const {$cursor} = state.selection;
-  if (!$cursor || $cursor.parentOffset !== $cursor.parent.content.size || $cursor.depth < 1) return false;
-  const after = state.doc.resolve($cursor.after()).nodeAfter;
-  if (after && after.type === table) return true;
-  const parent = $cursor.node(-1);
-  return parent.type === expand && $cursor.index(-1) === parent.childCount - 1;
-}
-
-// Up and Down, Left and Right, over a divider go on past it, as in 1.x,
-// rather than selecting it, where typing would replace it.
-export function skipDivider(dir) {
-  return (state, dispatch, view) => {
-    const {$head, empty} = state.selection;
-    if (!empty || !$head.parent.isTextblock || $head.depth < 1) return false;
-    if (view && !view.endOfTextblock(dir)) return false;
-    const forward = dir === 'down' || dir === 'right';
-    const edge = forward ? $head.after() : $head.before();
-    const $edge = state.doc.resolve(edge);
-    const next = forward ? $edge.nodeAfter : $edge.nodeBefore;
-    if (!next || next.type !== horizontal_rule) return false;
-    const beyond = forward ? edge + next.nodeSize : edge - next.nodeSize;
-    const sel = Selection.findFrom(state.doc.resolve(beyond), forward ? 1 : -1, true);
-    if (!sel) return true;
-    if (dispatch) dispatch(state.tr.setSelection(sel).scrollIntoView());
-    return true;
-  };
-}
 
 // Enter in a list: a new item of the same kind, an open to-do after a done
 // one. An empty item ends the list (splitListItem lifts it).

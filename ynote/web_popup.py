@@ -54,6 +54,7 @@ class WebPopup(Gtk.Window):
         self._anchor = None
         self._side = 'below'
         self._takes_input = False
+        self._typing = False
         self._grabbed = None
         self._size = (0, 0)
         self._focus_watch = None
@@ -78,6 +79,9 @@ class WebPopup(Gtk.Window):
         self._anchor = anchor
         self._side = side
         self._takes_input = takes_input
+        # A menu with a field to type in, as the emoji picker's, takes keys
+        # in its page: typing, Korean too, and moving with the arrows.
+        self._typing = bool(spec.get('emoji'))
         spec = dict(spec, flat=not self._composited)
         if self._ready:
             call_js(self.view, 'menu.show', spec)
@@ -134,6 +138,8 @@ class WebPopup(Gtk.Window):
             if not self._grab():
                 GLib.timeout_add(30, self._grab_later, 20)
             self._watch_focus()
+            if self._typing:
+                self.view.grab_focus()
 
     # --- closing when the focus goes elsewhere ----------------------------
     #
@@ -231,6 +237,8 @@ class WebPopup(Gtk.Window):
         if event.keyval == Gdk.KEY_Escape:
             self.close()
             return True
+        if self._typing:
+            return False
         name = KEYS.get(event.keyval)
         if name is None:
             char = chr(Gdk.keyval_to_unicode(event.keyval) or 0)

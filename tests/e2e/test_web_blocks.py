@@ -55,10 +55,8 @@ CASES = {
         ('ls\npwd',), {'code_ranges': [[0, 6]]}, ['^ctrl+shift+c'], "paragraph('ls') paragraph('pwd')"),
 
     # J. dividers
-    'J1 Down skips a divider': (
-        ('a\n---\nb',), {}, ['^down', 'X'], "paragraph('a') horizontal_rule() paragraph('Xb')"),
-    'J1 Up skips a divider': (
-        ('a\n---\nb',), {}, ['^down', '^up', 'X'], "paragraph('aX') horizontal_rule() paragraph('b')"),
+    'J1 Down selects a divider, and typing replaces it, as in Confluence': (
+        ('a\n---\nb',), {}, ['^down', 'X'], "paragraph('a') paragraph('X') paragraph('b')"),
 
     # L. tables
     'L8 Down from the line above goes into the first cell': (
@@ -107,8 +105,8 @@ CASES = {
     'L20 Backspace on the empty line below takes it away': (
         ('x\n' + ANCHOR + '\n\nz',), TABLE, ['^ctrl+end', '^up', '^backspace', 'Z'],
         "paragraph('x') " + table(KV, [[p('a')], [p('bZ')]]) + " paragraph('z')"),
-    'L20 Delete at the end of the line above does nothing': (
-        ('x\n' + ANCHOR,), TABLE, ['^delete', 'Y'], "paragraph('xY') " + table(KV, AB)),
+    'L20 Delete at the end of the line above selects the table, as in Confluence': (
+        ('x\n' + ANCHOR,), TABLE, ['^delete', 'Y'], "paragraph('x') paragraph('Y')"),
 
     # M. expands
     'M2 Ctrl+Enter on the title folds it': (
@@ -119,9 +117,9 @@ CASES = {
     'M5 Backspace after an expand takes an empty line into it': (
         (OPEN + 'T\nbody\n' + END + '\n\nz',), {}, ['^ctrl+end', '^up', '^backspace', 'Z'],
         "expand(expand_title('T') paragraph('body') paragraph('Z')) paragraph('z')"),
-    'M5 Delete never joins a line to its end': (
+    'M5 Delete at its last line end takes the line after into it, as in Confluence': (
         (OPEN + 'T\nbody\n' + END + '\nz',), {}, ['^down', '^end', '^delete', 'Y'],
-        "expand(expand_title('T') paragraph('bodyY')) paragraph('z')"),
+        "expand(expand_title('T') paragraph('bodyY') paragraph('z'))"),
     'M6 Backspace at the title start keeps what it holds': (
         (OPEN + 'T\nbody\n' + END,), {}, ['^home', '^backspace'], "paragraph('T') paragraph('body')"),
 }
@@ -232,3 +230,33 @@ def test_K2_web_an_image_no_note_uses_is_cleaned_up(app):
     wait_until(lambda: not os.path.exists(os.path.join(images, 'unused.png')), what='the unused image to go')
     assert os.path.exists(os.path.join(images, 'used.png'))
     assert saved_note(app)['id'] == 'test'
+
+
+# ---------------------------------------------------------------- emoji
+
+
+def test_J4_web_ctrl_dot_finds_an_emoji_by_name_and_puts_it_at_the_cursor(app, inp):
+    import json
+    start(app, 'go', at=(200, 10))
+    inp.key('ctrl+period')
+    settle(0.8)
+    inp.type('rocket')
+    settle(0.3)
+    inp.key('enter')
+    assert_saved(app, "paragraph('go🚀')", last_line=False)
+    with open(os.path.join(app.conf, 'settings.json'), encoding='utf-8') as f:
+        assert json.load(f)['emoji_recent'][0] == '🚀'
+
+
+def test_J4_web_emoji_comes_first_in_the_texts_right_click_menu(app, inp):
+    from tests.e2e.web import menu_items
+    note = start(app, 'go', at=(200, 10))
+    note.click_text(100, 10, button=3)      # right of the text
+    first = menu_items(app)[0].get_name()
+    assert first.startswith('Emoji'), first
+    choose(app, 'Emoji')
+    settle(0.8)
+    inp.type('red heart')
+    settle(0.3)
+    inp.key('enter')
+    assert_saved(app, "paragraph('go❤️')", last_line=False)

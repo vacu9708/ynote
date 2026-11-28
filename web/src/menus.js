@@ -48,6 +48,7 @@ export function contextMenu(state, {link, hasSelection}) {
       {id: 'copy-link', icon: 'link', label: 'Copy link address'}, {sep: true});
   }
   items.push(
+    {id: 'emoji', icon: 'emoji', label: 'Emoji…', keys: ['Ctrl', '.']}, {sep: true},
     {id: 'cut', icon: 'cut', label: 'Cut', keys: ['Ctrl', 'X'], disabled: !hasSelection},
     {id: 'copy', icon: 'copy', label: 'Copy', keys: ['Ctrl', 'C'], disabled: !hasSelection},
     {id: 'paste', icon: 'paste', label: 'Paste', keys: ['Ctrl', 'V']},

@@ -34,7 +34,7 @@ window.ynote = {
   },
   set(props) { chrome.set(props); },
   // The popup window's answers about the menu this note opened.
-  popupPick(id) { chrome.pick(id); },
+  popupPick(id, value) { chrome.pick(id, value); },
   popupChange(id, value) { chrome.change(id, value); },
   popupClosed() { chrome.closed(); },
   focus() { editor.view.focus(); },

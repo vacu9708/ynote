@@ -21,7 +21,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 ## A. Starting, saving, files
 
 - A1 Starting with no notes at all makes a new note at the mouse pointer [2.0]
-- A2 With one hidden note and none shown, that note opens at the pointer [2.0] (2.0 showed it where it was saved: a hidden note shows where it was last put, which was set only as it moved on screen)
+- A2 With one hidden note and none shown, that note opens at the pointer; in 2.0, where it was, as a note has its place [2.0]
 - A3 With several hidden notes and none shown, the Hidden Notes window (in 2.0, their list) opens at the pointer [2.0]
 - A4 An edit is saved without quitting (notes.json changes) [2.0]
 - A5 Each start copies notes.json to notes.json.bak [2.0]
@@ -88,7 +88,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - E3 At the start of a line, the text after the cursor counts [2.0]
 - E4 At the start of a list item's, to-do's, or quote's text, after its marker, the text after the cursor counts [2.0]
 - E5 At the left edge of bold within a line, Bold is off: the text before the cursor counts, as in Confluence [2.0]
-- E6 A selection shows a format on only when all of it has it [2.0]
+- E6 A selection shows a format on only when all of it has it (2.0 follows Confluence: Ctrl+B on a selection partly bold takes the bold off) [2.0]
 - E7 Bold turned off in the middle of bold text types plain text there, splitting it [2.0]
 - E8 Enter turns every format off [2.0]
 - E9 Ctrl+H makes the cursor's line, or every line a selection touches, a heading; again takes it away when all are headings [2.0]
@@ -100,7 +100,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - E15 Bold in a heading goes out and comes back as Markdown, `# Title **bold**`
 - E16 Ctrl+E turns inline code on or off, or makes a selection code or plain [2.0]
 - E17 Inline code has a padding character at each end, which copying leaves out (1.x only: 2.0 keeps no padding characters)
-- E18 Text typed right after inline code is plain; typed inside it, code (2.0 too, unlike Confluence, which goes on in code: a command is usually followed by words about it) [2.0]
+- E18 Text typed right after inline code is plain; typed inside it, code (2.0 too, as in Confluence) [2.0]
 - E19 Turning code on or off at its edge steps the cursor over the padding (1.x only: 2.0 keeps no padding characters)
 - E20 Backspace and Delete next to the padding take the character beyond it (1.x only: 2.0 keeps no padding characters)
 - E21 Deleting the last character of inline code takes its padding too (1.x only: 2.0 keeps no padding characters)
@@ -164,10 +164,10 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 ## J. Dividers, links, emoji
 
-- J1 A `---` line is drawn as a line, and the cursor skips it either way [2.0]
+- J1 A `---` line is drawn as a line, and the cursor skips it either way (2.0 follows Confluence: Up and Down select it, and typing replaces it) [2.0]
 - J2 http and https addresses are underlined links: Ctrl+click opens one, a click only places the cursor, and a tooltip says so [2.0]
 - J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports [2.0]
-- J4 Insert Emoji comes first in the text's right-click menu (not in 2.0, which shows no emoji picker yet)
+- J4 Insert Emoji comes first in the text's right-click menu (2.0: Emoji… in the right-click menu, ＋, /emoji, or Ctrl+., a picker that finds them by name, the recent first) [2.0]
 - J5 Emoji are drawn larger without making their line taller [px]
 
 ## K. Images
@@ -199,7 +199,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - L17 The header row is shaded and bold, and its bold turns off; an empty header cell, and a line after Enter in one, start bold (2.0: U4, U5) [2.0]
 - L18 A note has one selection: a double click in a cell, then a click elsewhere, leaves no selection behind
 - L19 Typing or Backspace over a selection across a table removes it without a crash, and Ctrl+Z brings it back [2.0]
-- L20 Backspace at the start of the line below a table goes into its last cell, or takes that line away when empty; Delete at the end of the line above does nothing [2.0]
+- L20 Backspace at the start of the line below a table goes into its last cell, or takes that line away when empty; Delete at the end of the line above does nothing (2.0 follows Confluence for Delete: it selects the table, as typing then replaces) [2.0]
 - L21 A click right of a table puts the cursor beside it, not in a cell; typing there goes on the line after it, as in Confluence [2.0]
 - L21b Beside a table, Enter opens a line after it (or goes to the empty one there), Backspace goes into the last cell, Delete does nothing, and the arrows go into the table
 - L22 Text in cells is found by search, in the note and across all notes; Enter on a match selects it in its cell
@@ -217,7 +217,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - M2 A click on the arrow, or Ctrl+Enter on the title, folds or opens it; folding moves a cursor inside to the title [2.0]
 - M3 An expand holds code blocks, lists, tables, and other expands
 - M4 Enter on its empty last line goes on below the expand (2.0 follows Confluence instead: U11)
-- M5 Backspace after an expand takes an empty line into it; Delete never joins a line to its end [2.0]
+- M5 Backspace after an expand takes an empty line into it; Delete never joins a line to its end (2.0 follows Confluence: Delete takes the line after into it) [2.0]
 - M6 Backspace at the title's start keeps what it holds [2.0]
 - M7 An expand never ended gets an end, and an end without one is taken out
 - M8 A search match in a folded expand shows it open until the search closes (2.0: T13) [2.0]

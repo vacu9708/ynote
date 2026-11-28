@@ -77,6 +77,31 @@ def save_find_options(options):
         print(f'ynote: could not save settings: {e}', file=sys.stderr)
 
 
+EMOJI_RECENT = 24
+
+
+def emoji_recent():
+    settings = load_json(SETTINGS_FILE)
+    found = settings.get('emoji_recent') if isinstance(settings, dict) else None
+    return [e for e in found if isinstance(e, str)][:EMOJI_RECENT] if isinstance(found, list) else []
+
+
+def add_recent_emoji(emoji):
+    """Put emoji first among the recent ones, kept in settings.json."""
+    recent = emoji_recent()
+    if emoji:
+        recent = ([emoji] + [e for e in recent if e != emoji])[:EMOJI_RECENT]
+        settings = load_json(SETTINGS_FILE)
+        if not isinstance(settings, dict):
+            settings = {}
+        settings['emoji_recent'] = recent
+        try:
+            save_json(settings, SETTINGS_FILE)
+        except OSError as e:
+            print(f'ynote: could not save settings: {e}', file=sys.stderr)
+    return recent
+
+
 def _alt_only(event):
     mods = event.state & Gtk.accelerator_get_default_mod_mask()
     return mods == Gdk.ModifierType.MOD1_MASK
@@ -177,6 +202,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
                 'hiddenCount': self._hidden_count,
                 'version': __version__, 'notesPath': display_path(CONF_DIR),
                 'findOptions': find_options(),
+                'emojiRecent': emoji_recent(),
                 'autostart': {'available': bool(getattr(app, 'autostart_available', False)),
                               'enabled': bool(getattr(app, 'autostart_available', False)
                                               and app.autostart_enabled())}}
@@ -435,6 +461,12 @@ class WebNoteWindow(Gtk.ApplicationWindow):
             if note is not self:
                 note._send(findOptions=options)
 
+    def _do_emoji_used(self, message):
+        """An emoji chosen goes first among the recent, for every note."""
+        recent = add_recent_emoji(message.get('emoji', ''))
+        for note in self.app.notes.values():
+            note._send(emojiRecent=recent)
+
     def _do_open_match(self, message):
         """Show the note of a match chosen in the list, finding the query in
         it."""
@@ -454,8 +486,8 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         if popup().owner is self:
             popup().close()
 
-    def popup_pick(self, item_id, _value=None):
-        call_js(self.view, 'ynote.popupPick', item_id)
+    def popup_pick(self, item_id, value=None):
+        call_js(self.view, 'ynote.popupPick', item_id, value)
 
     def popup_change(self, item_id, value):
         call_js(self.view, 'ynote.popupChange', item_id, value)
@@ -551,11 +583,6 @@ class WebNoteWindow(Gtk.ApplicationWindow):
             self._lock_size(True, w)
         self.resize(w, h)
         GLib.timeout_add(300, self._apply_snap_move)
-
-    def move(self, x, y):
-        # A move while hidden, as to the pointer, is where it shows next.
-        self._shown_at = (x, y)
-        Gtk.Window.move(self, x, y)
 
     def _apply_snap_move(self):
         if self._snap_pending_move is not None:
