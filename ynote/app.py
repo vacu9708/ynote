@@ -38,6 +38,12 @@ from .styles import BASE_CSS
 SWITCH_PAUSE_MS = 200
 
 
+def _debug(text):
+    """A line on stderr with YNOTE_DEBUG set, to see what Alt+scroll does."""
+    if os.environ.get('YNOTE_DEBUG'):
+        print(f'ynote: {text}', file=sys.stderr, flush=True)
+
+
 class PostItApp(Gtk.Application):
     def __init__(self):
         # Before any text is laid out, so Pango finds them.
@@ -157,6 +163,7 @@ class PostItApp(Gtk.Application):
             gdk_win.focus(GdkX11.x11_get_server_time(gdk_win))
 
     def _on_note_focus_in(self, note=None):
+        _debug(f'focus in {note.title if note else None!r}')
         if note is not None:
             self._current_note = note
             # The notes Alt + scroll passes over do not count as used.
@@ -495,6 +502,8 @@ class PostItApp(Gtk.Application):
             self._switch_index = order.index(start)
         self._switch_index = (self._switch_index + step) % len(order)
         target = order[self._switch_index]
+        _debug(f'step {step}: {[w.title for w in order]} at {self._switch_index}, '
+               f'active {[w.title for w in order if w.is_active()]}, to {target.title!r}')
         self._current_note = target
         # With the scroll's own time, GNOME left the note behind while another
         # app had the focus, as right after a start until a note was clicked;
@@ -511,6 +520,7 @@ class PostItApp(Gtk.Application):
         target = self._switch_order[self._switch_index]
         self._switch_order = None
         self._mark_recent(target)
+        _debug(f'alt let go: focus to {target.title!r}, active {target.is_active()}')
         if target.get_visible() and not target.is_active():
             if not focus.present_at_server_time(target):
                 target.present()

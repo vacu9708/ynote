@@ -27,7 +27,7 @@ export function noteMenu(ctx, props) {
     {swatches: Object.entries(PALETTE).map(([name, c]) => ({
       id: 'color', value: name, color: c.paper, label: name[0].toUpperCase() + name.slice(1),
       on: name === props.color}))},
-    {slider: {id: 'opacity', label: 'Opacity', value: props.opacity, min: 0.2, max: 1, step: 0.05}},
+    {slider: {id: 'opacity', label: 'Opacity', value: props.opacity, min: 0, max: 1, step: 0.05}},
     {toggle: {id: 'solid-in-use', label: 'Solid while in use', value: props.solidInUse}},
     {stepper: {id: 'font-size', label: 'Font size', value: props.fontSize, min: 8, max: 32}},
     {sep: true},

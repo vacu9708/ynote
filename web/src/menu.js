@@ -53,11 +53,13 @@ function row(item) {
     return el('div', {class: 'row static'}, el('span', {class: 'label'}, item.label),
       item.md ? el('span', {class: 'md'}, item.md) : el('span'), keysOf(item.keys));
   }
+  // A note, as in the hidden notes, shows on its own color, as Windows'
+  // Sticky Notes lists them.
   const color = item.colorName && (PALETTE[item.colorName] || PALETTE.yellow).paper;
-  const mark = color ? el('span', {class: 'dot', style: `background:${color}`})
-    : item.icon ? strokeIcon(item.icon, 16) : null;
-  const node = el('div', {class: ['row', item.on && 'on', item.danger && 'danger', item.disabled && 'off'].filter(Boolean).join(' '),
-    role: 'menuitem', 'aria-disabled': item.disabled ? 'true' : null},
+  const mark = item.icon ? strokeIcon(item.icon, 16) : null;
+  const node = el('div', {class: ['row', item.on && 'on', item.danger && 'danger', item.disabled && 'off',
+    color && 'colored'].filter(Boolean).join(' '),
+  role: 'menuitem', 'aria-disabled': item.disabled ? 'true' : null, style: color ? `background:${color}` : null},
   el('span', {class: 'ic'}, mark),
   el('span', {class: 'label'}, item.label),
   item.md ? el('span', {class: 'md'}, item.md) : el('span'),

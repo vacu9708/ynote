@@ -95,6 +95,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self._color = data['color']
         self._opacity = data['opacity']
         self._solid_in_use = data['solid_in_use']
+        self._body_opacity = 1.0
         self._hovered = False
         self._collapsed = data['collapsed']
         self._expanded_height = data['h']
@@ -170,6 +171,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         return {'title': self.title, 'pinned': self._on_top,
                 'collapsed': self._collapsed, 'fontSize': self._font_size,
                 'opacity': self._opacity, 'solidInUse': self._solid_in_use,
+                'bodyOpacity': self._body_opacity,
                 'composited': self._composited,
                 'color': self._color, 'maximized': self.is_maximized(),
                 'hiddenCount': self._hidden_count,
@@ -246,7 +248,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
             self._queue_save()
 
     def _do_set_opacity(self, message):
-        self._opacity = min(1.0, max(0.2, float(message.get('opacity', 1))))
+        self._opacity = min(1.0, max(0.0, float(message.get('opacity', 1))))
         self._apply_opacity(preview=True)
         self._queue_save()
 
@@ -264,16 +266,22 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         return False
 
     def _apply_opacity(self, preview=False):
-        """The whole note fades alike, text and bars, by the window's
-        opacity, which needs a compositor. While the note is in use, and Solid
-        while in use is on, it is solid; while its opacity is being set, it
-        shows it."""
+        """Everything below the title bar fades alike, text too; the title
+        bar stays solid, so a note is found and moved at any opacity, 0%
+        too. While the note is in use, and Solid while in use is on, the rest
+        is solid as well; while the opacity is being set, it shows it. At 0%
+        it is solid while in use whatever the setting, or its text could not
+        be seen at all. Seeing through needs a compositor."""
         if not self._composited:
             return
         in_use = (self._hovered or self.is_active()
                   or popup().owner is self)
-        solid = self._solid_in_use and in_use and not preview
-        self.set_opacity(1.0 if solid else self._opacity)
+        solid_in_use = self._solid_in_use or self._opacity <= 0.001
+        solid = solid_in_use and in_use and not preview
+        value = 1.0 if solid else self._opacity
+        if value != self._body_opacity:
+            self._body_opacity = value
+            self._send(bodyOpacity=value)
 
     def _do_set_font_size(self, message):
         self._font_size = min(32, max(8, int(message.get('size', 14))))
@@ -510,6 +518,8 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         return True
 
     def _on_key_release(self, _window, event):
+        if os.environ.get('YNOTE_DEBUG') and event.keyval in (Gdk.KEY_Alt_L, Gdk.KEY_Alt_R):
+            print(f'ynote: alt released in {self.title!r}', file=sys.stderr, flush=True)
         key = SNAP_KEYS.get(event.keyval)
         if key in self._snap_held:
             self._snap_held.remove(key)

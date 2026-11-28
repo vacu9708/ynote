@@ -12,7 +12,7 @@ When what should happen is unclear, Ynote follows Confluence. Where it does
 not, the item says why.
 
 Not tested, until they matter: the tray menu (simple, with little room for
-edge cases), opacity (B6: it needs a compositor, and matters little), and
+edge cases), opacity (B6, and 2.0's, where the title bar stays solid down to 0%: it needs a compositor), and
 placing notes across two monitors (D4, D9: much effort for little).
 
 ---
@@ -311,7 +311,7 @@ so they may reach past the note.
 - T15 A tool's tooltip shows its name, the Markdown typed for it, and its keys, and only that
 - T16 A note is not resized smaller than it can be used: 180 × 120, or its title bar collapsed
 - T17 A note saved smaller than that opens at the least size
-- T18 Hidden notes, in the note menu (or the tray), lists them latest hidden first, and choosing one shows it (1.x's arrows to reorder them are gone: the latest hidden first is the order, and Find's All notes finds any)
+- T18 Hidden notes, in the note menu (or the tray), lists them latest hidden first, each on its own color, and choosing one shows it (1.x's arrows to reorder them are gone: the latest hidden first is the order, and Find's All notes finds any)
 - T19 Show all shows every hidden note
 - T21 Collapse leaves the note as tall as its title bar, and Expand brings back its height (GNOME made a collapsed note 1px tall, from what its web view asks for; openbox, which the tests run, sized it right either way, so this test does not catch that bug)
 - T22 A click outside closes the shortcuts, as any menu, and does nothing else; a note whose menu is open closes it when another window takes the focus

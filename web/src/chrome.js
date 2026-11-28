@@ -523,6 +523,7 @@ export function setupChrome(editor, post) {
       root.style.setProperty('--soft', c.soft);
     }
     if ('fontSize' in next) root.style.setProperty('--font-size', next.fontSize + 'px');
+    if ('bodyOpacity' in next) root.style.setProperty('--body-opacity', next.bodyOpacity);
     if ('composited' in next) root.classList.toggle('square', !next.composited);
     if ('pinned' in next) pinBtn.classList.toggle('on', next.pinned);
     if ('collapsed' in next) {

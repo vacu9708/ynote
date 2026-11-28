@@ -443,9 +443,12 @@ design. The GTK window stays, frameless, for what only a window can do.
   note hears before the menu closes.
 - **Toolbar.** When the bottom bar is too narrow, its last tools hide and go to
   the top of ＋'s menu (`layoutToolbar()`, on every resize).
-- **Opacity.** The window's opacity, so text and bars fade alike. With Solid
-  while in use (`solid_in_use`), a note is solid while the mouse is on it,
-  it is active, or its menu is open.
+- **Opacity.** Everything below the title bar fades alike, text too, by
+  the page (`--body-opacity`); the title bar stays solid, so a note is found
+  and moved at any opacity, down to 0%. With Solid while in use
+  (`solid_in_use`, always at 0%), the rest is solid while the mouse is on
+  the note, it is active, or its menu is open. Seeing through needs a
+  compositor.
 - **The / menu.** `slash.js` notes a / typed where a word starts and what is
   typed after it; `chrome.js` shows the matching actions (`actions.SLASH`) in
   the popup, which then takes no keys: the editor passes it Up, Down, Enter,
@@ -454,7 +457,7 @@ design. The GTK window stays, frameless, for what only a window can do.
   last row leaves the expand, and Right at the end of its last cell puts the
   cursor after the table, in the expand, where typing starts a line.
 - **Hidden notes and Help.** In 2.0 both are menus of the popup window:
-  the hidden notes, latest hidden first, below the note or at the pointer
+  the hidden notes, latest hidden first, each on its own color, below the note or at the pointer
   from the tray (`web_note_window.show_hidden_list()`), and the keyboard
   shortcuts, made from the actions (`menus.helpPage()`), in two columns with
   the version and where the notes are.

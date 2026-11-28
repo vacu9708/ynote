@@ -126,6 +126,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .ProseMirror .find-hit { background: #FFD45C; border-radius: 2px; box-shadow: 0 0 0 1px #E9A400; }
 .ProseMirror .find-hit.current { background: #FF9F1C; }
 
+/* Opacity: all below the title bar fades alike, text too; the title bar
+   stays solid (web_note_window.py _apply_opacity). */
+#scroll, #bottombar, .find-bar, .all-results { opacity: var(--body-opacity, 1); transition: opacity .12s; }
+
 /* A collapsed note is its title bar alone. */
 #note.collapsed #scroll, #note.collapsed #bottombar, #note.collapsed .find-bar { display: none; }
 
