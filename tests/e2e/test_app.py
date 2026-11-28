@@ -64,8 +64,10 @@ def test_A4_a_change_is_saved_without_quitting(app):
     write(app, [note('t', 'x')])
     app.start()
     n = WebNote(app, app.note('t').frame)
-    n.click_text(0, 10)
-    app.inp.key('end')
+    # Right of the text: the cursor at its end. A moment for the editor to
+    # take the focus, or a loaded machine loses the first keys.
+    n.click_text(200, 10)
+    settle(0.5)
     app.inp.type(' saved text')
     assert_saved(app, "paragraph('x saved text')", note_id='t', timeout=10)
 
@@ -138,8 +140,10 @@ def test_A10_notes_are_saved_readably_with_korean_as_it_is(app):
     write(app, [note('t', 'x')])
     app.start()
     n = WebNote(app, app.note('t').frame)
-    n.click_text(0, 10)
-    app.inp.key('end')
+    # Right of the text: the cursor at its end. A moment for the editor to
+    # take the focus, or a loaded machine loses the first keys.
+    n.click_text(200, 10)
+    settle(0.5)
     app.inp.type(' 한글')
     app.quit()
     with open(app.notes_file, encoding='utf-8') as f:
