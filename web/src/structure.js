@@ -166,3 +166,22 @@ export const dragAcrossTablesPlugin = new Plugin({
     },
   },
 });
+
+// Short inline code, such as `x | y` or a flag, does not wrap: in a narrow
+// table column it would break where it is read as one, as in 1.x. Long code
+// still wraps.
+const SHORT_CODE = 24;
+export const shortCodePlugin = new Plugin({
+  props: {
+    decorations(state) {
+      const decos = [];
+      state.doc.descendants((node, pos) => {
+        if (node.isText && node.text.length <= SHORT_CODE && node.marks.some(m => m.type.name === 'code')) {
+          decos.push(Decoration.inline(pos, pos + node.nodeSize, {class: 'short-code'}));
+        }
+        return !node.isTextblock || node.inlineContent;
+      });
+      return decos.length ? DecorationSet.create(state.doc, decos) : null;
+    },
+  },
+});

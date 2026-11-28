@@ -65,6 +65,26 @@ window.ynote = {
         dispatch(state.tr.insertText(text).scrollIntoView());
         return true;
       }
+      const {$from, empty} = state.selection;
+      // A table pasted in a table's cell goes after that table: a cell holds
+      // no table, and the table it is in would be split.
+      let hasTable = false;
+      slice.content.descendants(node => { if (node.type === schema.nodes.table) hasTable = true; return !hasTable; });
+      if (hasTable) {
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type !== schema.nodes.table) continue;
+          const after = $from.after(d);
+          dispatch(state.tr.replaceRange(after, after, slice).scrollIntoView().setMeta('uiEvent', 'paste'));
+          return true;
+        }
+      }
+      // Blocks pasted on an empty line take its place, as in Confluence.
+      const first = slice.content.firstChild;
+      if (empty && slice.openStart === 0 && first && first.type !== schema.nodes.paragraph
+          && $from.parent.type === schema.nodes.paragraph && !$from.parent.content.size) {
+        dispatch(state.tr.replaceRange($from.before(), $from.after(), slice).scrollIntoView().setMeta('uiEvent', 'paste'));
+        return true;
+      }
       dispatch(state.tr.replaceSelection(slice).scrollIntoView().setMeta('uiEvent', 'paste'));
       return true;
     });

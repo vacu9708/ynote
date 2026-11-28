@@ -135,7 +135,10 @@ export function setupChrome(editor, post) {
     for (const t of tools) {
       if (t.id === '|') continue;
       const action = ACTION[t.id];
-      t.node.classList.toggle('on', !!(action.active && action.active(c)));
+      const on = !!(action.active && action.active(c));
+      t.node.classList.toggle('on', on);
+      // Said to the desktop too, as a toggle's state.
+      if (action.active) t.node.setAttribute('aria-pressed', String(on));
       t.node.classList.toggle('off', !enabled(action, c));
     }
     refreshFindCount();

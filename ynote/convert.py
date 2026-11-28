@@ -210,12 +210,19 @@ class _Converter:
                 for row in table.get('rows') or []]
         return self.table(rows)
 
-    def old_table_row(self, line):
+    def old_table_row(self, start, line):
         """A row of a table as 1.x wrote them before cells were editors:
-        cells of plain text separated by tabs."""
-        cells = line.lstrip('\t')[len(TABLE_MARKER):].split('\t')
-        row = [[paragraph([{'type': 'text', 'text': c}] if c else None)]
-               for c in cells]
+        cells of text separated by tabs, as a pasted Markdown table also
+        comes, with its formats."""
+        at = start + len(line) - len(line.lstrip('\t')) + len(TABLE_MARKER)
+        row = []
+        for cell in line.lstrip('\t')[len(TABLE_MARKER):].split('\t'):
+            # U+2028, a line break in a pasted cell, starts a line of it.
+            lines = []
+            for part in cell.split('\u2028'):
+                lines.append(paragraph(self.inline(at, at + len(part)) or None))
+                at += len(part) + 1
+            row.append(lines)
         if self.prev == 'old-table':
             self._old_rows.append(row)
             self.blocks[-1] = self.table(self._old_rows)
@@ -232,7 +239,7 @@ class _Converter:
         body = start + level
 
         if stripped.startswith(TABLE_MARKER):
-            self.old_table_row(line)
+            self.old_table_row(start, line)
             return
         if line and self.code[start]:
             self.add_code_line(line)

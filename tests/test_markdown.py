@@ -189,8 +189,9 @@ def test_a_section_becomes_details_and_back_without_extra_lines():
     text = f'{OPEN}Test info\nrun it\n{END}\nafter'
     md = to_markdown(state(text))
 
+    # A blank line after </details> too, as Markdown after HTML needs.
     assert md == ('<details open>\n<summary>Test info</summary>\n\nrun it\n\n'
-                  '</details>\nafter')
+                  '</details>\n\nafter')
     assert from_markdown(md)['text'] == text
 
 

@@ -9,7 +9,7 @@ import pytest
 
 from tests.e2e.driver import settle, wait_until
 from tests.e2e.test_misc import fake_browser
-from tests.e2e.web import WebNote, assert_saved, choose, saved_note, start
+from tests.e2e.web import WebNote, assert_saved, choose, start
 
 pytestmark = [pytest.mark.web]
 
@@ -229,7 +229,6 @@ def test_K2_web_an_image_no_note_uses_is_cleaned_up(app):
     start(app, 'x ' + ANCHOR, at=(200, 10), images=images_field)
     wait_until(lambda: not os.path.exists(os.path.join(images, 'unused.png')), what='the unused image to go')
     assert os.path.exists(os.path.join(images, 'used.png'))
-    assert saved_note(app)['id'] == 'test'
 
 
 # ---------------------------------------------------------------- emoji

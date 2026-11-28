@@ -35,7 +35,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - A12 `ynote --version` prints the version (the same command for 2.0)
 - A13 Quit with a dialog open (Help, About, Delete) quits; a Delete confirmation counts as cancelled (2.0: Delete asking on the note) [2.0]
 - A14 A note saved off screen, as after a monitor was unplugged, moves onto the primary monitor [2.0]
-- A15 On an X server with no primary monitor, the first note is still placed on screen
+- A15 On an X server with no primary monitor, the first note is still placed on screen (app code shared by 1.x and 2.0)
 - A16 [2204] On 22.04 (PyGObject 3.42) the app starts and shows its notes (2.0: every 2.0 test runs on 22.04 too)
 - A17 A note moved and resized is saved where it is, and opens there again [WM] [2.0]
 
@@ -62,7 +62,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 ## C. Hidden Notes
 
 - C1 The Hidden Notes window lists hidden notes, the latest hidden first [2.0]
-- C2 Notes hidden together (Hide All) come first in that order
+- C2 Notes hidden together (Hide All) come first in that order (the tray, shared by 1.x and 2.0)
 - C3 A double click or Restore shows the note and closes the window [2.0]
 - C4 Restore right after the window opens restores the note hidden last (first, chosen already) (not in 2.0: its list has no Restore button)
 - C5 The arrow buttons reorder hidden notes, and the order is saved (not in 2.0, see T18)
@@ -97,7 +97,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - E12 Enter at the end of a heading starts a plain line [2.0]
 - E13 A heading is bold with Bold off; Bold on makes it bolder, in the font's Black weight [px] (2.0: U3) [2.0]
 - E14 Making a line a heading, or taking the heading away, keeps the bold in it [2.0]
-- E15 Bold in a heading goes out and comes back as Markdown, `# Title **bold**`
+- E15 Bold in a heading goes out and comes back as Markdown, `# Title **bold**` [2.0]
 - E16 Ctrl+E turns inline code on or off, or makes a selection code or plain [2.0]
 - E17 Inline code has a padding character at each end, which copying leaves out (1.x only: 2.0 keeps no padding characters)
 - E18 Text typed right after inline code is plain; typed inside it, code (2.0 too, as in Confluence) [2.0]
@@ -145,21 +145,21 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 - H1 Insert > Quote or `> ` starts a quote, with a bar beside it [2.0]
 - H2 Enter continues a quote; Enter on an empty line ends it [2.0]
-- H3 A wrapped quote's later rows start as far in as its text [px]
+- H3 A wrapped quote's later rows start as far in as its text [px] [2.0]
 
 ## I. Code blocks
 
 - I1 Insert > Code block, or ` ``` ` on an empty line (2.0: F5) [2.0]
-- I2 The box is as wide as the longest line, and follows edits; lines do not wrap, the block scrolls sideways [px]
+- I2 The box is as wide as the longest line, and follows edits; lines do not wrap, the block scrolls sideways [px] (2.0 follows Confluence: the block is as wide as the note) [2.0]
 - I3 A double click in a code block selects the line without its line break; a triple click, the whole block (2.0: U1, U2) [2.0]
 - I4 Empty lines in a code block stay in it, through pastes and replaced selections too (2.0: U12) [2.0]
 - I5 Text pasted or typed over a selection in a code block stays code, as over a line selected by a double click (2.0: U1) [2.0]
 - I6 A paste into code takes the text as it is, without reading Markdown (2.0: V9) [2.0]
 - I7 Lines with formats made a code block show their Markdown (`# Title`, `**bold**`, `- item`) in one block; Ctrl+Z brings them back in one step [2.0]
-- I8 Lines already code stay as they are; a line with an image is left out
+- I8 Lines already code stay as they are; a line with an image is left out (2.0: lines with an image are not made code at all) [2.0]
 - I9 A code block made plain again keeps the Markdown as text [2.0]
-- I10 A search match in a code block is highlighted [px]
-- I11 A long code block (3000 lines) opens fast and typing in it stays fast
+- I10 A search match in a code block is highlighted [px] [2.0]
+- I11 A long code block (3000 lines) opens fast and typing in it stays fast [2.0]
 - I12 A selection over several lines of a code block looks like GTK's, out to the right edge (1.x only: GTK's look)
 
 ## J. Dividers, links, emoji
@@ -168,20 +168,20 @@ placing notes across two monitors (D4, D9: much effort for little).
 - J2 http and https addresses are underlined links: Ctrl+click opens one, a click only places the cursor, and a tooltip says so [2.0]
 - J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports [2.0]
 - J4 Insert Emoji comes first in the text's right-click menu (2.0: Emoji… in the right-click menu, ＋, /emoji, or Ctrl+., a picker that finds them by name, the recent first) [2.0]
-- J5 Emoji are drawn larger without making their line taller [px]
+- J5 Emoji are drawn larger without making their line taller [px] (1.x only: GTK drew emoji small; WebKit draws them at the text's size)
 
 ## K. Images
 
 - K1 Ctrl+V pastes an image; Insert > Image inserts a file (2.0: U15, pasting) [2.0]
 - K2 Image files are saved in images/, and one no note uses is cleaned up [2.0]
-- K3 Images still in the undo history or Ynote's clipboard are not cleaned up
-- K4 An image in a table cell counts as in use
+- K3 Images still in the undo history or Ynote's clipboard are not cleaned up [2.0]
+- K4 An image in a table cell counts as in use [2.0]
 
 ## L. Tables
 
 - L1 Insert > Table adds a table with a header row and the cursor in its first cell (2.0: U5) [2.0]
-- L2 A click in a cell puts the cursor where it was clicked, also right of or below the text
-- L3 A drag selects in a cell, and a double click selects a word
+- L2 A click in a cell puts the cursor where it was clicked, also right of or below the text [2.0]
+- L3 A drag selects in a cell, and a double click selects a word [2.0]
 - L4 Tab and Shift+Tab go to the next or previous cell; Tab past the last cell adds a row and goes to its first cell, which shows and takes typing [2.0]
 - L5 Tab on a list item in a cell indents it [2.0]
 - L6 Enter makes a new line in a cell, not a row, and the table grows [2.0]
@@ -192,34 +192,34 @@ placing notes across two monitors (D4, D9: much effort for little).
 - L10a Deleting the header row makes the next row the header, in bold. Unlike Confluence the table keeps a header, which a Markdown table must have (2.0: U6) [2.0]
 - L11 A deleted table comes back with Ctrl+Z, and takes clicks [2.0]
 - L12 Ctrl+Z in a cell undoes that cell's edits [2.0]
-- L13 A cell holds lists, quotes, code blocks, inline formats, and images
+- L13 A cell holds lists, quotes, code blocks, inline formats, and images (2.0: lists, quotes, code blocks, formats) [2.0]
 - L14 The Format and Insert menus and the shortcuts act on the cell with the cursor; Insert > Table is off in a cell [2.0]
-- L15 A column is as wide as its text, measured in its fonts (bold, inline code); in a note too narrow, narrow columns keep their width and wide ones share the rest
-- L16 Short inline code, as `x | y`, does not wrap in a narrow column
+- L15 A column is as wide as its text, measured in its fonts (bold, inline code); in a note too narrow, narrow columns keep their width and wide ones share the rest [2.0]
+- L16 Short inline code, as `x | y`, does not wrap in a narrow column [2.0]
 - L17 The header row is shaded and bold, and its bold turns off; an empty header cell, and a line after Enter in one, start bold (2.0: U4, U5) [2.0]
-- L18 A note has one selection: a double click in a cell, then a click elsewhere, leaves no selection behind
+- L18 A note has one selection: a double click in a cell, then a click elsewhere, leaves no selection behind [2.0]
 - L19 Typing or Backspace over a selection across a table removes it without a crash, and Ctrl+Z brings it back [2.0]
 - L20 Backspace at the start of the line below a table goes into its last cell, or takes that line away when empty; Delete at the end of the line above does nothing (2.0 follows Confluence for Delete: it selects the table, as typing then replaces) [2.0]
 - L21 A click right of a table puts the cursor beside it, not in a cell; typing there goes on the line after it, as in Confluence [2.0]
-- L21b Beside a table, Enter opens a line after it (or goes to the empty one there), Backspace goes into the last cell, Delete does nothing, and the arrows go into the table
-- L22 Text in cells is found by search, in the note and across all notes; Enter on a match selects it in its cell
-- L23 A folded expand hides a table in it
-- L24 A table copies as a GitHub Markdown table: `<br>` for a line break in a cell, `\|` for a pipe, code lines as inline code, no bold markers in the header
-- L25 A pasted Markdown table becomes a table, `<br>` a line break in a cell, its header bold
-- L26 Markdown pasted into a cell keeps its formats; a table is not put in a cell
+- L21b Beside a table, Enter opens a line after it (or goes to the empty one there), Backspace goes into the last cell, Delete does nothing, and the arrows go into the table [2.0]
+- L22 Text in cells is found by search, in the note and across all notes; Enter on a match selects it in its cell [2.0]
+- L23 A folded expand hides a table in it [2.0]
+- L24 A table copies as a GitHub Markdown table: `<br>` for a line break in a cell, `\|` for a pipe, code lines as inline code, no bold markers in the header [2.0]
+- L25 A pasted Markdown table becomes a table, `<br>` a line break in a cell, its header bold [2.0]
+- L26 Markdown pasted into a cell keeps its formats; a table is not put in a cell (2.0: a table pasted in a cell goes after its table) [2.0]
 - L27 A table in the 1.13 format, rows of tab-separated text, becomes a table of cells when its note opens (2.0: R4) [2.0]
 - L28 A cell's right-click opens one menu, not the note's too (2.0: T8) [2.0]
 - L29 Cells are saved with their text, formats, and images in the note's tables field, and open as they were (1.x only: 2.0 saves cells in the note's document)
 
 ## M. Expands
 
-- M1 Insert > Expand puts the selected lines in it; inserted on the empty last line, it leaves a line after it
+- M1 Insert > Expand puts the selected lines in it; inserted on the empty last line, it leaves a line after it [2.0]
 - M2 A click on the arrow, or Ctrl+Enter on the title, folds or opens it; folding moves a cursor inside to the title [2.0]
-- M3 An expand holds code blocks, lists, tables, and other expands
+- M3 An expand holds code blocks, lists, tables, and other expands [2.0]
 - M4 Enter on its empty last line goes on below the expand (2.0 follows Confluence instead: U11)
 - M5 Backspace after an expand takes an empty line into it; Delete never joins a line to its end (2.0 follows Confluence: Delete takes the line after into it) [2.0]
 - M6 Backspace at the title's start keeps what it holds [2.0]
-- M7 An expand never ended gets an end, and an end without one is taken out
+- M7 An expand never ended gets an end, and an end without one is taken out (2.0: as such a note is converted, tests/test_convert.py)
 - M8 A search match in a folded expand shows it open until the search closes (2.0: T13) [2.0]
 - M9 An expand copies as `<details>` and pastes back as an expand (2.0: V8) [2.0]
 - M10 The cursor does not rest on an expand's end line (1.x only: 2.0 has no end line)
@@ -234,7 +234,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - N6 A list, heading, or code block pasted after text starts a line of its own [2.0]
 - N7 Ctrl+Shift+V pastes the text alone, without reading Markdown (2.0: V7) [2.0]
 - N8 Cut and paste brings everything back, tables included (2.0: V8) [2.0]
-- N9 Copying out and pasting back as Markdown gives the same note, but for a blank line before a divider
+- N9 Copying out and pasting back as Markdown gives the same note, but for a blank line before a divider [2.0]
 - N10 Names with underscores and lone stars stay text; inline code holding a backtick gets longer backticks [2.0]
 - N11 Middle-click pastes and drags carry no invisible characters, such as an empty code line's mark (1.x only: 2.0 keeps no invisible characters)
 
@@ -242,23 +242,23 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 - O1 Ctrl+Z and Ctrl+Shift+Z keep the scroll position and put the cursor where the edit was [2.0]
 - O2 A table's shape changes and cell edits are steps of the note's undo (2.0: L11, L12) [2.0]
-- O3 After undo, the Format button follows the formats at the cursor
+- O3 After undo, the Format button follows the formats at the cursor [2.0]
 
 ## P. Search
 
 - P1 Ctrl+F opens the search bar with All notes on, this note's matches first (2.0: All notes is as last set, U21)
 - P2 With All notes off, only this note is searched (2.0: T12) [2.0]
 - P3 Matching ignores case and takes the query literally, not as a pattern [2.0]
-- P4 Each match shows the note's title and the matching line, cut around the match; a hidden note's mark always shows
+- P4 Each match shows the note's title and the matching line, cut around the match; a hidden note's mark always shows (2.0: in All notes, with a hidden note tagged so) [2.0]
 - P5 Up and Down in the entry pick a match, the cursor staying in the entry; Enter opens it, or the first (2.0: T12) [2.0]
 - P6 Opening a match brings its note forward, restoring it if hidden, and selects the match (2.0: U16) [2.0]
-- P7 Highlights go when the search closes
+- P7 Highlights go when the search closes [2.0]
 - P8 Esc closes the search (2.0: T12) [2.0]
 
 ## Q. Drawing and wrapping [px]
 
-- Q1 A long line wraps at the note's width; a code block's lines do not
-- Q2 In a note with Korean, every line is as far from the next
+- Q1 A long line wraps at the note's width; a code block's lines do not [2.0]
+- Q2 In a note with Korean, every line is as far from the next [2.0]
 - Q3 Inline code that wraps has padding at the end of the row it wraps from (1.x drawing: 2.0 draws with CSS)
 - Q4 Inline code that starts a line and wraps lines up its later rows, box and text, with the first, with padding (1.x drawing: 2.0 draws with CSS)
 - Q5 Inline code that starts within a line and wraps starts its later rows' boxes with the text (1.x drawing: 2.0 draws with CSS)
@@ -267,7 +267,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - Q8 Code boxes have the same padding on all sides; an inline code box sits in the middle of its line (1.x drawing: 2.0 draws with CSS)
 - Q9 List markers (dots, boxes) are drawn at an em-based size and do not make their line taller (1.x drawing: 2.0 draws with CSS)
 - Q10 After Enter in a list, quote, code block, or table, and any key the note handles, the new line is in view [2.0]
-- Q11 Bold in a heading is drawn bolder, in English and Korean, on 22.04 too [2204]
+- Q11 Bold in a heading is drawn bolder, in English and Korean, on 22.04 too [2204] [2.0]
 - Q12 A see-through note keeps an opaque strip behind text, table cells too (1.x only: 2.0 fades all below the title bar alike)
 
 ## R. Notes from older versions

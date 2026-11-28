@@ -95,9 +95,13 @@ export function toggleCodeBlock(state, dispatch) {
   // Within one line: that line becomes code.
   if ($from.parent.isTextblock && $from.sameParent($to)) return setBlockType(code_block)(state, dispatch);
   // Lines selected over several blocks become one block of code, a line
-  // each, their formats as Markdown, as in 1.x.
+  // each, their formats as Markdown, as in 1.x. Not over an image, which
+  // code cannot hold: it would be lost.
   const range = $from.blockRange($to);
   if (!range) return false;
+  let image = false;
+  state.doc.nodesBetween(from, to, node => { if (node.type.name === 'image') image = true; return !image; });
+  if (image) return false;
   if (!dispatch) return true;
   const text = markdownLines(state.doc, from, to).join('\n');
   const tr = state.tr.replaceWith(range.start, range.end, code_block.create(null, text ? schema.text(text) : null));

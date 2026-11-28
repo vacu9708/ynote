@@ -34,7 +34,7 @@ class WebNote:
 
     def button(self, label):
         return wait_until(lambda: next(
-            (b for b in find_all(self.frame, lambda a: role(a) in ('button', 'push button'))
+            (b for b in find_all(self.frame, lambda a: role(a) in ('button', 'push button', 'toggle button'))
              if showing(b) and name(b) == label), None), what=f'button {label!r}')
 
     def press(self, label):
@@ -55,13 +55,13 @@ class WebNote:
 
     def buttons(self):
         """The names of the buttons shown."""
-        return [name(b) for b in find_all(self.frame, lambda a: role(a) in ('button', 'push button'))
+        return [name(b) for b in find_all(self.frame, lambda a: role(a) in ('button', 'push button', 'toggle button'))
                 if showing(b)]
 
     def find_button(self, text):
         """A button whose name holds text, such as a code block's Copy."""
         return wait_until(lambda: next(
-            (b for b in find_all(self.frame, lambda a: role(a) in ('button', 'push button'))
+            (b for b in find_all(self.frame, lambda a: role(a) in ('button', 'push button', 'toggle button'))
              if text in name(b)), None), what=f'a button with {text!r}')
 
 
@@ -96,7 +96,7 @@ def choose(app, label):
 def menu_button(app, label):
     """A button inside the menu, such as a color swatch or A+."""
     return wait_until(lambda: next(
-        (b for b in find_all(menu(app), lambda a: role(a) in ('button', 'push button'))
+        (b for b in find_all(menu(app), lambda a: role(a) in ('button', 'push button', 'toggle button'))
          if showing(b) and (name(b) == label or (b.get_description() or '') == label)), None),
         what=f'menu button {label!r}')
 

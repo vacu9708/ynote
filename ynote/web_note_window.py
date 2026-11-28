@@ -21,6 +21,7 @@ from gi.repository import Gdk, GLib, Gtk, WebKit2
 
 from . import __version__
 from .config import CONF_DIR, IMAGES_DIR, SETTINGS_FILE, UNTITLED_LABEL, display_path
+from .images import doc_image_files
 from .storage import load_json, save_json
 from .convert import doc_text, note_doc
 from .search import find_matches
@@ -135,6 +136,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         # The content, as the page last sent it. A note of 1.x is converted
         # once, here, and saved in the new form from then on.
         self._doc = data.get('doc') or note_doc(data)
+        self._seen_images = doc_image_files(self._doc)
 
         self.set_decorated(False)
         self.set_app_paintable(True)
@@ -223,6 +225,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
 
     def _do_changed(self, message):
         self._doc = message['doc']
+        self._seen_images |= doc_image_files(self._doc)
         self._queue_save()
 
     def _do_title(self, message):
@@ -675,7 +678,10 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         pass
 
     def history_image_files(self):
-        return set()
+        # Every image the note has shown in this run: a superset of those its
+        # undo history holds, which the page keeps to itself. Cleaned up on
+        # the next start, when there is no history.
+        return set(self._seen_images)
 
     def _queue_save(self):
         if self._save_id:

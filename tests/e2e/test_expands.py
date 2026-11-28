@@ -1,8 +1,10 @@
 """M. Expands: see BEHAVIORS.md."""
 from tests.e2e.driver import clipboard_text, settle, wait_until
 
+# An empty line after the expand: the blank line right after </details> is
+# only Markdown's, which pasting leaves out.
 FOLDED = ('top\n\n<details>\n<summary>Fold</summary>\n\ninside text\n\n'
-          '</details>\n\nbottom\n')
+          '</details>\n\n\nbottom\n')
 OPEN = FOLDED.replace('<details>', '<details open>')
 
 

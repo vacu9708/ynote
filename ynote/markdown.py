@@ -225,7 +225,9 @@ def to_markdown(state):
                 break
         else:
             if line == EXPAND_END:
-                out.extend(['', '</details>'])
+                # A blank line after it too, as Markdown after HTML needs:
+                # always one, which the reader drops (_sections()).
+                out.extend(['', '</details>', ''])
                 continue
         if line.startswith((EXPAND_OPEN, EXPAND_CLOSED)):
             continue
@@ -252,6 +254,9 @@ def to_markdown(state):
             out.append(_inline(line, bold[start:end], inline[start:end]))
     if in_block:
         out.append(FENCE)
+    # Nothing follows a last expand: no blank line after it.
+    if lines and lines[-1] == EXPAND_END and out and out[-1] == '':
+        out.pop()
     return '\n'.join(out)
 
 
@@ -431,6 +436,8 @@ def _sections(lines):
                 out.pop()
             out.append(('end',))
             i += 1
+            if i < len(lines) and not lines[i].strip():
+                i += 1
             continue
         out.append(line)
         i += 1
