@@ -32,11 +32,11 @@ placing notes across two monitors (D4, D9: much effort for little).
 - A9 Notes open stacked as they were when Ynote quit [WM]. Openbox stacks them right even without the restacking GNOME (mutter) needs, so that part is not shown here [2.0]
 - A10 notes.json keeps Korean as it is and each range on one line, read and written as UTF-8 [2.0]
 - A11 Starting Ynote while it runs brings its notes forward instead of a second copy [WM] [2.0]
-- A12 `ynote --version` prints the version
+- A12 `ynote --version` prints the version (the same command for 2.0)
 - A13 Quit with a dialog open (Help, About, Delete) quits; a Delete confirmation counts as cancelled (2.0: Delete asking on the note) [2.0]
 - A14 A note saved off screen, as after a monitor was unplugged, moves onto the primary monitor [2.0]
 - A15 On an X server with no primary monitor, the first note is still placed on screen
-- A16 [2204] On 22.04 (PyGObject 3.42) the app starts and shows its notes
+- A16 [2204] On 22.04 (PyGObject 3.42) the app starts and shows its notes (2.0: every 2.0 test runs on 22.04 too)
 - A17 A note moved and resized is saved where it is, and opens there again [WM] [2.0]
 
 ## B. A note's window
@@ -54,7 +54,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - B11 While maximized, collapse is disabled; while collapsed, maximize does nothing [WM] [2.0]
 - B12 Every edge resizes the note [WM] [2.0]
 - B13 Pin keeps the note on top, and is saved [WM] [2.0]
-- B14 Right-clicking the title or bottom bar opens the popover: color, opacity, font size, title, delete, Start at Login, Help, About
+- B14 Right-clicking the title or bottom bar opens the popover: color, opacity, font size, title, delete, Start at Login, Help, About (2.0: the note menu, T23)
 - B15 Start at Login turned off turns the autostart entry off, and it stays off on later starts [2.0]
 - B16 About shows the version, where notes are saved, and where the running copy is (2.0: in the keyboard shortcuts, F1) [2.0]
 - B17 Help lists only shortcuts nothing on screen shows (not the menus' Markdown or shortcuts) [2.0]
@@ -160,7 +160,7 @@ placing notes across two monitors (D4, D9: much effort for little).
 - I9 A code block made plain again keeps the Markdown as text [2.0]
 - I10 A search match in a code block is highlighted [px]
 - I11 A long code block (3000 lines) opens fast and typing in it stays fast
-- I12 A selection over several lines of a code block looks like GTK's, out to the right edge
+- I12 A selection over several lines of a code block looks like GTK's, out to the right edge (1.x only: GTK's look)
 
 ## J. Dividers, links, emoji
 
@@ -207,9 +207,9 @@ placing notes across two monitors (D4, D9: much effort for little).
 - L24 A table copies as a GitHub Markdown table: `<br>` for a line break in a cell, `\|` for a pipe, code lines as inline code, no bold markers in the header
 - L25 A pasted Markdown table becomes a table, `<br>` a line break in a cell, its header bold
 - L26 Markdown pasted into a cell keeps its formats; a table is not put in a cell
-- L27 A table in the 1.13 format, rows of tab-separated text, becomes a table of cells when its note opens
-- L28 A cell's right-click opens one menu, not the note's too
-- L29 Cells are saved with their text, formats, and images in the note's tables field, and open as they were
+- L27 A table in the 1.13 format, rows of tab-separated text, becomes a table of cells when its note opens (2.0: R4) [2.0]
+- L28 A cell's right-click opens one menu, not the note's too (2.0: T8) [2.0]
+- L29 Cells are saved with their text, formats, and images in the note's tables field, and open as they were (1.x only: 2.0 saves cells in the note's document)
 
 ## M. Expands
 
@@ -259,22 +259,22 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 - Q1 A long line wraps at the note's width; a code block's lines do not
 - Q2 In a note with Korean, every line is as far from the next
-- Q3 Inline code that wraps has padding at the end of the row it wraps from
-- Q4 Inline code that starts a line and wraps lines up its later rows, box and text, with the first, with padding
-- Q5 Inline code that starts within a line and wraps starts its later rows' boxes with the text
-- Q6 Rows of wrapped inline code with Korean in it do not overlap
-- Q7 A word of code too long for its row starts on it, leaving no empty box before
-- Q8 Code boxes have the same padding on all sides; an inline code box sits in the middle of its line
-- Q9 List markers (dots, boxes) are drawn at an em-based size and do not make their line taller
+- Q3 Inline code that wraps has padding at the end of the row it wraps from (1.x drawing: 2.0 draws with CSS)
+- Q4 Inline code that starts a line and wraps lines up its later rows, box and text, with the first, with padding (1.x drawing: 2.0 draws with CSS)
+- Q5 Inline code that starts within a line and wraps starts its later rows' boxes with the text (1.x drawing: 2.0 draws with CSS)
+- Q6 Rows of wrapped inline code with Korean in it do not overlap (1.x drawing: 2.0 draws with CSS)
+- Q7 A word of code too long for its row starts on it, leaving no empty box before (1.x drawing: 2.0 draws with CSS)
+- Q8 Code boxes have the same padding on all sides; an inline code box sits in the middle of its line (1.x drawing: 2.0 draws with CSS)
+- Q9 List markers (dots, boxes) are drawn at an em-based size and do not make their line taller (1.x drawing: 2.0 draws with CSS)
 - Q10 After Enter in a list, quote, code block, or table, and any key the note handles, the new line is in view [2.0]
 - Q11 Bold in a heading is drawn bolder, in English and Korean, on 22.04 too [2204]
-- Q12 A see-through note keeps an opaque strip behind text, table cells too
+- Q12 A see-through note keeps an opaque strip behind text, table cells too (1.x only: 2.0 fades all below the title bar alike)
 
 ## R. Notes from older versions
 
 - R1 Inline code padded by plain spaces or en spaces (U+2002) gets figure spaces [2.0]
 - R2 Lists indented by spaces get tabs [2.0]
-- R3 Formats on markers and line breaks are taken off
+- R3 Formats on markers and line breaks are taken off (1.x only: 2.0 has no marker characters)
 - R4 Tables of tab-separated rows (1.13) become tables of cells [2.0]
 - R5 A note saved without newer fields (color, opacity, collapsed...) gets their defaults [2.0]
 - R6 What is saved stays readable by an older version, but for the tables field (1.x only: 1.x cannot read what 2.0 saves, which is why 2.0 keeps the notes of 1.x apart)
