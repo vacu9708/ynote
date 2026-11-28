@@ -267,7 +267,7 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-t
 .ProseMirror img { max-width: 100%; vertical-align: bottom; border-radius: 3px; }
 .ProseMirror img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
 
-.ProseMirror .link { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+.ProseMirror .link { color: var(--link); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 
 
 /* --- Asking on the note itself, as before deleting it --------------------- */

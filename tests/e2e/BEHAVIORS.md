@@ -113,6 +113,7 @@ two monitors (D4, D9: much effort for little).
 - F6 `- ` makes a bullet, `[ ] ` a to-do, also after a bullet; not in a code block
 - F7 `> ` starts a quote
 - F8 A line of `---` is a divider
+- F10 `[text](address)` typed makes a link
 - F9 Each tool's tooltip shows its name, the Markdown typed for it, and its keys (T15)
 
 ## G. Lists: bullets and to-dos
@@ -155,11 +156,14 @@ two monitors (D4, D9: much effort for little).
 ## J. Dividers, links, emoji
 
 - J1 Up and Down select a divider, from a line, a code block, or a table alike, and typing replaces it, as in Confluence (1.x skipped it)
-- J2 http and https addresses are links: Ctrl+click opens one, and a click only places the cursor
+- J2 A click on a link opens it: right-click changes it, so a click need not place the cursor (1.x opened on Ctrl+click, as its addresses were only text)
 - J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports
+- J2a An http or https address typed becomes a link once a space or Enter ends it, and one pasted at once, as in Confluence; notes saved before links were kept as links have theirs made links as they open
+- J2b A link shows the hand
 - J4 Emoji… (the right-click menu, ＋, /emoji, or Ctrl+.) finds emoji by name and puts one at the cursor; the ones used last come first
 - J5 Emoji are drawn in color, not in a text font's black and white, as DejaVu Sans drew 😀 [px]
 - J5b Emoji are drawn larger than the text, as in 1.x, without making their line taller [px]
+- J6 Link… (Ctrl+K, ＋, /link, or a link's right-click menu) makes the selection or new text a link, or changes a link's text and address, an address typed too; Remove link leaves its text, which stays text; a link copies as `[text](address)` and pastes back as one; its fields fit in it
 
 ## K. Images
 
@@ -219,7 +223,7 @@ two monitors (D4, D9: much effort for little).
 - N2 Code alone is copied as it is, without fences (V2)
 - N3 A paste into another note keeps everything as it was (V3)
 - N4 Once another app takes the clipboard, its text is pasted, not Ynote's copy (V4)
-- N5 Markdown from another app pastes in with its formats, and links as their text and address
+- N5 Markdown from another app pastes in with its formats, and a link as a link
 - N6 A heading or code block pasted after text starts a line of its own
 - N7 Ctrl+Shift+V pastes the text alone, without reading Markdown (V7)
 - N8 Cut and paste brings everything back, tables included (V8)

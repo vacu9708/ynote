@@ -206,40 +206,6 @@ def test_L21_a_click_right_of_a_table_and_typing_goes_on_the_line_after(app, inp
 # ---------------------------------------------------------------- links
 
 
-def test_J2_ctrl_click_opens_a_link_and_a_click_only_places_the_cursor(app, inp):
-    opened = fake_browser(app.home)
-    note = start(app, 'see https://example.com/page now', at=(200, 10))
-    note.click_text(80, 10)                  # on the link
-    settle(0.5)
-    assert not os.path.exists(opened)
-    x, y = note.text_point(80, 10)
-    inp.move(x, y)
-    inp._mods(['ctrl'], True)
-    inp.press()
-    inp.release()
-    inp._mods(['ctrl'], False)
-    wait_until(lambda: os.path.exists(opened), timeout=10, what='the link')
-    with open(opened) as f:
-        assert f.read().strip() == 'https://example.com/page'
-
-
-def test_J3_a_link_leaves_out_the_punctuation_after_it(app, inp):
-    opened = fake_browser(app.home)
-    note = start(app, 'at https://example.com:8080/a?b=(c), then', at=(200, 10))
-    x, y = note.text_point(70, 10)
-    inp.move(x, y)
-    inp._mods(['ctrl'], True)
-    inp.press()
-    inp.release()
-    inp._mods(['ctrl'], False)
-    wait_until(lambda: os.path.exists(opened), timeout=10, what='the link')
-    with open(opened) as f:
-        assert f.read().strip() == 'https://example.com:8080/a?b=(c)'
-
-
-# ---------------------------------------------------------------- images
-
-
 def test_K2_an_image_no_note_uses_is_cleaned_up(app):
     images = os.path.join(app.conf, 'images')
     os.makedirs(images)
@@ -285,3 +251,244 @@ def test_J4_emoji_comes_first_in_the_texts_right_click_menu(app, inp):
     settle(0.3)
     inp.key('enter')
     assert_saved(app, "paragraph('go❤️')", last_line=False)
+
+
+# ---------------------------------------------------------------- links
+
+
+def link_form(app):
+    """The popup while it shows the link form."""
+    from tests.e2e.driver import find_all, name, role
+    from tests.e2e.driver import wait_until as wait
+    return wait(lambda: next((w for w in app.windows() if role(w) != 'frame' and find_all(
+        w, lambda a: name(a) in ('Insert', 'Save') and role(a) in ('button', 'push button'))), None),
+        what='the link form')
+
+
+def doc_note(app, content):
+    """A note saved by 2.0, with this paragraph content, clicked into at its
+    start."""
+    import json
+    os.makedirs(app.conf, exist_ok=True)
+    doc = {'type': 'doc', 'content': [{'type': 'paragraph', 'content': content}, {'type': 'paragraph'}]}
+    with open(app.notes_file, 'w') as f:
+        json.dump([{'id': 'test', 'title': 'test', 'x': 100, 'y': 80, 'w': 420, 'h': 360, 'doc': doc}], f)
+    app.start()
+    note = WebNote(app, app.note('test').frame)
+    note.click_text(2, 10)
+    return note
+
+
+def saved_link(app):
+    from tests.e2e.web import saved_note
+    for node in saved_note(app)['doc']['content'][0].get('content', []):
+        for mark in node.get('marks', []):
+            if mark['type'] == 'link':
+                return node['text'], mark['attrs']['href']
+    return None
+
+
+def test_J6_ctrl_k_links_the_selected_text(app, inp):
+    start(app, 'see docs here', at=(200, 10))
+    inp.key('home')
+    for _ in range(4):
+        inp.key('right')
+    for _ in range(4):
+        inp.key('shift+right')
+    inp.key('ctrl+k')
+    link_form(app)
+    settle(0.3)
+    inp.type('https://e.com/a')
+    inp.key('enter')
+    wait_until(lambda: saved_link(app) == ('docs', 'https://e.com/a'), what='docs linked')
+    assert_saved(app, "paragraph('see ' 'docs'[link] ' here')", last_line=False)
+
+
+def test_J6_link_inserts_text_and_address_at_the_cursor(app, inp):
+    note = start(app, 'see ', at=(200, 10))
+    note.press('More to insert')
+    choose(app, 'Link')
+    link_form(app)
+    settle(0.3)
+    inp.type('the docs')
+    inp.key('tab')
+    inp.type('https://e.com/a')
+    inp.key('enter')
+    wait_until(lambda: saved_link(app) == ('the docs', 'https://e.com/a'), what='the link inserted')
+
+
+def test_J6_editing_a_link_changes_its_text_and_keeps_its_address(app, inp):
+    doc_note(app, [{'type': 'text', 'text': 'docs', 'marks': [{'type': 'link', 'attrs': {'href': 'https://e.com/a'}}]}])
+    inp.key('right')
+    inp.key('ctrl+k')
+    link_form(app)
+    settle(0.3)
+    inp.key('ctrl+a')
+    inp.type('manual')
+    inp.key('enter')
+    wait_until(lambda: saved_link(app) == ('manual', 'https://e.com/a'), what='the text changed')
+
+
+def test_J6_remove_link_keeps_its_text(app, inp):
+    from tests.e2e.driver import center, find_all, name
+    doc_note(app, [{'type': 'text', 'text': 'docs', 'marks': [{'type': 'link', 'attrs': {'href': 'https://e.com/a'}}]}])
+    inp.key('right')
+    inp.key('ctrl+k')
+    form = link_form(app)
+    remove = wait_until(lambda: next(iter(find_all(form, lambda a: name(a) == 'Remove link')), None),
+                        what='Remove link')
+    app.inp.click(*center(remove))
+    assert_saved(app, "paragraph('docs')", last_line=False)
+
+
+def test_J6_a_link_copies_as_a_markdown_link(app, inp):
+    from tests.e2e.driver import clipboard_text, set_clipboard
+    doc_note(app, [{'type': 'text', 'text': 'see '},
+                   {'type': 'text', 'text': 'docs', 'marks': [{'type': 'link', 'attrs': {'href': 'https://e.com/a'}}]}])
+    inp.key('ctrl+a')
+    set_clipboard('-')
+    inp.key('ctrl+c')
+    wait_until(lambda: clipboard_text() not in (None, '-'), what='a copy')
+    assert clipboard_text() == 'see [docs](https://e.com/a)'
+
+
+def cursor_image(inp):
+    """The mouse cursor's picture, as X shows it (XFixes): through libXfixes,
+    as 22.04's python-xlib cannot ask for it."""
+    import ctypes
+    import hashlib
+
+    class Image(ctypes.Structure):
+        _fields_ = [('x', ctypes.c_short), ('y', ctypes.c_short), ('width', ctypes.c_ushort),
+                    ('height', ctypes.c_ushort), ('xhot', ctypes.c_ushort), ('yhot', ctypes.c_ushort),
+                    ('serial', ctypes.c_ulong), ('pixels', ctypes.POINTER(ctypes.c_ulong)),
+                    ('atom', ctypes.c_ulong), ('name', ctypes.c_char_p)]
+    xlib = ctypes.CDLL('libX11.so.6')
+    xfixes = ctypes.CDLL('libXfixes.so.3')
+    xlib.XOpenDisplay.restype = ctypes.c_void_p
+    xlib.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    xlib.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    xfixes.XFixesGetCursorImage.restype = ctypes.POINTER(Image)
+    xfixes.XFixesGetCursorImage.argtypes = [ctypes.c_void_p]
+    display = xlib.XOpenDisplay(None)
+    try:
+        image = xfixes.XFixesGetCursorImage(display).contents
+        pixels = bytes(memoryview(ctypes.cast(image.pixels, ctypes.POINTER(
+            ctypes.c_ulong * (image.width * image.height))).contents))
+        return image.width, image.height, hashlib.sha1(pixels).hexdigest()
+    finally:
+        xlib.XCloseDisplay(display)
+
+
+def opened_by_click(app, inp, note, dx):
+    """Click the text dx from its left, and the address a browser was asked
+    to open, if one was."""
+    opened = fake_browser(app.home)
+    x, y = note.text_point(dx, 10)
+    app.inp.click(x, y)
+    try:
+        wait_until(lambda: os.path.exists(opened), timeout=5, what='the link')
+    except AssertionError:
+        return None
+    with open(opened) as f:
+        return f.read().strip()
+
+
+def test_J2_a_click_opens_a_link(app, inp):
+    note = start(app, 'see https://example.com/page now', at=(200, 10))
+    assert opened_by_click(app, inp, note, 80) == 'https://example.com/page'
+
+
+def test_J3_a_link_leaves_out_the_punctuation_after_it(app, inp):
+    note = start(app, 'at https://example.com:8080/a?b=(c), then', at=(200, 10))
+    assert opened_by_click(app, inp, note, 70) == 'https://example.com:8080/a?b=(c)'
+
+
+def test_J2a_an_address_typed_becomes_a_link_as_a_space_ends_it(app, inp):
+    start(app, '', at=(200, 10))
+    inp.type('see https://e.com/a')
+    settle(0.3)
+    assert saved_link(app) is None, 'not while it is typed'
+    inp.type(' now')
+    wait_until(lambda: saved_link(app) == ('https://e.com/a', 'https://e.com/a'), what='the address linked')
+
+
+def test_J2a_an_address_typed_becomes_a_link_as_enter_ends_it(app, inp):
+    start(app, '', at=(200, 10))
+    inp.type('https://e.com/a')
+    inp.key('enter')
+    inp.type('next')
+    wait_until(lambda: saved_link(app) == ('https://e.com/a', 'https://e.com/a'), what='the address linked')
+
+
+def test_J2a_an_address_pasted_becomes_a_link(app, inp):
+    from tests.e2e.driver import set_clipboard
+    start(app, 'see ', at=(200, 10))
+    set_clipboard('https://e.com/a')
+    inp.key('ctrl+v')
+    wait_until(lambda: saved_link(app) == ('https://e.com/a', 'https://e.com/a'), what='the address linked')
+
+
+def test_J2b_a_link_shows_the_hand(app, inp):
+    note = start(app, 'plain https://e.com/a', at=(200, 10))
+    x, y = note.text_point(10, 10)
+    inp.move(x, y)
+    settle(0.3)
+    text = cursor_image(inp)
+    x, y = note.text_point(90, 10)
+    inp.move(x, y)
+    settle(0.3)
+    assert cursor_image(inp) != text
+
+
+def test_J6_an_address_gets_text_of_its_own(app, inp):
+    start(app, 'see https://e.com/a now', at=(200, 10))
+    inp.key('home')
+    for _ in range(6):
+        inp.key('right')
+    inp.key('ctrl+k')
+    link_form(app)
+    settle(0.3)
+    inp.key('ctrl+a')
+    inp.type('docs')
+    inp.key('enter')
+    wait_until(lambda: saved_link(app) == ('docs', 'https://e.com/a'), what='the address given text')
+
+
+def test_J6_remove_link_leaves_text_that_a_click_does_not_open(app, inp):
+    from tests.e2e.driver import center, find_all, name
+    note = start(app, 'see https://e.com/a now', at=(200, 10))
+    inp.key('home')
+    for _ in range(6):
+        inp.key('right')
+    inp.key('ctrl+k')
+    form = link_form(app)
+    remove = wait_until(lambda: next(iter(find_all(form, lambda a: name(a) == 'Remove link')), None),
+                        what='Remove link')
+    app.inp.click(*center(remove))
+    assert_saved(app, "paragraph('see https://e.com/a now')", last_line=False)
+    # Typing after it does not make it a link again.
+    inp.key('end')
+    inp.type(' more')
+    settle(0.5)
+    assert saved_link(app) is None
+    assert opened_by_click(app, inp, note, 80) is None
+
+
+def test_J6_the_link_forms_fields_fit_in_it(app, inp):
+    from tests.e2e.driver import extents, find_all, role, showing
+    doc_note(app, [{'type': 'text', 'text': 'docs', 'marks': [{'type': 'link', 'attrs': {'href': 'https://e.com/a'}}]}])
+    inp.key('right')
+    inp.key('ctrl+k')
+    form = link_form(app)
+    settle(0.3)
+    buttons = [b for b in find_all(form, lambda a: role(a) in ('button', 'push button')) if showing(b)]
+    from tests.e2e.driver import Atspi
+    # By being editable: 22.04's WebKit names a field's role otherwise.
+    fields = [f for f in find_all(form, lambda a: a.get_state_set().contains(Atspi.StateType.EDITABLE)
+                                  and role(a) not in ('document web', 'frame', 'window')) if showing(f)]
+    assert len(fields) >= 2, [role(f) for f in fields]
+    right = max(extents(b)[0] + extents(b)[2] for b in buttons)
+    for f in fields:
+        x, y, w, h = extents(f)
+        assert x + w <= right + 1, (x + w, right)

@@ -81,7 +81,7 @@ class WebPopup(Gtk.Window):
         self._takes_input = takes_input
         # A menu with a field to type in, as the emoji picker's, takes keys
         # in its page: typing, Korean too, and moving with the arrows.
-        self._typing = bool(spec.get('emoji'))
+        self._typing = bool(spec.get('emoji') or spec.get('link'))
         spec = dict(spec, flat=not self._composited)
         if self._ready:
             call_js(self.view, 'menu.show', spec)

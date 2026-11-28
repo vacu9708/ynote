@@ -66,6 +66,8 @@ export const ACTIONS = [
   {id: 'emoji', group: 'Insert', label: 'Emoji…', icon: 'emoji', md: '/emoji', keys: ['Ctrl', '.'],
     run: ({chrome}) => { chrome.openEmoji(); return true; }, enabled: () => true},
   // Typed as // where a word starts, as in Confluence (editor.js).
+  {id: 'link', group: 'Insert', label: 'Link…', icon: 'link', md: '[text](url)', keys: ['Ctrl', 'K'],
+    run: ({chrome}) => { chrome.openLink(); return true; }, enabled: () => true},
   {id: 'date', group: 'Insert', label: 'Date', icon: 'calendar', md: '//', ...insertText(today)},
 
   // Keys of the editor, for the shortcuts page
@@ -132,11 +134,11 @@ export function menuRow(action, ctx, extra = {}) {
 // last before ＋ go into ＋'s menu first.
 export const TOOLBAR = ['heading', 'bold', 'code', '|', 'bullet', 'checklist', 'codeblock', 'table'];
 // ＋'s menu, after any of the toolbar's that did not fit.
-export const MORE = ['quote', 'divider', 'expand', 'image', 'emoji', 'date'];
+export const MORE = ['quote', 'divider', 'expand', 'link', 'image', 'emoji', 'date'];
 
 // The / menu: every insertable thing and the text formats that make a block.
 export const SLASH = ['heading', 'bullet', 'checklist', 'codeblock', 'table', 'quote', 'divider', 'expand',
-  'image', 'emoji', 'date'];
+  'link', 'image', 'emoji', 'date'];
 
 export function inTable(state) { return isInTable(state); }
 export {TextSelection};

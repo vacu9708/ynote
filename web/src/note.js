@@ -93,12 +93,12 @@ window.ynote = {
   pasteText(text) {
     editor.run((state, dispatch) => {
       if (state.selection.$from.parent.type.spec.code || !text.includes('\n')) {
-        dispatch(state.tr.insertText(text).scrollIntoView());
+        dispatch(state.tr.insertText(text).scrollIntoView().setMeta('uiEvent', 'paste'));
         return true;
       }
       const lines = text.split('\n').map(line =>
         schema.nodes.paragraph.create(null, line ? schema.text(line) : null));
-      dispatch(state.tr.replaceSelection(new Slice(Fragment.from(lines), 1, 1)).scrollIntoView());
+      dispatch(state.tr.replaceSelection(new Slice(Fragment.from(lines), 1, 1)).scrollIntoView().setMeta('uiEvent', 'paste'));
       return true;
     });
   },

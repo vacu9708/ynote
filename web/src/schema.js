@@ -11,7 +11,9 @@ export function setImagesUrl(url) { imagesUrl = url; }
 export const imageSrc = file => imagesUrl + encodeURIComponent(file);
 
 const nodes = {
-  doc: {content: 'block+'},
+  // attrs.links: the note's addresses are links (convert.linkify()), as
+  // every note saved since; one saved before has them made links once.
+  doc: {content: 'block+', attrs: {links: {default: 1}}},
 
   paragraph: {
     content: 'inline*', group: 'block cellblock',
@@ -115,6 +117,15 @@ const marks = {
     inclusive: false,
     parseDOM: [{tag: 'code'}],
     toDOM: () => ['code', 0],
+  },
+  // A link: an address typed or pasted (links.js), or text of its own
+  // with Link… or [text](address). A click opens it.
+  link: {
+    attrs: {href: {}},
+    inclusive: false,
+    parseDOM: [{tag: 'a[href]', getAttrs: dom => ({href: dom.getAttribute('href')})}],
+    toDOM: mark => ['a', {href: mark.attrs.href, class: 'link', 'data-url': mark.attrs.href,
+      title: mark.attrs.href}, 0],
   },
 };
 

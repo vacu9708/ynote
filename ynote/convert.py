@@ -6,6 +6,8 @@ images and tables; see ARCHITECTURE.md). A 2.0 note is a ProseMirror
 document, saved as its JSON, in the schema of web/src/schema.js. Pure Python,
 so it is unit-tested.
 """
+import re
+
 from .config import (
     BULLET_MARKER, CHECKBOX_MARKER, CHECKED_MARKER, CODE_ANCHOR, CODE_PAD_CHAR,
     DIVIDER_TEXT, EXPAND_CLOSED, EXPAND_END, EXPAND_OPEN, IMAGE_ANCHOR,
@@ -23,6 +25,67 @@ def paragraph(content=None):
     if content:
         node['content'] = content
     return node
+
+
+# An http or https address in text, as links.js finds one: it runs to a
+# space or a character that rarely ends one, and leaves out punctuation that
+# ends the sentence.
+_URL_RE = re.compile(r'\bhttps?://[^\s<>"\'`]+', re.I)
+_TRAILING = '.,;:!?\'"]}>'
+
+
+def _trim_url(url):
+    while url:
+        if url[-1] in _TRAILING:
+            url = url[:-1]
+        elif url[-1] == ')' and url.count('(') < url.count(')'):
+            url = url[:-1]
+        else:
+            break
+    return url
+
+
+def _linkify_inline(nodes):
+    out = []
+    for node in nodes:
+        marks = node.get('marks') or []
+        if node.get('type') != 'text' or any(m.get('type') in ('link', 'code') for m in marks):
+            out.append(node)
+            continue
+        text, pos = node['text'], 0
+        for m in _URL_RE.finditer(text):
+            url = _trim_url(m.group(0))
+            if '://' not in url or url.endswith('://'):
+                continue
+            start, end = m.start(), m.start() + len(url)
+            if start > pos:
+                out.append(dict(node, text=text[pos:start]))
+            out.append(dict(node, text=url, marks=marks + [{'type': 'link', 'attrs': {'href': url}}]))
+            pos = end
+        if pos == 0:
+            out.append(node)
+        elif pos < len(text):
+            out.append(dict(node, text=text[pos:]))
+    return out
+
+
+def linkify(doc):
+    """The document with the addresses in its text made links, as typing
+    them makes them, once: a note saved before links were marks, as by 1.x
+    or 2.0.0, has attrs.links unset. Returned as it was otherwise."""
+    if (doc.get('attrs') or {}).get('links'):
+        return doc
+
+    def walk(node):
+        if node.get('type') == 'code_block':
+            return node
+        content = node.get('content')
+        if not content:
+            return node
+        if node.get('type') in ('paragraph', 'heading', 'expand_title'):
+            return dict(node, content=_linkify_inline(content))
+        return dict(node, content=[walk(child) for child in content])
+    return dict(walk(doc), attrs=dict(doc.get('attrs') or {}, links=1))
 
 
 def note_doc(note):
@@ -58,6 +121,11 @@ class _Converter:
         self.heading = _flags(n, state.get('heading'))
         self.code = _flags(n, state.get('code'))
         self.tick = _flags(n, state.get('backtick'))
+        # The address each character links to, or None.
+        self.link = [None] * n
+        for start, end, href in state.get('links') or []:
+            for i in range(max(0, int(start)), min(n, int(end))):
+                self.link[i] = href
         self.images = {int(im.get('offset', -1)): im
                        for im in state.get('images') or []}
         self.tables = ({int(t.get('offset', -1)): t
@@ -112,6 +180,8 @@ class _Converter:
                 want.append({'type': 'strong'})
             if self.tick[i]:
                 want.append({'type': 'code'})
+            if self.link[i]:
+                want.append({'type': 'link', 'attrs': {'href': self.link[i]}})
             if want != marks:
                 flush()
                 marks = want
@@ -376,6 +446,7 @@ class _StateBuilder:
     def __init__(self, allow_tables=True):
         self.text = ''
         self.bold, self.heading, self.code, self.backtick = [], [], [], []
+        self.links = []
         self.images, self.tables = [], []
         self.allow_tables = allow_tables
         self.lines = 0
@@ -402,6 +473,14 @@ class _StateBuilder:
                 self.bold.append([start, end])
             if 'code' in marks:
                 self.backtick.append([start, end])
+            for mark in node.get('marks') or []:
+                if mark.get('type') == 'link' and end > start:
+                    href = (mark.get('attrs') or {}).get('href', '')
+                    # Next to the same link it goes on, as one.
+                    if self.links and self.links[-1][1] == start and self.links[-1][2] == href:
+                        self.links[-1][1] = end
+                    else:
+                        self.links.append([start, end, href])
 
     def line(self, prefix='', nodes=(), heading=False):
         self._newline()
@@ -466,7 +545,7 @@ class _StateBuilder:
     def state(self):
         return {'text': self.text, 'bold': self.bold, 'heading': self.heading,
                 'code': self.code, 'backtick': self.backtick,
-                'images': self.images, 'tables': self.tables}
+                'images': self.images, 'tables': self.tables, 'links': self.links}
 
 
 def state_of(nodes, allow_tables=True):

@@ -85,6 +85,8 @@ CASES = {
         P("'say ' 'hello'[code] ' now'")),
     'F1b ** typed before text that ends with ** makes it bold': (
         ('hello**',), {}, ['^home', '**'], P("'hello'[strong]")),
+    'F10 [text](address) typed makes a link': (
+        ('',), {}, ['see [docs](https://e.com/a)'], P("'see ' 'docs'[link]") + ' paragraph()'),
     'F2 `text` makes inline code, and what follows is plain': (
         ('',), {}, ['`ls` x'], P("'ls'[code] ' x'") + ' paragraph()'),
     'F3 backticks in a code block stay': (

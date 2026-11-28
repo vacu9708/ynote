@@ -76,7 +76,7 @@ def test_A5_starting_keeps_a_copy_of_the_notes_as_the_backup(app):
     write(app, [note('t', 'kept')])
     app.start()
     with open(app.notes_file + '.bak', encoding='utf-8') as f:
-        assert json.load(f)[0]['doc'] == note('t', 'kept')['doc']
+        assert json.load(f)[0]['doc']['content'] == note('t', 'kept')['doc']['content']
 
 
 def test_A5b_notes_of_1x_open_converted_and_are_kept_as_notes_old(app):
@@ -98,7 +98,7 @@ def test_A6_an_empty_notes_file_does_not_replace_a_good_backup(app):
         json.dump([note('t', 'precious')], f)
     app.start()
     with open(app.notes_file + '.bak') as f:
-        assert json.load(f)[0]['doc'] == note('t', 'precious')['doc']
+        assert json.load(f)[0]['doc']['content'] == note('t', 'precious')['doc']['content']
 
 
 def test_A7_an_unreadable_notes_file_is_kept_aside_with_a_warning(app):
@@ -120,7 +120,7 @@ def test_A8_a_note_that_fails_to_open_is_saved_back_unchanged(app):
     app.quit()
     saved = {n['title']: n for n in app.saved()}
     assert saved['bad'] == bad
-    assert saved['good']['doc'] == note('good', 'fine')['doc']
+    assert saved['good']['doc']['content'] == note('good', 'fine')['doc']['content']
 
 
 def test_A9_notes_open_stacked_as_they_were_saved(app):
@@ -172,7 +172,7 @@ def test_A13_quitting_while_delete_asks_quits_and_keeps_the_note(app):
     n.button('Delete')
     app.quit()
     assert app.proc.poll() is not None
-    assert saved_note(app, 't')['doc'] == note('t', 'some text')['doc']
+    assert saved_note(app, 't')['doc']['content'] == note('t', 'some text')['doc']['content']
 
 
 def test_A14_a_note_saved_off_screen_is_moved_onto_it(app):

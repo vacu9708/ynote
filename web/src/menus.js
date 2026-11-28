@@ -44,7 +44,8 @@ export function noteMenu(ctx, props) {
 export function contextMenu(state, {link, hasSelection}) {
   const items = [];
   if (link) {
-    items.push({id: 'open-link', icon: 'open', label: 'Open link', keys: ['Ctrl', 'Click']},
+    items.push({id: 'open-link', icon: 'open', label: 'Open link', keys: ['Click']},
+      {id: 'edit-link', icon: 'rename', label: 'Edit link…', keys: ['Ctrl', 'K']},
       {id: 'copy-link', icon: 'link', label: 'Copy link address'}, {sep: true});
   }
   items.push(

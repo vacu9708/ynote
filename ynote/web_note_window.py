@@ -23,7 +23,7 @@ from . import __version__
 from .config import CONF_DIR, IMAGES_DIR, SETTINGS_FILE, UNTITLED_LABEL, display_path
 from .images import doc_image_files
 from .storage import load_json, save_json
-from .convert import doc_text, note_doc
+from .convert import doc_text, linkify, note_doc
 from .search import find_matches
 from .models import normalize_note_data
 from .snap import snap_rect
@@ -135,7 +135,8 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self._focus_on_load = False
         # The content, as the page last sent it. A note of 1.x is converted
         # once, here, and saved in the new form from then on.
-        self._doc = data.get('doc') or note_doc(data)
+        # Addresses made links once in a note saved before they were.
+        self._doc = linkify(data.get('doc') or note_doc(data))
         self._seen_images = doc_image_files(self._doc)
 
         self.set_decorated(False)

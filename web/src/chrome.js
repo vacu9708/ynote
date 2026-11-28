@@ -9,6 +9,8 @@ import {ACTION, ACTIONS, TOOLBAR, SLASH, perform, enabled, menuRow} from './acti
 import * as menus from './menus.js';
 import {findKey, setFind, step, endFind} from './find.js';
 import {slashKey, slashMatches} from './slash.js';
+import {schema} from './schema.js';
+import {TextSelection} from 'prosemirror-state';
 
 // A button of a bar: pressing it never takes the focus from the text, so the
 // cursor and the selection stay.
@@ -329,6 +331,64 @@ export function setupChrome(editor, post) {
   }
 
   // The emoji picker, at the cursor: typing in it finds emoji by name.
+  // Link…: its text and address, at the selection, or for the link the
+  // cursor is in, to change or take away. A selection that is an address
+  // takes it as the address too.
+  function linkRange(state) {
+    const {from, to, empty, $from} = state.selection;
+    const type = schema.marks.link;
+    const at = empty ? $from : null;
+    const mark = at && (type.isInSet(at.marks()) || (at.nodeBefore && type.isInSet(at.nodeBefore.marks))
+      || (at.nodeAfter && type.isInSet(at.nodeAfter.marks)));
+    if (mark) {
+      // The whole run of text with this link around the cursor.
+      let pos = at.start(), run = null, hit = null;
+      at.parent.forEach(child => {
+        const end = pos + child.nodeSize;
+        if (child.isText && mark.isInSet(child.marks)) {
+          if (run) run.to = end; else run = {from: pos, to: end};
+          if (run.from <= from && from <= run.to) hit = run;
+        } else run = null;
+        pos = end;
+      });
+      if (hit) return {...hit, text: state.doc.textBetween(hit.from, hit.to), href: mark.attrs.href, editing: true};
+    }
+    if (!empty) {
+      const text = state.doc.textBetween(from, to, ' ');
+      const typed = /^https?:\/\/\S+$/.test(text) ? text : '';
+      return {from, to, text, href: typed, editing: false};
+    }
+    return {from, to, text: '', href: '', editing: false};
+  }
+  function openLink() {
+    setTimeout(() => {
+      const range = linkRange(editor.view.state);
+      const at = editor.view.coordsAtPos(range.from);
+      popup('link', [], {x: at.left, y: at.top, height: at.bottom - at.top},
+        {extra: {link: {text: range.text, href: range.href, editing: range.editing}}}).range = range;
+    }, 60);
+  }
+  function applyLink(range, value) {
+    editor.run((state, dispatch) => {
+      const type = schema.marks.link;
+      const href = (value.href || '').trim();
+      const tr = state.tr;
+      if (!href) {
+        if (range.editing) tr.removeMark(range.from, range.to, type);
+      } else {
+        const text = value.text || href;
+        // The formats of the text it takes the place of, as bold, kept.
+        const $at = state.doc.resolve(range.to > range.from ? range.from + 1 : range.from);
+        const marks = type.create({href}).addToSet($at.marks().filter(m => m.type !== type));
+        tr.replaceWith(range.from, range.to, schema.text(text, marks));
+        tr.setSelection(TextSelection.create(tr.doc, range.from + text.length));
+        tr.removeStoredMark(type);
+      }
+      dispatch(tr.scrollIntoView());
+      return true;
+    });
+  }
+
   // Opened a moment later: chosen from a menu, it opens after that menu
   // has closed, which would otherwise close it too.
   function openEmoji() {
@@ -426,6 +486,11 @@ export function setupChrome(editor, post) {
     const menu = openMenu;
     closeMenu();
     if (!menu) return;
+    if (menu.name === 'link') {
+      if (id === 'link' && value) applyLink(menu.range, value);
+      else if (id === 'unlink') applyLink(menu.range, {href: ''});
+      return;
+    }
     if (menu.name === 'emoji') {
       if (!value) return;
       editor.run((state, dispatch) => { dispatch(state.tr.insertText(value).scrollIntoView()); return true; });
@@ -444,6 +509,7 @@ export function setupChrome(editor, post) {
     }
     if (menu.name === 'context') {
       if (id === 'emoji') openEmoji();
+      else if (id === 'edit-link') openLink();
       else if (id === 'open-link') post({type: 'open-link', url: menu.link});
       else if (id === 'copy-link') post({type: 'copy-text', text: menu.link});
       else if (['cut', 'copy', 'paste', 'paste-plain'].includes(id)) window.ynote.clipboard(id);
@@ -471,6 +537,7 @@ export function setupChrome(editor, post) {
     else if (ctrl && !event.shiftKey && key === 'f') id = 'find';
     else if (ctrl && event.shiftKey && key === 'm') id = 'copy-markdown';
     else if (ctrl && !event.shiftKey && key === '.') id = 'emoji';
+    else if (ctrl && !event.shiftKey && key === 'k') id = 'link';
     else if (event.key === 'Escape' && !findBar.hidden) { event.preventDefault(); closeFind(); return; }
     else if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
       event.preventDefault();
@@ -565,6 +632,6 @@ export function setupChrome(editor, post) {
 
   renderTitle();
   const chrome = {set, editTitle, confirmDelete, openFind, closeFind, pick, change, closed: closeMenu,
-    refresh: refreshTools, slashKey: slashKeyPressed, allResults: showResults, openHelp, openEmoji};
+    refresh: refreshTools, slashKey: slashKeyPressed, allResults: showResults, openHelp, openEmoji, openLink};
   return chrome;
 }

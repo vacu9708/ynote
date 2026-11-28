@@ -65,14 +65,25 @@ def _code_span(body):
     return f'{fence}{body}{fence}'
 
 
-def _inline(text, bold, code):
-    """One line of text with its bold and inline code as Markdown."""
+def _inline(text, bold, code, link=None):
+    """One line of text with its bold, inline code, and links as Markdown:
+    a link as [its text](its address), or the address alone when that is
+    its text."""
     out = []
     i = 0
     while i < len(text):
+        if link and link[i]:
+            j = i
+            while j < len(text) and link[j] == link[i]:
+                j += 1
+            label = _inline(text[i:j], bold[i:j], code[i:j]).strip()
+            href = link[i]
+            out.append(href if label in (href, '') else f'[{label}]({href})')
+            i = j
+            continue
         if code[i]:
             j = i
-            while j < len(text) and code[j]:
+            while j < len(text) and code[j] and not (link and link[j]):
                 j += 1
             body = _clean(text[i:j])
             if body.strip():
@@ -80,7 +91,7 @@ def _inline(text, bold, code):
             i = j
             continue
         j = i
-        while j < len(text) and not code[j] and bold[j] == bold[i]:
+        while j < len(text) and not code[j] and bold[j] == bold[i] and not (link and link[j]):
             j += 1
         run = _clean(text[i:j])
         if bold[i] and run.strip():
@@ -103,15 +114,14 @@ def _list_parts(line):
     return None
 
 
-def _table_row(text, start, end, bold, inline, columns):
+def _table_row(text, start, end, bold, inline, link, columns):
     """One row of a table, the text from start to end, as a Markdown row of
     `columns` cells."""
     cells = []
     cell_start = start + len(TABLE_MARKER)
     for cell in text[cell_start:end].split('\t'):
         cell_end = cell_start + len(cell)
-        body = _inline(cell, bold[cell_start:cell_end],
-                       inline[cell_start:cell_end]).strip()
+        body = _inline(cell, bold[cell_start:cell_end], inline[cell_start:cell_end], link[cell_start:cell_end]).strip()
         cells.append(body.replace('|', '\\|'))
         cell_start = cell_end + 1
     cells += [''] * (columns - len(cells))
@@ -155,6 +165,10 @@ def to_markdown(state):
     heading = _flags(len(text), state.get('heading', []))
     block = _flags(len(text), state.get('code', []))
     inline = _flags(len(text), state.get('backtick', []))
+    link = [None] * len(text)
+    for start, end, href in state.get('links', []) or []:
+        for i in range(max(0, start), min(len(text), end)):
+            link[i] = href
 
     lines = text.split('\n')
     starts = []
@@ -202,7 +216,7 @@ def to_markdown(state):
                     last += 1
                 table_columns = max(lines[n].count('\t') + 1
                                     for n in range(number, last + 1))
-            out.append(_table_row(text, start, end, bold, inline,
+            out.append(_table_row(text, start, end, bold, inline, link,
                                   table_columns))
             if header:
                 out.append('| ' + ' | '.join(['---'] * table_columns) + ' |')
@@ -219,8 +233,7 @@ def to_markdown(state):
                             (EXPAND_CLOSED, '<details>')):
             if line.startswith(marker):
                 body = start + len(marker)
-                title = _inline(text[body:end], bold[body:end],
-                                inline[body:end]).strip()
+                title = _inline(text[body:end], bold[body:end], inline[body:end], link[body:end]).strip()
                 out.extend([tag, f'<summary>{title}</summary>', ''])
                 break
         else:
@@ -245,13 +258,11 @@ def to_markdown(state):
             level = indent.count('\t') + indent.count(' ') // 4
             body_start = start + len(indent) + len(marker)
             out.append(MARKDOWN_INDENT * level + MARKDOWN_MARKERS[marker]
-                       + _inline(text[body_start:end], bold[body_start:end],
-                                 inline[body_start:end]))
+                       + _inline(text[body_start:end], bold[body_start:end], inline[body_start:end], link[body_start:end]))
         elif end > start and all(heading[start:end]):
-            out.append('# ' + _inline(text[start:end], bold[start:end],
-                                      inline[start:end]).strip())
+            out.append('# ' + _inline(text[start:end], bold[start:end], inline[start:end], link[start:end]).strip())
         else:
-            out.append(_inline(line, bold[start:end], inline[start:end]))
+            out.append(_inline(line, bold[start:end], inline[start:end], link[start:end]))
     if in_block:
         out.append(FENCE)
     # Nothing follows a last expand: no blank line after it.
@@ -284,6 +295,7 @@ class _Builder:
         self.text = []
         self.length = 0
         self.ranges = {'bold': [], 'heading': [], 'code': [], 'backtick': []}
+        self.links = []
 
     def add(self, text, kind=None):
         if kind is not None and text:
@@ -291,8 +303,23 @@ class _Builder:
         self.text.append(text)
         self.length += len(text)
 
+    def add_plain(self, text, kind=None):
+        """Text outside code: a link [its text](its address) as its text,
+        linked; the rest as _plain() gives it."""
+        pos = 0
+        for m in _LINK_RE.finditer(text):
+            if m.group(0).startswith('!'):
+                continue
+            self.add(_plain(text[pos:m.start()]), kind)
+            label = _plain(m.group(1)) or m.group(2)
+            start = self.length
+            self.add(label, kind)
+            self.links.append([start, self.length, m.group(2)])
+            pos = m.end()
+        self.add(_plain(text[pos:]), kind)
+
     def state(self):
-        return dict(self.ranges, text=''.join(self.text), images=[])
+        return dict(self.ranges, text=''.join(self.text), images=[], links=self.links)
 
 
 def _plain(text):
@@ -340,10 +367,10 @@ def _add_inline(builder, text):
             continue
         pos = 0
         for m in _BOLD_RE.finditer(piece):
-            builder.add(_plain(piece[pos:m.start()]))
-            builder.add(_plain(m.group(1)), 'bold')
+            builder.add_plain(piece[pos:m.start()])
+            builder.add_plain(m.group(1), 'bold')
             pos = m.end()
-        builder.add(_plain(piece[pos:]))
+        builder.add_plain(piece[pos:])
 
 
 def _table_cells(line):

@@ -33,6 +33,13 @@ function markRule(regexp, mark) {
   });
 }
 
+// [text](address) typed makes a link, as it pastes.
+const linkRule = new InputRule(/(?<![!\\])\[([^\]]+)\]\((\S+)\)$/, (state, match, start, end) => {
+  if (state.doc.resolve(start).parent.type.spec.code) return null;
+  const mark = schema.marks.link.create({href: match[2]});
+  return state.tr.replaceWith(start, end, schema.text(match[1], [mark])).removeStoredMark(schema.marks.link);
+});
+
 // The opening marker typed before text that ends with the closing one, as
 // ` before hello` or ** before hello**, makes that text code or bold, as
 // the closing one typed after it does.
@@ -102,6 +109,7 @@ const rules = inputRules({rules: [
   dateRule,
   markRule(/(?<![*\\])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/, schema.marks.strong),
   markRule(/(?<![`\\])`([^`]+)`$/, schema.marks.code),
+  linkRule,
 ]});
 
 // --- Keys ------------------------------------------------------------------

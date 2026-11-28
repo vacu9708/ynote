@@ -14,10 +14,10 @@ def paste(app, inp, markdown):
     inp.key('ctrl+v')
 
 
-def test_N5_a_pasted_markdown_link_is_its_text_and_address(app, inp):
+def test_N5_a_pasted_markdown_link_is_a_link(app, inp):
     start(app, '')
     paste(app, inp, 'see [the docs](https://example.com/a) now')
-    assert_saved(app, "paragraph('see the docs (https://example.com/a) now')", last_line=False)
+    assert_saved(app, "paragraph('see ' 'the docs'[link] ' now')", last_line=False)
 
 
 def test_N6_a_heading_or_code_pasted_after_text_starts_a_line(app, inp):

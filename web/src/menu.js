@@ -221,6 +221,33 @@ function showEmoji(recent) {
   field.focus();
 }
 
+// --- The link form -----------------------------------------------------
+
+// A link's text and address, to make one or change it: Enter keeps them,
+// Esc leaves it as it was; Remove link takes the link away, keeping its text.
+function showLink(spec) {
+  const text = el('input', {class: 'link-field', type: 'text', placeholder: 'Text', spellcheck: 'false'});
+  const href = el('input', {class: 'link-field', type: 'text', placeholder: 'https://', spellcheck: 'false'});
+  text.value = spec.text || '';
+  href.value = spec.href || '';
+  const save = el('button', {class: 'link-save'}, spec.editing ? 'Save' : 'Insert');
+  const remove = spec.editing ? el('button', {class: 'link-remove'}, 'Remove link') : null;
+  const done = () => post({type: 'pick', id: 'link', value: {text: text.value, href: href.value}});
+  save.addEventListener('click', done);
+  if (remove) remove.addEventListener('click', () => post({type: 'pick', id: 'unlink'}));
+  for (const field of [text, href]) {
+    field.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); done(); }
+    });
+  }
+  root.replaceChildren(
+    el('label', {class: 'link-label'}, 'Text', text),
+    el('label', {class: 'link-label'}, 'Address', href),
+    el('div', {class: 'link-buttons'}, remove, save));
+  // The address first when there is text already, as after a selection.
+  (text.value && !href.value ? href : text).focus();
+}
+
 window.menu = {
   // Shows a menu: lights its first row when opened by keys, and says how
   // large it is, as the window is made to fit it.
@@ -228,6 +255,14 @@ window.menu = {
     document.documentElement.classList.toggle('flat', !!spec.flat);
     root.classList.toggle('columns', !!spec.columns);
     root.classList.toggle('emoji', !!spec.emoji);
+    root.classList.toggle('link-form', !!spec.link);
+    if (spec.link) {
+      rows = [];
+      current = -1;
+      showLink(spec.link);
+      sendSize();
+      return;
+    }
     if (spec.emoji) {
       rows = [];
       current = -1;

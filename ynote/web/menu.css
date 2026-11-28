@@ -117,3 +117,18 @@ input[type=range] { width: 110px; margin: 0; accent-color: var(--accent); }
 .emoji-cell.sel { background: var(--accent-tint); box-shadow: inset 0 0 0 1px var(--accent); }
 .emoji-name { height: 22px; line-height: 22px; padding: 4px 3px 0; font-size: 12px; color: var(--dim);
   border-top: 1px solid var(--line); margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* The link form: its text and address, and Insert or Save. */
+#menu.link-form { width: 320px; padding: 10px; overflow: hidden; }
+.link-label { display: grid; gap: 3px; min-width: 0; font-size: 12px; color: var(--dim); margin-bottom: 8px; }
+/* As wide as the card: an input's own width is that of 20 characters, wider. */
+.link-field { width: 100%; min-width: 0; box-sizing: border-box;
+  font: 13.5px var(--body); color: var(--ink); padding: 6px 9px; border-radius: 7px;
+  border: 1px solid #D5D9E0; outline: none; user-select: text; }
+.link-field:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-tint); }
+.link-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.link-save, .link-remove { padding: 5px 12px; border-radius: 7px; font-weight: 600; }
+.link-save { background: var(--accent); color: #fff; }
+.link-remove { color: var(--danger); }
+.link-save:hover { filter: brightness(1.08); }
+.link-remove:hover { background: #FBEAEA; }

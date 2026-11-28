@@ -101,7 +101,7 @@ Korean as it is (`storage.to_json()`):
 
 | Field | Meaning |
 | --- | --- |
-| `doc` | The note's ProseMirror document as JSON (`web/src/schema.js`). A bullet and a to-do are items of one list (`list_item.attrs.checked` is `null` for a bullet), an expand is a node holding a title and blocks, a table's first row holds header cells, and its cells hold any block but a table. An image names its file in `images/`. Links are found in the text as it changes, and not saved. |
+| `doc` | The note's ProseMirror document as JSON (`web/src/schema.js`). A bullet and a to-do are items of one list (`list_item.attrs.checked` is `null` for a bullet), an expand is a node holding a title and blocks, a table's first row holds header cells, and its cells hold any block but a table. An image names its file in `images/`. A link is a `link` mark with its address, whether typed, pasted, or made with Link…; `attrs.links` says the note's addresses are links, and a note saved without it, as by 1.x, has its addresses made links once as it opens (`convert.linkify()`). |
 | `x`, `y`, `w`, `h` | Window position and size. A maximized note saves the rectangle it had before, and a collapsed note saves its expanded height as `h`. |
 | `hidden`, `sort_order` | Whether the note is hidden, and its place among the hidden notes. |
 | `stack` | Where the note was in the stack of windows, so the next start stacks them the same; -1 when hidden. |
@@ -239,6 +239,14 @@ sequenceDiagram
   arrows select a divider, and Delete before a table selects it.
   BEHAVIORS.md notes each. A table holds no table, unlike Confluence's: a
   Markdown table cannot, and Markdown is how a note leaves Ynote.
+- **Links.** One kind of link, a mark: an address typed becomes one once a
+  space or Enter typed right after it ends it, and one pasted at once
+  (`links.js`); Link… (Ctrl+K) gives a link text of its own, or changes or
+  takes it away, in a form in the popup (`chrome.js` `openLink()`), and
+  `[text](address)` typed makes one too. A click opens a link: its
+  right-click menu changes it. On the clipboard, a link is a `links` range
+  of the rich state, which `markdown.py` writes as `[text](address)` and
+  reads back.
 - **Copy and paste.** The window keeps the clipboard. The page takes Ctrl+C,
   X, V, and Shift+V in its keymap, in turn with the keys before them, and
   posts `clipboard` with what is selected, as a ProseMirror slice. The window

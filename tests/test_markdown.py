@@ -94,7 +94,9 @@ def test_a_fenced_block_comes_back_as_code_lines_without_its_fences():
 def test_a_divider_links_and_escapes():
     st = from_markdown('***\n[docs](https://x.io) and <https://y.io>\n\\*not\\*')
 
-    assert st['text'] == '---\ndocs (https://x.io) and https://y.io\n*not*'
+    # A link keeps its text, linked to its address.
+    assert st['text'] == '---\ndocs and https://y.io\n*not*'
+    assert st['links'] == [[4, 8, 'https://x.io']]
 
 
 def test_names_with_underscores_and_lone_stars_stay_text():
@@ -210,3 +212,10 @@ def test_br_in_a_pasted_table_cell_is_a_line_break_to_come():
     st = from_markdown('| a |\n| - |\n| one<br>two |')
 
     assert st['text'] == f'{TABLE_MARKER}a\n{TABLE_MARKER}one two'
+
+
+def test_links_go_out_as_markdown_links_and_come_back():
+    state = {'text': 'see the docs or https://x.io', 'links': [[4, 12, 'https://e.com/a'], [16, 28, 'https://x.io']]}
+    assert to_markdown(state) == 'see [the docs](https://e.com/a) or https://x.io'
+    back = from_markdown('see [the docs](https://e.com/a) or https://x.io')
+    assert back['text'] == 'see the docs or https://x.io' and back['links'] == [[4, 12, 'https://e.com/a']]

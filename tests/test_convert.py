@@ -230,3 +230,21 @@ def test_a_list_indented_by_spaces_nests_as_by_tabs():
     result = blocks(text, bold_ranges=[[12, 18]])
     nested = result[0]['content'][0]['content'][1]
     assert nested['content'][0]['content'] == [p(t('nested', 'strong'))]
+
+
+# ---------------------------------------------------------------- linkify
+
+from ynote.convert import linkify  # noqa: E402
+
+
+def test_linkify_makes_addresses_links_once_and_leaves_code():
+    doc = note_doc({'text': 'see https://e.com/a. ok\nhttps://x.io/b', 'code_ranges': [[24, 38]]})
+    done = linkify(doc)
+    first = done['content'][0]['content']
+    assert first[1] == {'type': 'text', 'text': 'https://e.com/a',
+                        'marks': [{'type': 'link', 'attrs': {'href': 'https://e.com/a'}}]}
+    assert first[2]['text'] == '. ok'
+    assert done['content'][1]['type'] == 'code_block'
+    assert done['attrs'] == {'links': 1}
+    # Once: a link taken away later is left as text.
+    assert linkify(dict(done, content=[p(t('https://e.com/a'))])) ['content'][0] == p(t('https://e.com/a'))
