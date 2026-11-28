@@ -6,7 +6,7 @@ in the real app: real mouse and key input (XTEST), and results read from
 notes.json, the clipboard, the accessibility tree (AT-SPI), or pixels.
 
 Marks: **[WM]** needs a window manager (the test desktop runs openbox) ·
-**[GNOME]** runs on GNOME's window manager, mutter, headless with Xwayland
+**[2.0]** proven in Ynote 2.0 too · **[GNOME]** runs on GNOME's window manager, mutter, headless with Xwayland
 and its own input (`gnome.py`) · **[px]** checked by pixels · **[2204]** also checked on Ubuntu 22.04
 
 When what should happen is unclear, Ynote follows Confluence. Where it does
@@ -20,23 +20,24 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 ## A. Starting, saving, files
 
-- A1 Starting with no notes at all makes a new note at the mouse pointer
-- A2 With one hidden note and none shown, that note opens at the pointer
-- A3 With several hidden notes and none shown, the Hidden Notes window opens at the pointer
-- A4 An edit is saved without quitting (notes.json changes)
-- A5 Each start copies notes.json to notes.json.bak
-- A6 An empty notes.json does not replace a good .bak
-- A7 An unreadable notes.json is renamed notes.json.broken-<time>, a dialog says so, and image cleanup is skipped
-- A8 A note that fails to open is saved back unchanged, with a warning, and image cleanup is skipped
-- A9 Notes open stacked as they were when Ynote quit [WM]. Openbox stacks them right even without the restacking GNOME (mutter) needs, so that part is not shown here
-- A10 notes.json keeps Korean as it is and each range on one line, read and written as UTF-8
-- A11 Starting Ynote while it runs brings its notes forward instead of a second copy [WM]
+- A1 Starting with no notes at all makes a new note at the mouse pointer [2.0]
+- A2 With one hidden note and none shown, that note opens at the pointer [2.0] (2.0 showed it where it was saved: a hidden note shows where it was last put, which was set only as it moved on screen)
+- A3 With several hidden notes and none shown, the Hidden Notes window (in 2.0, their list) opens at the pointer [2.0]
+- A4 An edit is saved without quitting (notes.json changes) [2.0]
+- A5 Each start copies notes.json to notes.json.bak [2.0]
+- A5b 2.0's first start opens the notes of 1.x (notes.json), converted, and leaves that file as it was [2.0]
+- A6 An empty notes.json does not replace a good .bak [2.0]
+- A7 An unreadable notes.json is renamed notes.json.broken-<time>, a dialog says so, and image cleanup is skipped [2.0]
+- A8 A note that fails to open is saved back unchanged, with a warning, and image cleanup is skipped [2.0]
+- A9 Notes open stacked as they were when Ynote quit [WM]. Openbox stacks them right even without the restacking GNOME (mutter) needs, so that part is not shown here [2.0]
+- A10 notes.json keeps Korean as it is and each range on one line, read and written as UTF-8 [2.0]
+- A11 Starting Ynote while it runs brings its notes forward instead of a second copy [WM] [2.0]
 - A12 `ynote --version` prints the version
-- A13 Quit with a dialog open (Help, About, Delete) quits; a Delete confirmation counts as cancelled
-- A14 A note saved off screen, as after a monitor was unplugged, moves onto the primary monitor
+- A13 Quit with a dialog open (Help, About, Delete) quits; a Delete confirmation counts as cancelled (2.0: Delete asking on the note) [2.0]
+- A14 A note saved off screen, as after a monitor was unplugged, moves onto the primary monitor [2.0]
 - A15 On an X server with no primary monitor, the first note is still placed on screen
 - A16 [2204] On 22.04 (PyGObject 3.42) the app starts and shows its notes
-- A17 A note moved and resized is saved where it is, and opens there again [WM]
+- A17 A note moved and resized is saved where it is, and opens there again [WM] [2.0]
 
 ## B. A note's window
 

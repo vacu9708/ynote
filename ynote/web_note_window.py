@@ -552,6 +552,11 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self.resize(w, h)
         GLib.timeout_add(300, self._apply_snap_move)
 
+    def move(self, x, y):
+        # A move while hidden, as to the pointer, is where it shows next.
+        self._shown_at = (x, y)
+        Gtk.Window.move(self, x, y)
+
     def _apply_snap_move(self):
         if self._snap_pending_move is not None:
             x, y, _, _ = self._snap_pending_move
