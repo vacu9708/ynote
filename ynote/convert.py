@@ -11,6 +11,9 @@ from .config import (
     DIVIDER_TEXT, EXPAND_CLOSED, EXPAND_END, EXPAND_OPEN, IMAGE_ANCHOR,
     OLD_CODE_PAD_CHAR, QUOTE_MARKER, TABLE_MARKER)
 
+# How many spaces made a level of a list before a tab did (as editor.py).
+INDENT_SPACES = 4
+
 ITEM_MARKERS = {BULLET_MARKER: None, CHECKBOX_MARKER: False,
                 CHECKED_MARKER: True}
 
@@ -264,6 +267,15 @@ class _Converter:
             if stripped.startswith(marker):
                 self.add_item(level, checked,
                               self.inline(body + len(marker), end))
+                return
+        # An item indented by spaces, as before tabs were: each run of
+        # INDENT_SPACES is a level, as 1.x opens it (tabbed_indent()).
+        spaced = line.lstrip(' \t')
+        indent = line[:len(line) - len(spaced)]
+        for marker, checked in ITEM_MARKERS.items():
+            if ' ' in indent and spaced.startswith(marker):
+                self.add_item(indent.replace(' ' * INDENT_SPACES, '\t').count('\t'), checked,
+                              self.inline(start + len(indent) + len(marker), end))
                 return
         if stripped.startswith(QUOTE_MARKER):
             self.add_quote(self.inline(body + len(QUOTE_MARKER), end))

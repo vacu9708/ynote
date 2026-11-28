@@ -223,3 +223,10 @@ def test_a_table_goes_out_as_a_markdown_table():
                                      [{'text': 'a|b'}, {'text': 'c'}]]}]
     doc = note_doc({'text': IMAGE_ANCHOR, 'tables': tables})
     assert to_markdown(state_of(doc['content'])) == '| k | v |\n| --- | --- |\n| a\\|b | c |'
+
+
+def test_a_list_indented_by_spaces_nests_as_by_tabs():
+    text = BULLET_MARKER + 'top\n    ' + BULLET_MARKER + 'nested'
+    result = blocks(text, bold_ranges=[[12, 18]])
+    nested = result[0]['content'][0]['content'][1]
+    assert nested['content'][0]['content'] == [p(t('nested', 'strong'))]

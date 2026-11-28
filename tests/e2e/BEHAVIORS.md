@@ -226,34 +226,34 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 ## N. Clipboard
 
-- N1 Copied text goes to other apps as Markdown: headings, bold, inline code, fenced code, list levels, to-dos, quotes, dividers, tables, expands
-- N2 Code alone is copied as it is, without fences
-- N3 A paste into another note keeps formats, images, and tables exactly
-- N4 Once another app takes the clipboard, its text is pasted, not Ynote's formats
-- N5 Markdown from another app pastes in with its formats, and links as their text and address
-- N6 A list, heading, or code block pasted after text starts a line of its own
-- N7 Ctrl+Shift+V pastes the text alone, without reading Markdown
-- N8 Cut and paste brings everything back, tables included
+- N1 Copied text goes to other apps as Markdown: headings, bold, inline code, fenced code, list levels, to-dos, quotes, dividers, tables, expands (2.0: V1) [2.0]
+- N2 Code alone is copied as it is, without fences (2.0: V2) [2.0]
+- N3 A paste into another note keeps formats, images, and tables exactly (2.0: V3) [2.0]
+- N4 Once another app takes the clipboard, its text is pasted, not Ynote's formats (2.0: V4) [2.0]
+- N5 Markdown from another app pastes in with its formats, and links as their text and address [2.0]
+- N6 A list, heading, or code block pasted after text starts a line of its own [2.0]
+- N7 Ctrl+Shift+V pastes the text alone, without reading Markdown (2.0: V7) [2.0]
+- N8 Cut and paste brings everything back, tables included (2.0: V8) [2.0]
 - N9 Copying out and pasting back as Markdown gives the same note, but for a blank line before a divider
-- N10 Names with underscores and lone stars stay text; inline code holding a backtick gets longer backticks
-- N11 Middle-click pastes and drags carry no invisible characters, such as an empty code line's mark
+- N10 Names with underscores and lone stars stay text; inline code holding a backtick gets longer backticks [2.0]
+- N11 Middle-click pastes and drags carry no invisible characters, such as an empty code line's mark (1.x only: 2.0 keeps no invisible characters)
 
 ## O. Undo and redo
 
-- O1 Ctrl+Z and Ctrl+Shift+Z keep the scroll position and put the cursor where the edit was
-- O2 A table's shape changes and cell edits are steps of the note's undo
+- O1 Ctrl+Z and Ctrl+Shift+Z keep the scroll position and put the cursor where the edit was [2.0]
+- O2 A table's shape changes and cell edits are steps of the note's undo (2.0: L11, L12) [2.0]
 - O3 After undo, the Format button follows the formats at the cursor
 
 ## P. Search
 
-- P1 Ctrl+F opens the search bar with All notes on, this note's matches first
-- P2 With All notes off, only this note is searched
-- P3 Matching ignores case and takes the query literally, not as a pattern
+- P1 Ctrl+F opens the search bar with All notes on, this note's matches first (2.0: All notes is as last set, U21)
+- P2 With All notes off, only this note is searched (2.0: T12) [2.0]
+- P3 Matching ignores case and takes the query literally, not as a pattern [2.0]
 - P4 Each match shows the note's title and the matching line, cut around the match; a hidden note's mark always shows
-- P5 Up and Down in the entry pick a match, the cursor staying in the entry; Enter opens it, or the first
-- P6 Opening a match brings its note forward, restoring it if hidden, and selects the match
+- P5 Up and Down in the entry pick a match, the cursor staying in the entry; Enter opens it, or the first (2.0: T12) [2.0]
+- P6 Opening a match brings its note forward, restoring it if hidden, and selects the match (2.0: U16) [2.0]
 - P7 Highlights go when the search closes
-- P8 Esc closes the search
+- P8 Esc closes the search (2.0: T12) [2.0]
 
 ## Q. Drawing and wrapping [px]
 
@@ -266,18 +266,18 @@ placing notes across two monitors (D4, D9: much effort for little).
 - Q7 A word of code too long for its row starts on it, leaving no empty box before
 - Q8 Code boxes have the same padding on all sides; an inline code box sits in the middle of its line
 - Q9 List markers (dots, boxes) are drawn at an em-based size and do not make their line taller
-- Q10 After Enter in a list, quote, code block, or table, and any key the note handles, the new line is in view
+- Q10 After Enter in a list, quote, code block, or table, and any key the note handles, the new line is in view [2.0]
 - Q11 Bold in a heading is drawn bolder, in English and Korean, on 22.04 too [2204]
 - Q12 A see-through note keeps an opaque strip behind text, table cells too
 
 ## R. Notes from older versions
 
-- R1 Inline code padded by plain spaces or en spaces (U+2002) gets figure spaces
-- R2 Lists indented by spaces get tabs
+- R1 Inline code padded by plain spaces or en spaces (U+2002) gets figure spaces [2.0]
+- R2 Lists indented by spaces get tabs [2.0]
 - R3 Formats on markers and line breaks are taken off
-- R4 Tables of tab-separated rows (1.13) become tables of cells
-- R5 A note saved without newer fields (color, opacity, collapsed...) gets their defaults
-- R6 What is saved stays readable by an older version, but for the tables field
+- R4 Tables of tab-separated rows (1.13) become tables of cells [2.0]
+- R5 A note saved without newer fields (color, opacity, collapsed...) gets their defaults [2.0]
+- R6 What is saved stays readable by an older version, but for the tables field (1.x only: 1.x cannot read what 2.0 saves, which is why 2.0 keeps the notes of 1.x apart)
 
 ## S. Korean through an input method, in Ynote 2.0
 
