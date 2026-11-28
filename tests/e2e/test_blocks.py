@@ -53,6 +53,18 @@ CASES = {
     'I9 a code block made plain keeps its lines': (
         ('ls\npwd',), {'code_ranges': [[0, 6]]}, ['^ctrl+shift+c'], "paragraph('ls') paragraph('pwd')"),
 
+    'U26 Right at the end of a code block, then Enter, makes a line before a divider': (
+        ('ls\n---',), {'code_ranges': [[0, 2]]}, ['^right', '^enter', 'x'],
+        "code_block('ls') paragraph('x') horizontal_rule()"),
+    'U26 Right at the end of a code block, then typing, makes a line before a table': (
+        ('ls\n' + ANCHOR,), {'code_ranges': [[0, 2]], 'tables': [{'offset': 3, 'rows': [[{'text': 'k'}]]}]},
+        ['^right', 'x'], "code_block('ls') paragraph('x') table(table_row(table_header(paragraph('k'))))"),
+    'U26 Right at the end of a code block goes onto the line after it, when there is one': (
+        ('ls\npwd',), {'code_ranges': [[0, 2]]}, ['^right', 'x'], "code_block('ls') paragraph('xpwd')"),
+    'U27 Right at the end of a table, then Enter, makes a line before a divider': (
+        ('x\n' + ANCHOR + '\n---',), TABLE, ['^down', '^down', '^tab', '^end', '^right', '^enter', 'y'],
+        "paragraph('x') " + table(KV, AB) + " paragraph('y') horizontal_rule()"),
+
     # J. dividers
     'J1 Down selects a divider, and typing replaces it, as in Confluence': (
         ('a\n---\nb',), {}, ['^down', 'X'], "paragraph('a') paragraph('X') paragraph('b')"),

@@ -417,11 +417,14 @@ def test_O3_after_undo_the_bold_button_follows_the_cursor(app, inp):
     settle(0.6)
 
     def bold_on():
-        # Found anew each time: WebKit 2.50 leaves a state kept from before.
-        bold = note.button('Bold')
-        bold.clear_cache()
-        states = bold.get_state_set()
-        return states.contains(Atspi.StateType.PRESSED) or states.contains(Atspi.StateType.CHECKED)
+        # As drawn: blue when on. WebKit 2.50 did not always tell the desktop
+        # a toggle's new state under load.
+        e = note.button('Bold').get_extents(Atspi.CoordType.SCREEN)
+        pb = screenshot('/tmp/e2e-bold.png', (e.x, e.y, e.width, e.height))
+        n, stride, data = pb.get_n_channels(), pb.get_rowstride(), pb.get_pixels()
+        blue = sum(1 for yy in range(pb.get_height()) for xx in range(pb.get_width())
+                   if data[yy * stride + xx * n + 2] > data[yy * stride + xx * n] + 80)
+        return blue > 5
     wait_until(bold_on, what='Bold on')
     inp.key('ctrl+z')
     wait_until(lambda: not bold_on(), what='Bold off')

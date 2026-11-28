@@ -110,9 +110,29 @@ function outOfCode(dir) {
   };
 }
 
+// The cursor right after a block, at pos: on the line there, or, with no
+// line there, as before a divider, another block, or an expand's end, a gap
+// cursor, where Enter or typing makes one, as in Confluence.
+function cursorAfter(state, dispatch, pos) {
+  const next = state.doc.resolve(pos).nodeAfter;
+  const sel = next && (next.type === paragraph || next.type === heading)
+    ? TextSelection.create(state.doc, pos + 1) : new GapCursor(state.doc.resolve(pos));
+  if (dispatch) dispatch(state.tr.setSelection(sel).scrollIntoView());
+  return true;
+}
+
+// Right at the very end of a code block: the way to write below it where
+// no line follows.
+function rightOutOfCode(state, dispatch) {
+  const {$cursor} = state.selection;
+  if (!$cursor || $cursor.parent.type !== code_block
+      || $cursor.parentOffset !== $cursor.parent.content.size) return false;
+  return cursorAfter(state, dispatch, $cursor.after());
+}
+
 // Right at the very end of a table, in its last cell, puts the cursor after
-// the table, where typing starts a line, as in Confluence: the way to go on
-// writing below a table at the end of an expand, as Down leaves the expand.
+// the table: the way to write below a table where no line follows, as at
+// the end of an expand, which Down leaves.
 function rightOutOfTable(state, dispatch, view) {
   const {$cursor} = state.selection;
   if (!$cursor || !view || !view.endOfTextblock('right')) return false;
@@ -121,13 +141,7 @@ function rightOutOfTable(state, dispatch, view) {
     // Only at the end of the table's last cell's last line.
     const last = Selection.findFrom(state.doc.resolve($cursor.end(d)), -1, true);
     if (!last || last.head !== $cursor.pos) return false;
-    const $after = state.doc.resolve($cursor.after(d));
-    if (dispatch) {
-      const sel = GapCursor.valid($after) ? new GapCursor($after) : null;
-      if (sel) dispatch(state.tr.setSelection(sel).scrollIntoView());
-      else return cmd.leaveTable(state, dispatch);
-    }
-    return true;
+    return cursorAfter(state, dispatch, $cursor.after(d));
   }
   return false;
 }
@@ -169,7 +183,7 @@ const keys = keymap({
   'Escape': cmd.leaveTable,
   'Enter': chainCommands(cmd.splitItem, enterInExpand),
   'ArrowDown': outOfCode('down'),
-  'ArrowRight': rightOutOfTable,
+  'ArrowRight': chainCommands(rightOutOfCode, rightOutOfTable),
   'ArrowUp': outOfCode('up'),
   'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand, cmd.backspaceAfterTable),
   'Delete': cmd.deleteInItem,

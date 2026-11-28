@@ -234,8 +234,11 @@ sequenceDiagram
 - **Following Confluence.** Where Ynote 1.x and Confluence differ, the
   editor does as Confluence does: Enter on an empty line of an expand or of
   code stays in it, Down from a table last in an expand leaves the expand,
-  Right at the end of a table puts the cursor after it, arrows select a
-  divider, and Delete before a table selects it. BEHAVIORS.md notes each.
+  Right at the very end of a table or a code block puts the cursor after it,
+  a gap cursor where no line follows, at which Enter or typing makes one,
+  arrows select a divider, and Delete before a table selects it.
+  BEHAVIORS.md notes each. A table holds no table, unlike Confluence's: a
+  Markdown table cannot, and Markdown is how a note leaves Ynote.
 - **Copy and paste.** The window keeps the clipboard. The page takes Ctrl+C,
   X, V, and Shift+V in its keymap, in turn with the keys before them, and
   posts `clipboard` with what is selected, as a ProseMirror slice. The window

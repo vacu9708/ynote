@@ -322,6 +322,8 @@ Where Ynote 2.0 follows Confluence over 1.x, the item says so.
 - U23 A drag from below the text selects up from the end, as the editor fills the note
 - U24 A drag from the empty line below a table, up over it, selects everything it passes (WebKit moved the drag's start to the table's edge)
 - U25 A drag over a table shows what it selects while dragging, not only once let go
+- U26 Right at the very end of a code block puts the cursor after it: on the line there, or, with none, as before a divider or a table, where Enter or typing makes one, as in Confluence
+- U27 Right at the very end of a table does the same
 - U19 // where a word starts types today's date, as in Confluence
 - U20 // after other text, as in https://, stays as typed
 
