@@ -214,7 +214,7 @@ export function setupChrome(editor, post) {
     }
   }
   function showResults(query, list) {
-    if (!allMode || query !== findInput.value) return;
+    if (!allMode || findBar.hidden || query !== findInput.value) return;
     resultRows = list.map(m => {
       const row = el('div', {class: 'result', role: 'option'},
         el('b', {}, m.title || 'Untitled'), el('span', {class: 'snippet'}, mark(m.snippet, m.start, m.end)),
@@ -289,7 +289,17 @@ export function setupChrome(editor, post) {
   }
   function closeFind() {
     if (findBar.hidden) return;
-    if (allMode) setAllMode(false, false);
+    // Back to the note's text without finding in it again: that showed this
+    // note's count, which the next open in All notes flashed.
+    if (allMode) {
+      allMode = false;
+      results.hidden = true;
+      scrollBox.hidden = false;
+      allBtn.classList.remove('on');
+      prevBtn.classList.remove('away');
+      nextBtn.classList.remove('away');
+    }
+    findCount.textContent = '';
     findBar.hidden = true;
     findBtn.classList.remove('open');
     endFind(editor.view);

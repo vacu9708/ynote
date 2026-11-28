@@ -313,3 +313,9 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-t
 .result mark { background: #FFD45C; color: inherit; border-radius: 2px; }
 .result .tag { font-size: 11px; line-height: 16px; color: #6B7280; border: 1px solid rgba(0, 0, 0, .15); border-radius: 99px; padding: 0 6px; }
 .no-results { padding: 10px 8px; color: rgba(0, 0, 0, .5); }
+
+/* A drag over a table: the range it selects, drawn while the browser's own
+   selection, which lost where the drag started, is hidden (structure.js). */
+.ProseMirror.drag-crossing ::selection { background: transparent; }
+.ProseMirror .drag-selected { background: var(--select); }
+.ProseMirror .drag-selected-cell { background-image: linear-gradient(var(--select), var(--select)); }

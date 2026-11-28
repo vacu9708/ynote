@@ -318,6 +318,7 @@ so they may reach past the note.
 - T23 The note menu starts with New note and Hidden notes, which have no button, and ends with Delete, away from a quick click
 - T24 A wheel notch scrolls as far as in 1.x, about the view's height to the 2/3 power, and at once: WebKit's animated scroll, drawn in software, lagged on the desktop (Xvfb does not animate it, so the test does not catch that)
 - T25 Find's All notes stays where it is as it is turned on and off, beside Close
+- T26 A menu, the shortcuts, or the hidden notes close when another window becomes active, as a click on another app on a Wayland desktop makes it, which Ynote never sees
 - T20 F1 shows the keyboard shortcuts, made from the actions, with Ynote's version and where its notes are
 
 ## U. Editing in a 2.0 note
@@ -346,6 +347,7 @@ Where 2.0 follows Confluence over 1.x, the item says so.
 - U22 A drag up over a table selects everything it passes
 - U23 A drag from below the text selects up from the end, as the editor fills the note
 - U24 A drag from the empty line below a table, up over it, selects everything it passes (WebKit moved the drag's start to the table's edge)
+- U25 A drag over a table shows what it selects while dragging, not only once let go
 - U19 // where a word starts types today's date, as in Confluence
 - U20 // after other text, as in https://, stays as typed
 

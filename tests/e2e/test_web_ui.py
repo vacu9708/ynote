@@ -312,3 +312,32 @@ def test_T25_all_notes_stays_where_it_is_as_it_is_turned_on_and_off(app, inp):
     inp.key('alt+a')
     settle(0.4)
     assert all_box() == before
+
+
+def test_T26_a_menu_closes_when_another_window_becomes_active(app, inp):
+    from tests.e2e.driver import Gtk, pump
+    note = start(app, 'hello')
+    note.press('Note menu')
+    menu(app)
+    other = Gtk.Window(title='another app')
+    other.set_default_size(300, 200)
+    other.move(900, 500)
+    other.show_all()
+    try:
+        # Made active by the window manager, as a click on another app on a
+        # Wayland desktop does, which Ynote never sees.
+        d = inp.d
+        from Xlib import X, protocol
+        xid = other.get_window().get_xid()
+        target = d.create_resource_object('window', xid)
+        ev = protocol.event.ClientMessage(window=target, client_type=d.intern_atom('_NET_ACTIVE_WINDOW'),
+                                          data=(32, [2, X.CurrentTime, 0, 0, 0]))
+        d.screen().root.send_event(ev, event_mask=X.SubstructureRedirectMask | X.SubstructureNotifyMask)
+        d.flush()
+        for _ in range(10):
+            pump()
+            settle(0.1)
+        wait_until(lambda: not menu_open(app), what='the menu to close')
+    finally:
+        other.destroy()
+        pump()

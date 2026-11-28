@@ -56,6 +56,8 @@ class WebPopup(Gtk.Window):
         self._takes_input = False
         self._grabbed = None
         self._size = (0, 0)
+        self._focus_watch = None
+        self._active_at_open = 0
         self.connect('key-press-event', self._on_key)
         self.connect('button-press-event', self._on_press)
         self.view.connect('web-process-terminated', self._on_crash)
@@ -131,6 +133,50 @@ class WebPopup(Gtk.Window):
             # A window not mapped yet cannot be grabbed; try again once it is.
             if not self._grab():
                 GLib.timeout_add(30, self._grab_later, 20)
+            self._watch_focus()
+
+    # --- closing when the focus goes elsewhere ----------------------------
+    #
+    # On GNOME, Ynote's windows are X windows in a Wayland desktop: a click
+    # on another app, or on the desktop, never reaches the X server, so the
+    # grab cannot see it. The window manager's active window does change, to
+    # a window not Ynote's or to none, and that closes the menu.
+
+    def _active_xid(self):
+        window = Gdk.Screen.get_default().get_active_window()
+        if window is None:
+            return 0
+        try:
+            return window.get_xid()
+        except AttributeError:
+            return 0
+
+    def _ours(self):
+        xids = set()
+        for window in Gtk.Window.list_toplevels():
+            gdk_window = window.get_window()
+            if gdk_window is not None and hasattr(gdk_window, 'get_xid'):
+                xids.add(gdk_window.get_xid())
+        return xids
+
+    def _watch_focus(self):
+        if self._focus_watch:
+            GLib.source_remove(self._focus_watch)
+        self._active_at_open = self._active_xid()
+        self._focus_watch = GLib.timeout_add(150, self._check_focus)
+
+    def _check_focus(self):
+        if self._owner is None or not self.get_visible():
+            self._focus_watch = None
+            return False
+        active = self._active_xid()
+        # Opened from the tray, no window of Ynote's is active: only a change
+        # from that counts.
+        if active != self._active_at_open and active not in self._ours():
+            self._focus_watch = None
+            self.close()
+            return False
+        return True
 
     def _grab(self):
         """Take the mouse and keys, as a GTK menu does; whether it could."""

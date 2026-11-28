@@ -472,6 +472,9 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         return False
 
     def _on_scroll(self, _view, event):
+        if os.environ.get('YNOTE_DEBUG'):
+            print(f'ynote: scroll {event.direction} state {int(event.state)} '
+                  f'active {self.is_active()}', file=sys.stderr, flush=True)
         # Alt + scroll steps through the notes (PostItApp.scroll_notes()).
         if not _alt_only(event):
             return False

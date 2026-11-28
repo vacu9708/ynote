@@ -477,12 +477,16 @@ design. The GTK window stays, frameless, for what only a window can do.
   as GTK's views do. The editor fills the space between the bars, so a press
   or a drag below the text is in the editor, as on any line.
 - **Drags over tables.** WebKit moved the start of a drag that began
-  outside a table and passed over one to the table's edge; the start is
-  kept as the button goes down, and on release the selection is made from it
-  (`structure.js`, `dragAcrossTablesPlugin`).
-- **Menus and the focus.** A menu takes the mouse and keys once its window is
-  mapped; if the desktop does not let it, the note's losing the focus closes
-  it, so a click on another window does not leave it open.
+  outside a table and passed over one to the table's edge. The start is kept
+  as the button goes down; while the drag crosses a table, the browser's
+  selection is hidden and the range from the start to the pointer is drawn
+  as decorations, and on release it becomes the selection (`structure.js`,
+  `dragAcrossTablesPlugin`).
+- **Menus and the focus.** A menu takes the mouse and keys once its window
+  is mapped. On GNOME, Ynote's windows are X windows on a Wayland desktop, and
+  a click on another app or the desktop never reaches the X server, so no
+  grab sees it; while a menu is open, the window manager's active window is
+  checked, and its turning to a window not Ynote's, or none, closes the menu.
 - **Rules of the content.** `structure.js` keeps, after every change and when
   a note loads: a table's first row its header, and a line at the end of the
   note, so the cursor can go below anything. Typing in an empty header cell

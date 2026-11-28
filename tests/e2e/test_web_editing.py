@@ -293,3 +293,26 @@ def test_U24_a_drag_from_the_empty_line_below_a_table_up_over_it_selects_it_all(
     settle(0.3)
     inp.type('X')
     assert_saved(app, "paragraph('X')")
+
+
+def test_U25_a_drag_over_a_table_shows_what_it_selects_while_dragging(app, inp):
+    rows = [[{'text': 'k'}, {'text': 'v'}], [{'text': 'a'}, {'text': 'b'}]]
+    note = start(app, 'example text\n\n￼\n', tables=[{'offset': 14, 'rows': rows}])
+    from tests.e2e.web import text_holding, attrs_at
+    from tests.e2e.driver import Atspi
+    acc, at = text_holding(note, 'example text')
+    first = Atspi.Text.get_character_extents(acc, at, Atspi.CoordType.SCREEN)
+    acc2, at2 = text_holding(note, 'b')
+    cell = Atspi.Text.get_character_extents(acc2, at2, Atspi.CoordType.SCREEN)
+    plain = attrs_at(note, 'example text')
+    inp.move(first.x + 4, cell.y + cell.height + 22)
+    inp.press()
+    for i in range(1, 11):
+        inp.move(first.x + 4, cell.y + cell.height + 22 - i * (cell.y + cell.height + 22 - first.y - 4) / 10)
+        settle(0.05)
+    settle(0.3)
+    try:
+        during = attrs_at(note, 'example text')
+    finally:
+        inp.release()
+    assert during.get('bg-color') and during.get('bg-color') != plain.get('bg-color'), (plain, during)

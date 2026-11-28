@@ -1,5 +1,6 @@
 // Rules the note's content keeps after every change, and clicks in code.
-import {Plugin, TextSelection} from 'prosemirror-state';
+import {Plugin, PluginKey, TextSelection} from 'prosemirror-state';
+import {Decoration, DecorationSet} from 'prosemirror-view';
 import {schema} from './schema.js';
 
 const {paragraph, table, table_header, table_cell, code_block} = schema.nodes;
@@ -81,44 +82,87 @@ export const codeClicksPlugin = new Plugin({
 });
 
 // A drag that starts outside a table and passes over one lost where it
-// started in WebKit, which moved the start to the table's edge. The start is
-// kept as the button goes down, and the selection is made from it to where
-// the drag ends.
+// started in WebKit, which moved the start to the table's edge, and showed
+// so while dragging. The start is kept as the button goes down; while the
+// drag crosses a table, the browser's selection is hidden and the range from
+// the start to the pointer is drawn instead, and on release it becomes the
+// selection.
+const dragKey = new PluginKey('dragAcrossTables');
+
+function crossesTable(doc, a, b) {
+  let found = false;
+  doc.nodesBetween(Math.min(a, b), Math.max(a, b), node => {
+    if (node.type.name === 'table') found = true;
+    return !found;
+  });
+  return found;
+}
+
 export const dragAcrossTablesPlugin = new Plugin({
+  key: dragKey,
+  state: {
+    init: () => null,
+    apply(tr, range) {
+      const meta = tr.getMeta(dragKey);
+      if (meta !== undefined) return meta;
+      return range && {from: tr.mapping.map(range.from), to: tr.mapping.map(range.to)};
+    },
+  },
   props: {
+    decorations(state) {
+      const range = dragKey.getState(state);
+      if (!range || range.from === range.to) return null;
+      const from = Math.min(range.from, range.to), to = Math.max(range.from, range.to);
+      const decos = [Decoration.inline(from, to, {class: 'drag-selected'})];
+      // Cells wholly inside, as an empty cell has no text to mark.
+      state.doc.nodesBetween(from, to, (node, pos) => {
+        if ((node.type.name === 'table_cell' || node.type.name === 'table_header')
+            && pos >= from && pos + node.nodeSize <= to) {
+          decos.push(Decoration.node(pos, pos + node.nodeSize, {class: 'drag-selected-cell'}));
+        }
+        return true;
+      });
+      return DecorationSet.create(state.doc, decos);
+    },
     handleDOMEvents: {
       mousedown(view, event) {
-        dragStart = null;
         if (event.button !== 0 || event.shiftKey || event.detail > 1) return false;
         if (event.target.closest && event.target.closest('td, th')) return false;
         const at = view.posAtCoords({left: event.clientX, top: event.clientY});
-        if (at) dragStart = {pos: at.pos, x: event.clientX, y: event.clientY};
-        return false;
-      },
-      mouseup(view, event) {
-        const start = dragStart;
-        dragStart = null;
-        if (!start || Math.abs(event.clientX - start.x) + Math.abs(event.clientY - start.y) < 4) return false;
-        // After ProseMirror has read the browser's selection.
-        setTimeout(() => {
-          const {state} = view;
-          const {head} = state.selection;
-          if (state.selection.anchor === start.pos || start.pos > state.doc.content.size) return;
-          const crossed = (a, b) => {
-            let found = false;
-            state.doc.nodesBetween(Math.min(a, b), Math.max(a, b), node => {
-              if (node.type.name === 'table') found = true;
-              return !found;
-            });
-            return found;
-          };
-          if (!crossed(start.pos, head)) return;
-          const sel = TextSelection.between(state.doc.resolve(start.pos), state.doc.resolve(head));
-          view.dispatch(state.tr.setSelection(sel));
-        }, 0);
+        if (!at) return false;
+        const start = {pos: at.pos, x: event.clientX, y: event.clientY};
+        let shown = false;
+        const move = e => {
+          if (!(e.buttons & 1)) return;
+          if (Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y) < 4) return;
+          const here = view.posAtCoords({left: e.clientX, top: e.clientY});
+          if (!here) return;
+          const crossing = crossesTable(view.state.doc, start.pos, here.pos);
+          if (crossing || shown) {
+            shown = crossing;
+            view.dom.classList.toggle('drag-crossing', crossing);
+            view.dispatch(view.state.tr.setMeta(dragKey, crossing ? {from: start.pos, to: here.pos} : null));
+          }
+        };
+        const up = e => {
+          document.removeEventListener('mousemove', move, true);
+          document.removeEventListener('mouseup', up, true);
+          view.dom.classList.remove('drag-crossing');
+          if (shown) view.dispatch(view.state.tr.setMeta(dragKey, null));
+          if (Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y) < 4) return;
+          // After ProseMirror has read the browser's selection.
+          setTimeout(() => {
+            const {state} = view;
+            const head = state.selection.head;
+            if (start.pos > state.doc.content.size || !crossesTable(state.doc, start.pos, head)) return;
+            view.dispatch(state.tr.setSelection(
+              TextSelection.between(state.doc.resolve(start.pos), state.doc.resolve(head))));
+          }, 0);
+        };
+        document.addEventListener('mousemove', move, true);
+        document.addEventListener('mouseup', up, true);
         return false;
       },
     },
   },
 });
-let dragStart = null;
