@@ -15,6 +15,7 @@ import {schema} from './schema.js';
 import * as cmd from './commands.js';
 import {CodeBlockView, ExpandView, ListItemView} from './views.js';
 import {linksPlugin} from './links.js';
+import {today} from './actions.js';
 import {findPlugin} from './find.js';
 import {structurePlugin, headerBoldPlugin, codeClicksPlugin, normalize} from './structure.js';
 import {slashPlugin} from './slash.js';
@@ -50,6 +51,14 @@ const todoRule = new InputRule(/^\s*\[([ xX]?)\]\s$/, (state, match, start, end)
   return tr;
 });
 
+// // where a word starts types today's date, as in Confluence; a // after
+// other text, as in https://, stays.
+const dateRule = new InputRule(/(?:^|\s)(\/\/)$/, (state, match, start, end) => {
+  if (state.doc.resolve(start).parent.type.spec.code) return null;
+  // The second / is being typed and not in the text yet: the first goes.
+  return state.tr.insertText(today(), end - 1, end);
+});
+
 const dividerRule = new InputRule(/^---$/, (state, match, start, end) => {
   const $start = state.doc.resolve(start);
   if ($start.parent.type !== paragraph || $start.parent.content.size !== 3) return null;
@@ -65,6 +74,7 @@ const rules = inputRules({rules: [
   textblockTypeInputRule(/^#{1,6}\s$/, heading),
   textblockTypeInputRule(/^```$/, code_block),
   dividerRule,
+  dateRule,
   markRule(/(?<![*\\])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/, schema.marks.strong),
   markRule(/(?<![`\\])`([^`]+)`$/, schema.marks.code),
 ]});

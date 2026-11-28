@@ -215,3 +215,17 @@ def test_U17_the_note_menu_holds_nothing_a_title_bar_button_does(app, inp):
     names = [i.get_name() for i in menu_items(app)]
     for label in ('Collapse', 'Always on top', 'Hide note'):
         assert not any(n.startswith(label) for n in names), names
+
+
+def test_U19_two_slashes_where_a_word_starts_type_todays_date(app, inp):
+    start(app, 'log ')
+    inp.type('//')
+    today = datetime.date.today().isoformat()
+    inp.type(' done')
+    assert_saved(app, f"paragraph('log {today} done')")
+
+
+def test_U20_two_slashes_after_other_text_stay_as_typed(app, inp):
+    start(app, '')
+    inp.type('https://example.com')
+    assert_saved(app, "paragraph('https://example.com')")

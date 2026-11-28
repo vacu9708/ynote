@@ -236,3 +236,11 @@ def test_T20_f1_shows_the_shortcuts_with_their_keys_and_the_version(app, inp):
         return None
     text = wait_until(page_text, what='the shortcuts')
     assert f'Ynote {__version__}' in text and 'Ctrl' in text, text[:400]
+
+
+def test_T21_a_collapsed_note_is_its_title_bar(app, inp):
+    note = start(app, 'hello')
+    note.press('Collapse')
+    wait_until(lambda: 30 <= note.box[3] <= 40, what='the note as tall as its title bar')
+    note.press('Expand')
+    wait_until(lambda: note.box[3] >= 300, what='the note back at its height')

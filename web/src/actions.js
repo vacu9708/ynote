@@ -32,9 +32,6 @@ const pad = n => String(n).padStart(2, '0');
 export function today(now = new Date()) {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
-export function nowStamp(now = new Date()) {
-  return `${today(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-}
 const insertText = text => ({
   run: ({state, dispatch}) => {
     dispatch(state.tr.insertText(text()).scrollIntoView());
@@ -46,12 +43,12 @@ const insertText = text => ({
 
 export const ACTIONS = [
   // Text
+  {id: 'heading', group: 'Text', label: 'Heading', icon: 'heading', md: '# text', keys: ['Ctrl', 'H'],
+    ...edit(cmd.toggleHeading), active: ({state}) => cmd.headingActive(state)},
   {id: 'bold', group: 'Text', label: 'Bold', icon: 'bold', md: '**text**', keys: ['Ctrl', 'B'],
     ...edit(cmd.toggleBold), active: ({state}) => markActive(state, schema.marks.strong)},
   {id: 'code', group: 'Text', label: 'Inline code', icon: 'code', md: '`text`', keys: ['Ctrl', 'E'],
     ...edit(cmd.toggleInlineCode), active: ({state}) => markActive(state, schema.marks.code)},
-  {id: 'heading', group: 'Text', label: 'Heading', icon: 'heading', md: '# text', keys: ['Ctrl', 'H'],
-    ...edit(cmd.toggleHeading), active: ({state}) => cmd.headingActive(state)},
 
   // Blocks
   {id: 'bullet', group: 'Insert', label: 'Bullet list', icon: 'bullet', md: '- item', keys: ['Ctrl', '8'],
@@ -66,9 +63,8 @@ export const ACTIONS = [
   {id: 'expand', group: 'Insert', label: 'Expand', icon: 'expand', md: '/expand', ...edit(cmd.insertExpand)},
   {id: 'image', group: 'Insert', label: 'Image…', icon: 'image', keys: ['Ctrl', 'V'],
     run: ({post}) => { post({type: 'choose-image'}); return true; }, enabled: () => true},
-  {id: 'date', group: 'Insert', label: 'Date', icon: 'calendar', md: '/date', hint: today, ...insertText(today)},
-  {id: 'now', group: 'Insert', label: 'Date and time', icon: 'clock', md: '/now', hint: nowStamp,
-    ...insertText(nowStamp)},
+  // Typed as // where a word starts, as in Confluence (editor.js).
+  {id: 'date', group: 'Insert', label: 'Date', icon: 'calendar', md: '//', ...insertText(today)},
 
   // Keys of the editor, for the shortcuts page
   {id: 'todos', group: 'Lists and expands', label: 'Check or uncheck the to-dos', keys: ['Ctrl', 'Enter'], page: true},
@@ -123,7 +119,7 @@ export function perform(action, ctx) {
 export function menuRow(action, ctx, extra = {}) {
   return {
     id: action.id, icon: action.icon, label: action.label,
-    md: action.hint ? action.hint() : action.md, keys: action.keys, danger: action.danger,
+    md: action.md, keys: action.keys, danger: action.danger,
     on: action.active ? action.active(ctx) : false,
     disabled: !enabled(action, ctx),
     ...extra,
@@ -132,13 +128,13 @@ export function menuRow(action, ctx, extra = {}) {
 
 // The toolbar, in order; when the note is too narrow for all of them, those
 // last before ＋ go into ＋'s menu first.
-export const TOOLBAR = ['bold', 'code', 'heading', '|', 'bullet', 'checklist', 'codeblock', 'table'];
+export const TOOLBAR = ['heading', 'bold', 'code', '|', 'bullet', 'checklist', 'codeblock', 'table'];
 // ＋'s menu, after any of the toolbar's that did not fit.
-export const MORE = ['quote', 'divider', 'expand', 'image', 'date', 'now'];
+export const MORE = ['quote', 'divider', 'expand', 'image', 'date'];
 
 // The / menu: every insertable thing and the text formats that make a block.
 export const SLASH = ['heading', 'bullet', 'checklist', 'codeblock', 'table', 'quote', 'divider', 'expand',
-  'image', 'date', 'now'];
+  'image', 'date'];
 
 export function inTable(state) { return isInTable(state); }
 export {TextSelection};

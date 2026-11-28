@@ -531,8 +531,13 @@ class WebNoteWindow(Gtk.ApplicationWindow):
 
     def _lock_size(self, locked, width=-1):
         # A collapsed note cannot be resized, so the window manager never
-        # tiles or maximizes an empty note.
-        self.set_size_request(width if locked else -1, -1)
+        # tiles or maximizes an empty note. Its height is asked for too: a
+        # window that cannot be resized takes the size its child asks for,
+        # and a web view asks for next to none, which left a 1px note.
+        if locked:
+            self.set_size_request(width, TITLE_BAR_HEIGHT)
+        else:
+            self.set_size_request(-1, -1)
         self.set_resizable(not locked)
 
     def _apply_min_size(self):

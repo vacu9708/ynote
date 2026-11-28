@@ -313,6 +313,7 @@ so they may reach past the note.
 - T17 A note saved smaller than that opens at the least size
 - T18 Hidden notes, in the note menu (or the tray), lists them latest hidden first, and choosing one shows it (1.x's arrows to reorder them are gone: the latest hidden first is the order, and Find's All notes finds any)
 - T19 Show all shows every hidden note
+- T21 Collapse leaves the note as tall as its title bar, and Expand brings back its height (GNOME made a collapsed note 1px tall, from what its web view asks for; openbox, which the tests run, sized it right either way, so this test does not catch that bug)
 - T20 F1 shows the keyboard shortcuts, made from the actions, with Ynote's version and where its notes are
 
 ## U. Editing in a 2.0 note
@@ -337,6 +338,8 @@ Where 2.0 follows Confluence over 1.x, the item says so.
 - U16 Find's All notes (Alt+A) lists the matches in every note, hidden ones too, and Enter shows the note chosen
 - U17 The note menu holds nothing a title bar button does
 - U18 Down from a table's last row in an expand goes below the expand, as in Confluence
+- U19 // where a word starts types today's date, as in Confluence
+- U20 // after other text, as in https://, stays as typed
 
 ## V. Copy and paste in a 2.0 note
 
