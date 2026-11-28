@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
-"""Render the README screenshot from the real app in a virtual X server.
+"""Render the README pictures from the real app in a virtual X server.
 
-    dbus-run-session -- xvfb-run -a -s "-screen 0 2600x2000x24" \\
+    dbus-run-session -- xvfb-run -a -s "-screen 0 5200x4000x24" \\
         python3 tools/readme_screenshot.py
 
-It opens sample notes with a throwaway HOME and captures note windows at 2x
-scale on a plain background. The pictures show as much of what Ynote does as
-they can, since the README is mostly them:
+It opens sample notes with a throwaway HOME and captures them at 2x scale on
+a plain background. The pictures show as much of what Ynote does as they
+can, since the README is mostly them:
 
 - assets/ynote-screenshot.png: three notes side by side, between them every
   element a note holds: headings, a code block, an image, lists, a
   checklist, inline code, a table, expands open and folded, a quote, a link,
   emoji, and a divider, in three colors, one pinned.
-- assets/ynote-hidden.png: a note with its menu open, a note finding in
-  All notes, which lists matches in the hidden sample notes, and the hidden
-  notes' list.
+- assets/feature-*.png: one feature each, a note with what it shows open:
+  the / menu, a table's menu, find in all notes, the hidden notes, the note
+  menu, the emoji picker, and the keyboard shortcuts.
 
-Rerun it after a visible UI change so the README images stay current.
-dbus-run-session keeps it apart from a running Ynote.
+Each sample note has a place of its own on the large screen, so no other
+note shows in its picture. Rerun it after a visible UI change so the README
+pictures stay current. dbus-run-session keeps it apart from a running Ynote.
 """
 import json
 import os
@@ -48,7 +49,7 @@ from ynote.config import (  # noqa: E402
     EXPAND_CLOSED, EXPAND_END, EXPAND_OPEN, IMAGE_ANCHOR, TABLE_MARKER)
 
 OUTPUT = os.path.join(ROOT, 'assets', 'ynote-screenshot.png')
-HIDDEN_OUTPUT = os.path.join(ROOT, 'assets', 'ynote-hidden.png')
+ASSETS = os.path.join(ROOT, 'assets')
 SEARCH_NOTE = 'scratch'
 MENU_NOTE = 'ideas'
 SEARCH_QUERY = 'restart'
@@ -170,24 +171,45 @@ def sample_notes():
         out.append(note)
         x += width + GAP
 
-    # The notes of the second picture, below the first row so they stay out
-    # of the first picture.
+    # The notes of the feature pictures, each in a place of its own, with
+    # room for what opens from it.
+    def place(note_id, title, builder, x, y, w, h, color):
+        note = builder.note(note_id, title, x=x, w=w, h=h)
+        note['y'] = y
+        note['color'] = color
+        out.append(note)
+
     ideas = NoteBuilder()
     for idea in ('Dark mode', 'Export', 'Sync', 'Themes'):
         ideas.line('• ' + idea)
-    note = ideas.note(MENU_NOTE, 'Ideas', x=0, w=420, h=440)
-    note['y'] = 460
-    note['color'] = 'pink'
-    out.append(note)
+    place(MENU_NOTE, 'Ideas', ideas, 0, 500, 400, 440, 'pink')
 
-    # The note searched in the second picture, placed below the first row so
-    # it stays out of the first picture.
     scratch = NoteBuilder()
     scratch.line('api pods stuck after the config change')
     scratch.line('restart them, then check the logs')
-    note = scratch.note('scratch', 'Scratch', x=460, w=430, h=300)
-    note['y'] = 460
-    out.append(note)
+    place(SEARCH_NOTE, 'Scratch', scratch, 900, 500, 440, 300, 'yellow')
+
+    release = NoteBuilder()
+    release.line('Release 2.4', 'heading_ranges')
+    release.line('• tag and push')
+    release.line('')
+    place('release', 'Release', release, 0, 1100, 360, 300, 'purple')
+
+    ports = NoteBuilder()
+    ports.line('Ports', 'heading_ranges')
+    ports.line(TABLE_MARKER + 'Service\tPort')
+    ports.add(TABLE_MARKER).add('api', 'backtick_ranges').line('\t8080')
+    ports.add(TABLE_MARKER).add('db', 'backtick_ranges').line('\t5432')
+    place('ports', 'Ports', ports, 900, 1100, 380, 260, 'orange')
+
+    standup = NoteBuilder()
+    standup.line('Standup')
+    standup.line('• shipped the fix ')
+    place('standup', 'Standup', standup, 1700, 1100, 360, 260, 'blue')
+
+    keys = NoteBuilder()
+    keys.line('Press F1 for the shortcuts')
+    place('keys', 'Shortcuts', keys, 1400, 0, 400, 300, 'gray')
 
     # Hidden runbooks that the search picture finds.
     k8s = NoteBuilder()
@@ -215,6 +237,9 @@ def setup_home():
     write_terminal_image(os.path.join(conf, 'images', TERMINAL_IMAGE))
     with open(os.path.join(conf, 'notes.json'), 'w') as f:
         json.dump(sample_notes(), f)
+    # The emoji picker's recent ones, as after some use.
+    with open(os.path.join(conf, 'settings.json'), 'w') as f:
+        json.dump({'emoji_recent': ['🚀', '✅', '🔥', '👍', '🐛', '🎉'], 'autostart_done': True}, f)
 
 
 def capture_rect(x, y, width, height):
@@ -270,6 +295,38 @@ def compose(shots, output):
     print(output)
 
 
+# JavaScript run in a note for each feature picture: what it opens.
+SET_CURSOR_AT_END = """{
+const pm = document.querySelector('.ProseMirror');
+pm.focus();
+const range = document.createRange();
+range.selectNodeContents(pm.lastElementChild);
+range.collapse(false);
+getSelection().removeAllRanges();
+getSelection().addRange(range);
+}"""
+FEATURES = [
+    # (picture, note, JavaScript, wait in ms)
+    ('feature-menu.png', MENU_NOTE, "document.querySelector('.bar-btn.more').click()", 1000),
+    ('feature-find.png', SEARCH_NOTE,
+     "{ document.querySelector('.find-btn').click();"
+     "document.querySelector('.find-toggle.all').click();"
+     "const input = document.querySelector('.find-input');"
+     f"input.value = '{SEARCH_QUERY}';"
+     "input.dispatchEvent(new Event('input')); }", 1200),
+    ('feature-hidden.png', MENU_NOTE, None, 1000),
+    ('feature-slash.png', 'release', SET_CURSOR_AT_END, 400),
+    ('feature-table.png', 'ports',
+     "{ const cell = document.querySelectorAll('td')[1].getBoundingClientRect();"
+     "document.querySelector('td').dispatchEvent(new MouseEvent('contextmenu',"
+     " {bubbles: true, clientX: cell.left + 20, clientY: cell.top + 10})) }", 1000),
+    ('feature-emoji.png', 'standup', SET_CURSOR_AT_END +
+     "setTimeout(() => document.dispatchEvent(new KeyboardEvent('keydown', {key: '.', ctrlKey: true})), 300)", 1400),
+    ('feature-shortcuts.png', 'keys',
+     "document.dispatchEvent(new KeyboardEvent('keydown', {key: 'F1'}))", 1200),
+]
+
+
 def main():
     if not os.environ.get('DISPLAY'):
         sys.exit('run this under xvfb-run; see the docstring')
@@ -279,52 +336,55 @@ def main():
     def js(note, code):
         run_js(note.view, code)
 
-    def hide_cursors():
-        # A blinking text cursor would land in the picture at random.
+    def tidy():
+        # No cursor, and none of its formats lit: at the empty line each
+        # note ends with, then out of the note.
+        for w in app.notes.values():
+            js(w, SET_CURSOR_AT_END)
+        GLib.timeout_add(300, blur)
+        return False
+
+    def blur():
         for w in app.notes.values():
             js(w, 'document.activeElement && document.activeElement.blur()')
         GLib.timeout_add(500, capture_notes)
         return False
 
     def capture_notes():
-        # Capture left to right, then lay the captures out by their real
-        # widths, since a note can end up wider than requested.
-        windows = sorted((w for w in app.notes.values()
-                          if w.get_visible()
-                          and w.note_id not in (SEARCH_NOTE, MENU_NOTE)),
+        windows = sorted((w for w in app.notes.values() if w.note_id in ('orders', 'rollout', 'today')),
                          key=lambda w: w.get_window().get_origin()[1])
         compose([capture(w) for w in windows], OUTPUT)
-        js(app.notes[MENU_NOTE], "document.querySelector('.bar-btn.more').click()")
-        GLib.timeout_add(1000, capture_menu)
+        GLib.idle_add(feature, 0)
         return False
 
-    def capture_menu():
-        note = app.notes[MENU_NOTE]
-        shots.append(capture(note, popup()))
-        popup().close()
-        note = app.notes[SEARCH_NOTE]
-        js(note, "document.querySelector('.find-btn').click();"
-                 "document.querySelector('.find-toggle.all').click();"
-                 "const input = document.querySelector('.find-input');"
-                 f"input.value = '{SEARCH_QUERY}';"
-                 "input.dispatchEvent(new Event('input'));")
-        GLib.timeout_add(1200, capture_search)
+    def feature(i):
+        if i == len(FEATURES):
+            app.quit_app()
+            return False
+        name, note_id, code, wait = FEATURES[i]
+        note = app.notes[note_id]
+        if name == 'feature-hidden.png':
+            app.show_hidden_notes_manager(parent_note=note)
+        elif name == 'feature-slash.png':
+            js(note, code)
+            GLib.timeout_add(300, lambda: js(note, "ynote.pasteText('/')") and False)
+        else:
+            js(note, code)
+        GLib.timeout_add(wait + 300, shoot, i)
         return False
 
-    def capture_search():
-        note = app.notes[SEARCH_NOTE]
-        shots.append(capture(note))
-        app.show_hidden_notes_manager(parent_note=note)
-        GLib.timeout_add(1000, capture_hidden)
+    def shoot(i):
+        name, note_id, _code, _wait = FEATURES[i]
+        note = app.notes[note_id]
+        shown = popup().get_visible()
+        compose([capture(note, popup()) if shown else capture(note)], os.path.join(ASSETS, name))
+        if shown:
+            popup().close()
+        # Find stays open in its note; the next picture of it wants it.
+        GLib.timeout_add(500, feature, i + 1)
         return False
 
-    def capture_hidden():
-        compose(shots + [capture(popup())], HIDDEN_OUTPUT)
-        app.quit_app()
-        return False
-
-    shots = []
-    GLib.timeout_add(3500, hide_cursors)
+    GLib.timeout_add(3500, tidy)
     app.run([sys.argv[0]])
 
 

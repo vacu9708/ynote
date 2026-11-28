@@ -108,15 +108,17 @@ defined in `packaging/ynote.desktop`. Keep the dependency list in
 The package version comes from `__version__` in `ynote/__init__.py`, which is
 also what the keyboard shortcuts (F1) and `ynote --version` show.
 
-## README Screenshots
+## README Pictures
 
-`assets/ynote-screenshot.png` and `assets/ynote-hidden.png` are rendered from
+`assets/ynote-screenshot.png` and `assets/feature-*.png` are rendered from
 the real app, so regenerate them after any visible UI change:
 
 ```bash
-dbus-run-session -- xvfb-run -a -s "-screen 0 2600x2000x24" \
+dbus-run-session -- xvfb-run -a -s "-screen 0 5200x4000x24" \
     python3 tools/readme_screenshot.py
 ```
 
-The sample notes are defined in `tools/readme_screenshot.py`. They show as
-much of what Ynote does as they can: a new element of a note goes into them.
+The sample notes, and what each picture opens, are defined in
+`tools/readme_screenshot.py`. They show as much of what Ynote does as they
+can: a new feature goes into them. The README and the project page,
+`docs/index.html`, show the same pictures.
