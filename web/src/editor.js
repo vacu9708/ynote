@@ -1,6 +1,6 @@
 // A note's editor: ProseMirror with Ynote's content, keys, and typed
 // Markdown. The app talks to it through window.ynote (see bridge.js).
-import {EditorState, NodeSelection, Plugin, Selection, TextSelection} from 'prosemirror-state';
+import {EditorState, NodeSelection, Plugin, PluginKey, Selection, TextSelection} from 'prosemirror-state';
 import {EditorView, Decoration, DecorationSet} from 'prosemirror-view';
 import {Node} from 'prosemirror-model';
 import {keymap} from 'prosemirror-keymap';
@@ -9,7 +9,6 @@ import {history, undo, redo} from 'prosemirror-history';
 import {inputRules, InputRule, wrappingInputRule, textblockTypeInputRule} from 'prosemirror-inputrules';
 import {findWrapping} from 'prosemirror-transform';
 import {tableEditing, goToNextCell} from 'prosemirror-tables';
-import {gapCursor, GapCursor} from 'prosemirror-gapcursor';
 import {dropCursor} from 'prosemirror-dropcursor';
 import {schema} from './schema.js';
 import * as cmd from './commands.js';
@@ -115,14 +114,60 @@ function outOfCode(dir) {
 }
 
 // The cursor right after a block, at pos: on the line there, or, with no
-// line there, as before a divider, another block, or an expand's end, a gap
-// cursor, where Enter or typing makes one, as in Confluence.
+// line there, as before a divider, another block, or an expand's end, on an
+// empty line made there, the plain text cursor on it. The line stays once
+// anything is typed or done on it; left as it is, it goes (tempLinePlugin).
+// A gap cursor, Confluence's way, drew a line where the text cursor should
+// be, beside it, or nowhere.
+const tempKey = new PluginKey('tempLine');
+
 function cursorAfter(state, dispatch, pos) {
   const next = state.doc.resolve(pos).nodeAfter;
-  const sel = next && (next.type === paragraph || next.type === heading)
-    ? TextSelection.create(state.doc, pos + 1) : new GapCursor(state.doc.resolve(pos));
-  if (dispatch) dispatch(state.tr.setSelection(sel).scrollIntoView());
+  if (next && (next.type === paragraph || next.type === heading)) {
+    if (dispatch) dispatch(state.tr.setSelection(TextSelection.create(state.doc, pos + 1)).scrollIntoView());
+    return true;
+  }
+  if (dispatch) {
+    const tr = state.tr.insert(pos, paragraph.create());
+    tr.setSelection(TextSelection.create(tr.doc, pos + 1));
+    dispatch(tr.setMeta(tempKey, pos).setMeta('addToHistory', false).scrollIntoView());
+  }
   return true;
+}
+
+const tempLinePlugin = new Plugin({
+  key: tempKey,
+  state: {
+    init: () => null,
+    apply(tr, pos) {
+      const meta = tr.getMeta(tempKey);
+      if (meta !== undefined) return meta;
+      // Anything done to the note keeps the line: it is the user's now.
+      return pos == null || tr.docChanged ? null : pos;
+    },
+  },
+  appendTransaction(_trs, _old, state) {
+    const pos = tempKey.getState(state);
+    if (pos == null) return null;
+    const node = state.doc.nodeAt(pos);
+    if (!node || node.type !== paragraph || node.content.size) return state.tr.setMeta(tempKey, null);
+    const {from, to} = state.selection;
+    if (from > pos && to < pos + node.nodeSize) return null;
+    return state.tr.delete(pos, pos + node.nodeSize).setMeta(tempKey, null).setMeta('addToHistory', false);
+  },
+});
+
+// Right at the very end of an expand's last line goes after the expand.
+function rightOutOfExpand(state, dispatch, view) {
+  const {$cursor} = state.selection;
+  if (!$cursor || !view || !view.endOfTextblock('right')) return false;
+  for (let d = $cursor.depth; d > 0; d--) {
+    if ($cursor.node(d).type !== expand) continue;
+    const last = Selection.findFrom(state.doc.resolve($cursor.end(d)), -1, true);
+    if (!last || last.head !== $cursor.pos) return false;
+    return cursorAfter(state, dispatch, $cursor.after(d));
+  }
+  return false;
 }
 
 // Right at the very end of a code block: the way to write below it where
@@ -187,7 +232,7 @@ const keys = keymap({
   'Escape': cmd.leaveTable,
   'Enter': chainCommands(cmd.splitItem, enterInExpand),
   'ArrowDown': outOfCode('down'),
-  'ArrowRight': chainCommands(rightOutOfCode, rightOutOfTable),
+  'ArrowRight': chainCommands(rightOutOfCode, rightOutOfTable, rightOutOfExpand),
   'ArrowUp': outOfCode('up'),
   'Backspace': chainCommands(cmd.backspaceInItem, unwrapExpand, cmd.backspaceAfterList, cmd.backspaceAfterTable),
   'Delete': cmd.deleteInItem,
@@ -222,13 +267,17 @@ export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy, onSl
   });
   const plugins = [
     slashPlugin(key => onSlashKey(key)), clipboardKeys, rules, keys, keymap(baseKeymap),
-    history(), tableEditing({allowTableNodeSelection: true}), gapCursor(), dropCursor({color: '#2D6BE0', width: 2}),
+    history(), tableEditing({allowTableNodeSelection: true}), tempLinePlugin, dropCursor({color: '#2D6BE0', width: 2}),
     linksPlugin(onOpenLink), placeholder, findPlugin, structurePlugin, headerBoldPlugin, codeClicksPlugin, dragAcrossTablesPlugin,
     shortCodePlugin, emojiPlugin,
     changes,
   ];
   const view = new EditorView(place, {
     state: EditorState.create({schema, plugins}),
+    // Room kept below the cursor as it follows typing, so the end of a
+    // block, as a code block's border, shows above the bar.
+    scrollMargin: {top: 12, bottom: 40, left: 5, right: 5},
+    scrollThreshold: {top: 12, bottom: 40, left: 5, right: 5},
     nodeViews: {
       expand: (node, v, getPos) => new ExpandView(node, v, getPos),
       list_item: (node, v, getPos) => new ListItemView(node, v, getPos),

@@ -325,8 +325,8 @@ Where Ynote 2.0 follows Confluence over 1.x, the item says so.
 - U23 A drag from below the text selects up from the end, as the editor fills the note
 - U24 A drag from the empty line below a table, up over it, selects everything it passes (WebKit moved the drag's start to the table's edge)
 - U25 A drag over a table shows what it selects while dragging, not only once let go
-- U26 Right at the very end of a code block puts the cursor after it: on the line there, or, with none, as before a divider or a table, where Enter or typing makes one, as in Confluence; only that cursor shows, not the text cursor too
-- U27 Right at the very end of a table does the same
+- U26 Right at the very end of a code block, a table, or an expand puts the text cursor after it: on the line there, or, with none, as before a divider or a table, on an empty line made there, which stays once typed in and goes again if left as it is (a gap cursor, Confluence's, drew a line apart from the text cursor)
+- U27 The same after a table, and after an expand
 - U19 // where a word starts types today's date, as in Confluence
 - U20 // after other text, as in https://, stays as typed
 

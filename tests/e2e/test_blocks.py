@@ -53,8 +53,8 @@ CASES = {
     'I9 a code block made plain keeps its lines': (
         ('ls\npwd',), {'code_ranges': [[0, 6]]}, ['^ctrl+shift+c'], "paragraph('ls') paragraph('pwd')"),
 
-    'U26 Right at the end of a code block, then Enter, makes a line before a divider': (
-        ('ls\n---',), {'code_ranges': [[0, 2]]}, ['^right', '^enter', 'x'],
+    'U26 Right at the end of a code block, then typing, makes a line before a divider': (
+        ('ls\n---',), {'code_ranges': [[0, 2]]}, ['^right', 'x'],
         "code_block('ls') paragraph('x') horizontal_rule()"),
     'U26 Right at the end of a code block, then typing, makes a line before a table': (
         ('ls\n' + ANCHOR,), {'code_ranges': [[0, 2]], 'tables': [{'offset': 3, 'rows': [[{'text': 'k'}]]}]},
@@ -66,8 +66,13 @@ CASES = {
     'J1 Down from a table selects a divider after it': (
         ('x\n' + ANCHOR + '\n---\nb',), TABLE, ['^down', '^down', '^down', 'X'],
         "paragraph('x') " + table(KV, AB) + " paragraph('X') paragraph('b')"),
-    'U27 Right at the end of a table, then Enter, makes a line before a divider': (
-        ('x\n' + ANCHOR + '\n---',), TABLE, ['^down', '^down', '^tab', '^end', '^right', '^enter', 'y'],
+    'U26 a line made so and left as it is goes again': (
+        ('ls\n---',), {'code_ranges': [[0, 2]]}, ['^right', '^up', 'Y'], "code_block('Yls') horizontal_rule()"),
+    'U26 Right at the end of an expand, then typing, makes a line before a divider': (
+        (OPEN + 'T\nbody\n' + END + '\n---',), {}, ['^down', '^end', '^right', 'X'],
+        "expand(expand_title('T') paragraph('body')) paragraph('X') horizontal_rule()"),
+    'U27 Right at the end of a table, then typing, makes a line before a divider': (
+        ('x\n' + ANCHOR + '\n---',), TABLE, ['^down', '^down', '^tab', '^end', '^right', 'y'],
         "paragraph('x') " + table(KV, AB) + " paragraph('y') horizontal_rule()"),
 
     # J. dividers
