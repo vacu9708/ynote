@@ -252,9 +252,14 @@ def test_K2_an_image_no_note_uses_is_cleaned_up(app):
 
 def test_J4_ctrl_dot_finds_an_emoji_by_name_and_puts_it_at_the_cursor(app, inp):
     import json
-    start(app, 'go', at=(200, 10))
+    note = start(app, 'go', at=(200, 10))
     inp.key('ctrl+period')
     settle(0.8)
+    # A picker of its size, a grid that scrolls, not every emoji at once.
+    from tests.e2e.driver import extents, role
+    picker = wait_until(lambda: next((w for w in app.windows() if role(w) != 'frame'
+                                      and extents(w)[3] > 100), None), what='the picker')
+    assert extents(picker)[3] < 500, extents(picker)
     inp.type('rocket')
     settle(0.3)
     inp.key('enter')
