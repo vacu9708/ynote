@@ -151,7 +151,7 @@ two monitors (D4, D9: much effort for little).
 
 ## J. Dividers, links, emoji
 
-- J1 Up and Down select a divider, and typing replaces it, as in Confluence (1.x skipped it)
+- J1 Up and Down select a divider, from a line, a code block, or a table alike, and typing replaces it, as in Confluence (1.x skipped it)
 - J2 http and https addresses are links: Ctrl+click opens one, and a click only places the cursor
 - J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports
 - J4 Emoji… (the right-click menu, ＋, /emoji, or Ctrl+.) finds emoji by name and puts one at the cursor; the ones used last come first
@@ -322,7 +322,7 @@ Where Ynote 2.0 follows Confluence over 1.x, the item says so.
 - U23 A drag from below the text selects up from the end, as the editor fills the note
 - U24 A drag from the empty line below a table, up over it, selects everything it passes (WebKit moved the drag's start to the table's edge)
 - U25 A drag over a table shows what it selects while dragging, not only once let go
-- U26 Right at the very end of a code block puts the cursor after it: on the line there, or, with none, as before a divider or a table, where Enter or typing makes one, as in Confluence
+- U26 Right at the very end of a code block puts the cursor after it: on the line there, or, with none, as before a divider or a table, where Enter or typing makes one, as in Confluence; only that cursor shows, not the text cursor too
 - U27 Right at the very end of a table does the same
 - U19 // where a word starts types today's date, as in Confluence
 - U20 // after other text, as in https://, stays as typed

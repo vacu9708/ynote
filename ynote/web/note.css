@@ -260,6 +260,10 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-t
 
 .ProseMirror .link { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
 
+/* While a gap cursor or a block is selected, the browser's own caret and
+   selection are hidden, or two cursors would blink (ProseMirror's CSS). */
+.ProseMirror-hideselection *::selection { background: transparent; }
+.ProseMirror-hideselection { caret-color: transparent; }
 .ProseMirror-gapcursor { display: none; pointer-events: none; position: absolute; }
 .ProseMirror-gapcursor:after {
   content: ""; display: block; position: absolute; top: -2px; width: 20px; border-top: 1px solid var(--ink);

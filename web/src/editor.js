@@ -1,6 +1,6 @@
 // A note's editor: ProseMirror with Ynote's content, keys, and typed
 // Markdown. The app talks to it through window.ynote (see bridge.js).
-import {EditorState, Plugin, Selection, TextSelection} from 'prosemirror-state';
+import {EditorState, NodeSelection, Plugin, Selection, TextSelection} from 'prosemirror-state';
 import {EditorView, Decoration, DecorationSet} from 'prosemirror-view';
 import {Node} from 'prosemirror-model';
 import {keymap} from 'prosemirror-keymap';
@@ -93,7 +93,8 @@ function enterInExpand(state, dispatch) {
 }
 
 // Up and Down out of a code block's first or last line go to the line
-// above or below it, which WebKit does not do by itself.
+// above or below it, which WebKit does not do by itself; onto a divider
+// there, they select it, as from any other line or a table.
 function outOfCode(dir) {
   return (state, dispatch) => {
     const {$cursor} = state.selection;
@@ -103,7 +104,10 @@ function outOfCode(dir) {
     if (rest.includes('\n')) return false;
     const pos = dir === 'down' ? $cursor.after() : $cursor.before();
     const $pos = state.doc.resolve(pos);
-    const sel = Selection.findFrom($pos, dir === 'down' ? 1 : -1, true);
+    const beside = dir === 'down' ? $pos.nodeAfter : $pos.nodeBefore;
+    const sel = beside && beside.type === horizontal_rule
+      ? NodeSelection.create(state.doc, dir === 'down' ? pos : pos - beside.nodeSize)
+      : Selection.findFrom($pos, dir === 'down' ? 1 : -1, true);
     if (!sel) return false;
     if (dispatch) dispatch(state.tr.setSelection(sel).scrollIntoView());
     return true;

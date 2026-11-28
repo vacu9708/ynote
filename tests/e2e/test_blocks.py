@@ -61,6 +61,11 @@ CASES = {
         ['^right', 'x'], "code_block('ls') paragraph('x') table(table_row(table_header(paragraph('k'))))"),
     'U26 Right at the end of a code block goes onto the line after it, when there is one': (
         ('ls\npwd',), {'code_ranges': [[0, 2]]}, ['^right', 'x'], "code_block('ls') paragraph('xpwd')"),
+    'J1 Down from a code block selects a divider after it, as from a table': (
+        ('ls\n---\nb',), {'code_ranges': [[0, 2]]}, ['^down', 'X'], "code_block('ls') paragraph('X') paragraph('b')"),
+    'J1 Down from a table selects a divider after it': (
+        ('x\n' + ANCHOR + '\n---\nb',), TABLE, ['^down', '^down', '^down', 'X'],
+        "paragraph('x') " + table(KV, AB) + " paragraph('X') paragraph('b')"),
     'U27 Right at the end of a table, then Enter, makes a line before a divider': (
         ('x\n' + ANCHOR + '\n---',), TABLE, ['^down', '^down', '^tab', '^end', '^right', '^enter', 'y'],
         "paragraph('x') " + table(KV, AB) + " paragraph('y') horizontal_rule()"),
