@@ -33,6 +33,30 @@ function markRule(regexp, mark) {
   });
 }
 
+// The opening marker typed before text that ends with the closing one, as
+// ` before hello` or ** before hello**, makes that text code or bold, as
+// the closing one typed after it does.
+const openingMarks = new Plugin({props: {handleTextInput(view, from, to, text) {
+  const {state} = view;
+  if (from !== to || (text !== '`' && text !== '*')) return false;
+  const $from = state.doc.resolve(from);
+  if ($from.parent.type.spec.code || schema.marks.code.isInSet($from.marks())) return false;
+  const before = $from.parent.textBetween(0, $from.parentOffset, null, '\ufffc');
+  const after = $from.parent.textBetween($from.parentOffset, $from.parent.content.size, null, '\ufffc');
+  let mark, open = 0, close, m;
+  if (text === '`' && !before.endsWith('`') && (m = after.match(/^([^`\s][^`]*?)`(?!`)/))) {
+    mark = schema.marks.code; close = 1;
+  } else if (text === '*' && before.endsWith('*') && !before.endsWith('**')
+      && (m = after.match(/^([^*\s](?:[^*]*[^*\s])?)\*\*(?!\*)/))) {
+    mark = schema.marks.strong; open = 1; close = 2;
+  } else return false;
+  const end = from + m[1].length;
+  const tr = state.tr.delete(end, end + close).addMark(from, end, mark.create());
+  if (open) tr.delete(from - open, from);
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}}});
+
 // "[ ] " or "[x] " makes a to-do, also at the start of a bullet item.
 const todoRule = new InputRule(/^\s*\[([ xX]?)\]\s$/, (state, match, start, end) => {
   const checked = match[1].toLowerCase() === 'x';
@@ -266,7 +290,7 @@ export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy, onSl
     }),
   });
   const plugins = [
-    slashPlugin(key => onSlashKey(key)), clipboardKeys, rules, keys, keymap(baseKeymap),
+    slashPlugin(key => onSlashKey(key)), clipboardKeys, openingMarks, rules, keys, keymap(baseKeymap),
     history(), tableEditing({allowTableNodeSelection: true}), tempLinePlugin, dropCursor({color: '#2D6BE0', width: 2}),
     linksPlugin(onOpenLink), placeholder, findPlugin, structurePlugin, headerBoldPlugin, codeClicksPlugin, dragAcrossTablesPlugin,
     shortCodePlugin, emojiPlugin,

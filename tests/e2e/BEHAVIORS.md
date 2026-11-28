@@ -104,7 +104,9 @@ two monitors (D4, D9: much effort for little).
 ## F. Markdown typed into a note
 
 - F1 `**text**` typed makes bold; stars around spaces, or in a glob like `*.txt`, stay as they are
+- F1b `**` typed before text that ends with `**` makes it bold, as typed after it does
 - F2 `` `text` `` typed makes inline code, with the cursor after it
+- F2b `` ` `` typed before text that ends with `` ` `` makes it code, also within a line
 - F3 Backticks in a code block, in inline code, or on two lines do not make code
 - F4 `# ` on an empty line makes the next text a heading; before text, its line; after text, `#` stays
 - F5 ` ``` ` on an empty line starts a code block; after text it stays text

@@ -78,6 +78,13 @@ CASES = {
         ('',), {}, ['** a **'], P("'** a **'") + ' paragraph()'),
     'F1 a glob stays': (
         ('',), {}, ['ls *.txt **x'], P("'ls *.txt **x'") + ' paragraph()'),
+    'F2b ` typed before text that ends with ` makes it code': (
+        ('hello`',), {}, ['^home', '`'], P("'hello'[code]")),
+    'F2b the same within a line': (
+        ('say hello` now',), {}, ['^home', '^right', '^right', '^right', '^right', '`'],
+        P("'say ' 'hello'[code] ' now'")),
+    'F1b ** typed before text that ends with ** makes it bold': (
+        ('hello**',), {}, ['^home', '**'], P("'hello'[strong]")),
     'F2 `text` makes inline code, and what follows is plain': (
         ('',), {}, ['`ls` x'], P("'ls'[code] ' x'") + ' paragraph()'),
     'F3 backticks in a code block stay': (
