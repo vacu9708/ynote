@@ -1,5 +1,5 @@
 // The note around the editor. The title bar is the note's: collapse, title,
-// to-do progress, pin, the note's menu, hide. The bottom bar is the text's:
+// pin, the note's menu, hide. The bottom bar is the text's:
 // the toolbar, ＋ for the rest, and find. The find bar opens below the title
 // bar. Menus show in the app's popup window (ynote/web_popup.py); what only
 // the window can do is asked of the app with post().
@@ -69,13 +69,11 @@ export function setupChrome(editor, post) {
   // the press GTK saw, once the pointer moves: a double click still arrives
   // and maximizes.
   const collapseBtn = barButton(strokeIcon('down', 17), 'Collapse', () => run('collapse'));
-  const progress = el('span', {class: 'progress', hidden: true, title: 'To-dos done'},
-    el('span', {class: 'ring'}), el('span', {class: 'count'}));
   const pinBtn = barButton(strokeIcon('pin', 17), 'Always on top', () => run('pin'), 'pin');
   const moreBtn = barButton(strokeIcon('more', 17), 'Note menu', () => openNoteMenu(moreBtn));
   const hideBtn = barButton(strokeIcon('cross', 17), 'Hide note', () => run('hide'));
   titleBar.prepend(collapseBtn);
-  titleBar.append(progress, pinBtn, moreBtn, hideBtn);
+  titleBar.append(pinBtn, moreBtn, hideBtn);
   tipFor(collapseBtn, {label: 'Collapse'});
   tipFor(pinBtn, ACTION.pin);
   tipFor(moreBtn, {label: 'Note menu'});
@@ -140,24 +138,7 @@ export function setupChrome(editor, post) {
       t.node.classList.toggle('on', !!(action.active && action.active(c)));
       t.node.classList.toggle('off', !enabled(action, c));
     }
-    refreshProgress();
     refreshFindCount();
-  }
-
-  // --- To-do progress, beside the title.
-  function refreshProgress() {
-    let all = 0, done = 0;
-    editor.view.state.doc.descendants(node => {
-      if (node.type.name === 'list_item' && node.attrs.checked !== null) {
-        all++;
-        if (node.attrs.checked) done++;
-      }
-      return true;
-    });
-    progress.hidden = !all;
-    progress.querySelector('.count').textContent = `${done}/${all}`;
-    progress.style.setProperty('--done', all ? `${(done / all) * 100}%` : '0%');
-    progress.classList.toggle('all-done', all > 0 && done === all);
   }
 
   // --- Edges and corners resize the window.
@@ -190,13 +171,21 @@ export function setupChrome(editor, post) {
   const results = el('div', {class: 'all-results', role: 'listbox', hidden: true});
   scrollBox.before(results);
   let allMode = false, resultRows = [], resultIndex = -1, searchTimer = null;
-  function setAllMode(on) {
+  // Match case, regular expression, and All notes stay as last set, in
+  // every note and the next time Ynote starts (the app keeps them).
+  const options = () => props.findOptions || {};
+  function saveOptions(change) {
+    props.findOptions = {...options(), ...change};
+    post({type: 'find-options', options: props.findOptions});
+  }
+  function setAllMode(on, save = true) {
     allMode = on;
+    if (save) saveOptions({all: on});
     allBtn.classList.toggle('on', on);
     allBtn.setAttribute('aria-pressed', String(on));
     results.hidden = !on;
     scrollBox.hidden = on;
-    caseBtn.hidden = regexBtn.hidden = prevBtn.hidden = nextBtn.hidden = on;
+    prevBtn.hidden = nextBtn.hidden = on;
     if (on) {
       setFind(editor.view, {query: ''});
       searchAll();
@@ -210,7 +199,8 @@ export function setupChrome(editor, post) {
   allBtn.addEventListener('click', () => setAllMode(!allMode));
   function searchAll() {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => post({type: 'search-all', query: findInput.value}), 80);
+    searchTimer = setTimeout(() => post({type: 'search-all', query: findInput.value,
+      caseSensitive: !!options().caseSensitive, regex: !!options().regex}), 80);
   }
   function lightResult(i) {
     if (resultRows[resultIndex]) resultRows[resultIndex].classList.remove('sel');
@@ -224,8 +214,7 @@ export function setupChrome(editor, post) {
     if (!allMode || query !== findInput.value) return;
     resultRows = list.map(m => {
       const row = el('div', {class: 'result', role: 'option'},
-        el('span', {class: 'dot', style: `background:${(PALETTE[m.color] || PALETTE[DEFAULT_COLOR]).paper}`}),
-        el('b', {}, m.title || 'Untitled'), el('span', {class: 'snippet'}, mark(m.snippet, query)),
+        el('b', {}, m.title || 'Untitled'), el('span', {class: 'snippet'}, mark(m.snippet, m.start, m.end)),
         m.hidden ? el('span', {class: 'tag'}, 'hidden') : null);
       row.addEventListener('mousedown', event => event.preventDefault());
       row.addEventListener('click', () => openMatch(m));
@@ -237,14 +226,14 @@ export function setupChrome(editor, post) {
     lightResult(0);
     findCount.textContent = query ? String(list.length) : '';
   }
-  function mark(text, query) {
-    const i = text.toLowerCase().indexOf(query.toLowerCase());
-    if (!query || i < 0) return [text];
-    return [text.slice(0, i), el('mark', {}, text.slice(i, i + query.length)), text.slice(i + query.length)];
+  // The match in a snippet, from where the app found it.
+  function mark(text, start, end) {
+    if (start === undefined || start < 0 || end <= start) return [text];
+    return [text.slice(0, start), el('mark', {}, text.slice(start, end)), text.slice(end)];
   }
   function openMatch(m) {
     const query = findInput.value;
-    setAllMode(false);
+    setAllMode(false, false);
     post({type: 'open-match', id: m.id, query});
   }
   const findState = () => findKey.getState(editor.view.state);
@@ -255,8 +244,11 @@ export function setupChrome(editor, post) {
   const toggle = (button, key) => {
     button.addEventListener('mousedown', event => event.preventDefault());
     button.addEventListener('click', () => {
-      setFind(editor.view, {[key]: !findState()[key]});
-      button.classList.toggle('on', findState()[key]);
+      const on = !options()[key];
+      saveOptions({[key]: on});
+      button.classList.toggle('on', on);
+      if (allMode) searchAll();
+      else setFind(editor.view, {[key]: on});
     });
   };
   toggle(caseBtn, 'caseSensitive');
@@ -274,7 +266,13 @@ export function setupChrome(editor, post) {
   });
   function openFind(query) {
     if (props.collapsed) post({type: 'collapse'});
-    if (allMode && typeof query === 'string') setAllMode(false);
+    const o = options();
+    caseBtn.classList.toggle('on', !!o.caseSensitive);
+    regexBtn.classList.toggle('on', !!o.regex);
+    setFind(editor.view, {caseSensitive: !!o.caseSensitive, regex: !!o.regex});
+    // A query given, as for a note chosen in All notes, is this note's.
+    const all = typeof query === 'string' ? false : !!o.all;
+    if (all !== allMode) setAllMode(all, false);
     findBar.hidden = false;
     findBtn.classList.add('open');
     const {from, to} = editor.view.state.selection;
@@ -283,11 +281,12 @@ export function setupChrome(editor, post) {
     else if (selected && !selected.includes('\n')) findInput.value = selected;
     findInput.focus();
     findInput.select();
-    setFind(editor.view, {query: findInput.value, current: 0});
+    if (allMode) searchAll();
+    else setFind(editor.view, {query: findInput.value, current: 0});
   }
   function closeFind() {
     if (findBar.hidden) return;
-    if (allMode) setAllMode(false);
+    if (allMode) setAllMode(false, false);
     findBar.hidden = true;
     findBtn.classList.remove('open');
     endFind(editor.view);

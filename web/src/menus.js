@@ -16,7 +16,14 @@ export function moreMenu(ctx, overflow) {
 // The note's menu: how it looks, what to do with it, then Ynote's.
 export function noteMenu(ctx, props) {
   const row = (id, extra) => menuRow(ACTION[id], ctx, extra);
+  // The note actions used most first; how the note looks, then Ynote's,
+  // and Delete last, away from a quick click.
   return [
+    row('new-note'),
+    row('hidden-notes', {md: String(props.hiddenCount || 0)}),
+    row('rename'),
+    row('copy-markdown'),
+    {sep: true},
     {swatches: Object.entries(PALETTE).map(([name, c]) => ({
       id: 'color', value: name, color: c.paper, label: name[0].toUpperCase() + name.slice(1),
       on: name === props.color}))},
@@ -24,16 +31,12 @@ export function noteMenu(ctx, props) {
     {toggle: {id: 'solid-in-use', label: 'Solid while in use', value: props.solidInUse}},
     {stepper: {id: 'font-size', label: 'Font size', value: props.fontSize, min: 8, max: 32}},
     {sep: true},
-    row('new-note'),
-    row('rename'),
-    row('copy-markdown'),
-    row('delete'),
-    {sep: true},
-    row('hidden-notes', {md: String(props.hiddenCount || 0)}),
     row('help'),
     ...(props.autostart && props.autostart.available
       ? [row('autostart', {check: !!props.autostart.enabled})] : []),
     row('quit'),
+    {sep: true},
+    row('delete'),
   ];
 }
 

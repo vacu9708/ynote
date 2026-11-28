@@ -229,3 +229,22 @@ def test_U20_two_slashes_after_other_text_stay_as_typed(app, inp):
     start(app, '')
     inp.type('https://example.com')
     assert_saved(app, "paragraph('https://example.com')")
+
+
+def test_U21_finds_toggles_stay_as_last_set(app, inp):
+    import json
+    note = start(app, 'Error error')
+    inp.key('ctrl+f')
+    inp.key('alt+c')                 # match case
+    inp.key('alt+a')                 # all notes
+    inp.key('esc')
+    settle(0.3)
+    inp.key('ctrl+f')
+    inp.type('Error')
+    settle(0.5)
+    from tests.e2e.driver import find_all, name, role
+    results = [a for a in find_all(note.frame, lambda a: role(a) in ('list item', 'option'), limit=40)]
+    assert len(results) == 1, [name(a) for a in results]
+    settings = json.load(open(os.path.join(app.conf, 'settings.json')))
+    assert settings['find'].get('caseSensitive') and settings['find'].get('all'), settings
+    assert not settings['find'].get('regex'), settings

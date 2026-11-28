@@ -463,9 +463,18 @@ design. The GTK window stays, frameless, for what only a window can do.
   note saved smaller opens at that size.
 - **Finding in every note.** The find bar's All notes asks the window for
   the matches of the query in every note, hidden ones too
-  (`search.find_matches()` over each note's text), and lists them in place of
-  the note's text. A match chosen shows its note and opens its find bar on
-  the query.
+  (`search.find_matches()` over each note's text, matching case or as a
+  regular expression when those are on), and lists them in place of the
+  note's text, the match marked where the window found it. A match chosen
+  shows its note and opens its find bar on the query. Match case, regular
+  expression, and All notes are kept in `settings.json` (`find`) and sent to
+  every note.
+- **Shown again where it was.** A note keeps where it last was while shown,
+  and is moved there as it is shown again: the window manager would place a
+  window mapped again anew.
+- **Menus and the focus.** A menu takes the mouse and keys once its window is
+  mapped; if the desktop does not let it, the note's losing the focus closes
+  it, so a click on another window does not leave it open.
 - **Rules of the content.** `structure.js` keeps, after every change and when
   a note loads: a table's first row its header, and a line at the end of the
   note, so the cursor can go below anything. Typing in an empty header cell

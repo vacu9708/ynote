@@ -96,17 +96,6 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .bar-sep { width: 1px; height: 16px; background: rgba(0, 0, 0, .16); margin: 0 3px; flex: none; }
 .bar-sep[hidden] { display: none; }
 
-/* To-do progress beside the title: a ring filling up, then a check. */
-.progress {
-  flex: none; display: inline-flex; align-items: center; gap: 4px; margin-right: 2px;
-  font: 600 11.5px var(--body); color: #2A2A2A; background: rgba(255, 255, 255, .55);
-  border-radius: 99px; padding: 1px 7px 1px 5px; font-variant-numeric: tabular-nums;
-}
-.progress[hidden] { display: none; }
-.progress .ring { width: 10px; height: 10px; border-radius: 50%;
-  background: conic-gradient(#2B2B2B var(--done), rgba(0, 0, 0, .18) 0); }
-.progress.all-done .ring { background: #2B2B2B; }
-
 /* A tooltip: the name, the Markdown typed for it, and its keys. */
 .tip {
   position: fixed; z-index: 40; display: flex; gap: 8px; align-items: center; white-space: nowrap;

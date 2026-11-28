@@ -51,3 +51,26 @@ def test_snippet_cuts_a_long_line_around_the_match():
 
     assert piece.startswith('…') and piece.endswith('…')
     assert 'needle' in piece and len(piece) <= 62
+
+
+def test_find_matches_can_match_case():
+    from ynote.search import Note, find_matches
+    notes = [Note('n', 't', False, 'Error error')]
+    assert [m.start for m in find_matches(notes, 'Error', case_sensitive=True)] == [0]
+    assert [m.start for m in find_matches(notes, 'Error')] == [0, 6]
+
+
+def test_find_matches_as_a_regular_expression():
+    from ynote.search import Note, find_matches
+    notes = [Note('n', 't', False, 'err 502\nerror 110')]
+    found = find_matches(notes, r'err(or)?\s+\d+', regex=True)
+    assert [(m.start, m.end) for m in found] == [(0, 7), (8, 17)]
+    assert find_matches(notes, '(', regex=True) == []
+
+
+def test_a_match_is_marked_in_its_snippet():
+    from ynote.search import Note, find_matches
+    text = 'x' * 50 + ' kubectl rollout restart deploy/api'
+    (m,) = find_matches([Note('n', 't', False, text)], 'restart')
+    start, end = m.mark
+    assert m.snippet[start:end] == 'restart'

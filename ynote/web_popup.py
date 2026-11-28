@@ -16,7 +16,7 @@ import sys
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
-from gi.repository import Gdk, Gtk
+from gi.repository import Gdk, GLib, Gtk
 
 from .web_view import call_js, new_web_view, unhandled
 
@@ -94,6 +94,10 @@ class WebPopup(Gtk.Window):
     def owner(self):
         return self._owner
 
+    @property
+    def grabbed(self):
+        return self._grabbed is not None
+
     def key(self, name):
         """A key typed into the note while a menu follows the text."""
         call_js(self.view, 'menu.key', name)
@@ -124,19 +128,32 @@ class WebPopup(Gtk.Window):
         self.move(x - room, y - room)
         self.show()
         if self._takes_input:
-            self._grab()
+            # A window not mapped yet cannot be grabbed; try again once it is.
+            if not self._grab():
+                GLib.timeout_add(30, self._grab_later, 20)
 
     def _grab(self):
+        """Take the mouse and keys, as a GTK menu does; whether it could."""
         window = self.get_window()
-        if window is None or self._grabbed:
-            return
+        if window is None or self._owner is None:
+            return False
+        if self._grabbed:
+            return True
         seat = window.get_display().get_default_seat()
         status = seat.grab(window, Gdk.SeatCapabilities.ALL, True,
                            None, None, None, None)
-        if status == Gdk.GrabStatus.SUCCESS:
-            self._grabbed = seat
+        if status != Gdk.GrabStatus.SUCCESS:
+            return False
+        self._grabbed = seat
         # Within Ynote, a click on another of its windows comes here too.
         self.grab_add()
+        return True
+
+    def _grab_later(self, tries):
+        if self._owner is None or self._grab() or tries <= 1:
+            return False
+        GLib.timeout_add(30, self._grab_later, tries - 1)
+        return False
 
     def _release(self):
         if self._grabbed is not None:

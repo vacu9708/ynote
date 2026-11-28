@@ -244,3 +244,31 @@ def test_T21_a_collapsed_note_is_its_title_bar(app, inp):
     wait_until(lambda: 30 <= note.box[3] <= 40, what='the note as tall as its title bar')
     note.press('Expand')
     wait_until(lambda: note.box[3] >= 300, what='the note back at its height')
+
+
+def test_T22_a_click_outside_closes_the_shortcuts(app, inp):
+    start(app, 'hello')
+    inp.key('F1')
+    settle(0.8)
+    inp.click(1500, 900)              # the desktop, past every window
+    settle(0.5)
+    from tests.e2e.driver import Atspi
+
+    def shortcuts_shown():
+        for window in app.windows():
+            if role(window) != 'window':
+                continue
+            for acc in find_all(window, lambda a: a.get_text_iface() is not None, limit=40):
+                if 'Bold' in Atspi.Text.get_text(acc, 0, Atspi.Text.get_character_count(acc)):
+                    return True
+        return False
+    wait_until(lambda: not shortcuts_shown(), what='the shortcuts to close')
+    app.note('test')
+
+
+def test_T23_the_note_menu_starts_with_new_note_and_hidden_notes_and_ends_with_delete(app, inp):
+    note = start(app, 'hello')
+    note.press('Note menu')
+    names = [i.get_name() for i in menu_items(app)]
+    assert names[0].startswith('New note') and names[1].startswith('Hidden notes'), names
+    assert names[-1].startswith('Delete note'), names

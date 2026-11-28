@@ -20,7 +20,8 @@ gi.require_version('WebKit2', '4.1')
 from gi.repository import Gdk, GLib, Gtk, WebKit2
 
 from . import __version__
-from .config import CONF_DIR, IMAGES_DIR, UNTITLED_LABEL, display_path
+from .config import CONF_DIR, IMAGES_DIR, SETTINGS_FILE, UNTITLED_LABEL, display_path
+from .storage import load_json, save_json
 from .convert import doc_text, note_doc
 from .search import find_matches
 from .models import normalize_note_data
@@ -54,6 +55,27 @@ SNAP_KEYS = {
     Gdk.KEY_Left: 'left', Gdk.KEY_Right: 'right',
     Gdk.KEY_Up: 'up', Gdk.KEY_Down: 'down',
 }
+
+# Find's toggles: match case, regular expression, and All notes.
+FIND_OPTIONS = ('caseSensitive', 'regex', 'all')
+
+
+def find_options():
+    settings = load_json(SETTINGS_FILE)
+    found = settings.get('find') if isinstance(settings, dict) else None
+    return {k: bool(found.get(k)) for k in FIND_OPTIONS} if isinstance(found, dict) else {}
+
+
+def save_find_options(options):
+    settings = load_json(SETTINGS_FILE)
+    if not isinstance(settings, dict):
+        settings = {}
+    settings['find'] = options
+    try:
+        save_json(settings, SETTINGS_FILE)
+    except OSError as e:
+        print(f'ynote: could not save settings: {e}', file=sys.stderr)
+
 
 def _alt_only(event):
     mods = event.state & Gtk.accelerator_get_default_mod_mask()
@@ -111,7 +133,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self.connect('window-state-event', self._on_window_state)
         self.connect('delete-event', self._on_delete)
         self.connect('focus-in-event', lambda *_: self.app._on_note_focus_in(self))
-        self.connect('focus-out-event', lambda *_: self.app._on_note_focus_out())
+        self.connect('focus-out-event', self._on_focus_out)
         # Whether the note is in use, for Solid while in use.
         self.add_events(Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
         self.connect('enter-notify-event', self._on_crossing, True)
@@ -123,6 +145,10 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self._expanded_height = h
         self.set_default_size(w, TITLE_BAR_HEIGHT if self._collapsed else h)
         self.move(data['x'], data['y'])
+        # Where the note shows again after it is hidden: the window manager
+        # would place a window shown again anew.
+        self._shown_at = (data['x'], data['y'])
+        self.connect('show', lambda *_: self.move(*self._shown_at))
         if self._collapsed:
             self._lock_size(True, w)
         self.view.show()
@@ -148,6 +174,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
                 'color': self._color, 'maximized': self.is_maximized(),
                 'hiddenCount': self._hidden_count,
                 'version': __version__, 'notesPath': display_path(CONF_DIR),
+                'findOptions': find_options(),
                 'autostart': {'available': bool(getattr(app, 'autostart_available', False)),
                               'enabled': bool(getattr(app, 'autostart_available', False)
                                               and app.autostart_enabled())}}
@@ -384,12 +411,21 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         others shown, then the hidden ones, for the find bar's list."""
         query = message.get('query', '')
         notes = self.app.searchable_notes(first=self)
-        colors = {w.note_id: w._color for w in self.app.notes.values()}
-        matches = find_matches(notes, query)
+        matches = find_matches(notes, query, case_sensitive=bool(message.get('caseSensitive')),
+                               regex=bool(message.get('regex')))
         call_js(self.view, 'ynote.allResults', query, [
-            {'id': m.note_id, 'title': m.title, 'hidden': m.hidden,
-             'color': colors.get(m.note_id, 'yellow'), 'snippet': m.snippet}
+            {'id': m.note_id, 'title': m.title, 'hidden': m.hidden, 'snippet': m.snippet,
+             'start': m.mark[0], 'end': m.mark[1]}
             for m in matches])
+
+    def _do_find_options(self, message):
+        """Find's toggles, kept for every note and the next start."""
+        options = {k: bool(v) for k, v in (message.get('options') or {}).items()
+                   if k in FIND_OPTIONS}
+        save_find_options(options)
+        for note in self.app.notes.values():
+            if note is not self:
+                note._send(findOptions=options)
 
     def _do_open_match(self, message):
         """Show the note of a match chosen in the list, finding the query in
@@ -515,6 +551,8 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         return False
 
     def _on_configure(self, _window, event):
+        if self.get_visible() and not self.is_maximized():
+            self._shown_at = self.get_position()
         pending = self._snap_pending_move
         if pending is not None and (event.width, event.height) == pending[2:]:
             self._apply_snap_move()
@@ -523,6 +561,14 @@ class WebNoteWindow(Gtk.ApplicationWindow):
 
     def _on_window_state(self, _window, event):
         self._send(maximized=bool(event.new_window_state & Gdk.WindowState.MAXIMIZED))
+        return False
+
+    def _on_focus_out(self, *_):
+        self.app._on_note_focus_out()
+        # Another window taking the focus ends the note's menu, as a click
+        # outside it does, when the desktop did not let the menu grab.
+        if popup().owner is self and not popup().grabbed:
+            popup().close()
         return False
 
     def _on_delete(self, *_):
