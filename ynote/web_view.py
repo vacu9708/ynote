@@ -39,6 +39,9 @@ def _shared_settings():
         _settings.set_hardware_acceleration_policy(
             WebKit2.HardwareAccelerationPolicy.NEVER)
         _settings.set_enable_back_forward_navigation_gestures(False)
+        # The wheel moves the text at once, as GTK's views and 1.x do: an
+        # animated scroll, drawn in software, lagged behind the wheel.
+        _settings.set_enable_smooth_scrolling(False)
         _settings.set_enable_developer_extras(bool(os.environ.get('YNOTE_DEBUG')))
         _settings.set_enable_write_console_messages_to_stdout(True)
     return _settings

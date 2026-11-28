@@ -4,7 +4,6 @@
 // ynote/web/note.js.
 import {createEditor} from './editor.js';
 import {setupChrome} from './chrome.js';
-import {Selection} from 'prosemirror-state';
 import {Slice, Fragment} from 'prosemirror-model';
 import {setImagesUrl, schema} from './schema.js';
 
@@ -85,15 +84,9 @@ window.ynote = {
   },
 };
 
-// A click below the text puts the cursor at its end.
-document.getElementById('scroll').addEventListener('mousedown', event => {
-  if (event.target.id !== 'scroll' && event.target.id !== 'editor') return;
-  event.preventDefault();
-  editor.run((state, dispatch) => {
-    dispatch(state.tr.setSelection(Selection.atEnd(state.doc)).scrollIntoView());
-    return true;
-  });
-});
+// The editor fills the note (note.css), so a click or a drag below the text
+// is the editor's own, as on any line: the cursor goes to the end, and a
+// drag selects up from there.
 
 // What is selected goes with a copy or a cut; a cut then deletes it.
 function clipboard(command) {

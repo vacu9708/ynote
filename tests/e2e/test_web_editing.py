@@ -248,3 +248,32 @@ def test_U21_finds_toggles_stay_as_last_set(app, inp):
     settings = json.load(open(os.path.join(app.conf, 'settings.json')))
     assert settings['find'].get('caseSensitive') and settings['find'].get('all'), settings
     assert not settings['find'].get('regex'), settings
+
+
+def test_U22_a_drag_up_over_a_table_selects_everything_it_passes(app, inp):
+    rows = [[{'text': 'k'}, {'text': 'v'}], [{'text': 'a'}, {'text': 'b'}]]
+    text = 'example text\n\n￼\n\nempty line'
+    note = start(app, text, tables=[{'offset': 14, 'rows': rows}])
+    from tests.e2e.web import text_holding
+    from tests.e2e.driver import Atspi
+    acc, at = text_holding(note, 'empty line')
+    end = Atspi.Text.get_character_extents(acc, at + 9, Atspi.CoordType.SCREEN)
+    acc2, at2 = text_holding(note, 'example text')
+    first = Atspi.Text.get_character_extents(acc2, at2, Atspi.CoordType.SCREEN)
+    inp.drag((end.x + end.width, end.y + end.height // 2), (first.x + 1, first.y + first.height // 2), steps=16)
+    settle(0.3)
+    inp.type('X')
+    assert_saved(app, "paragraph('X')")
+
+
+def test_U23_a_drag_from_below_the_text_selects_up_to_where_it_ends(app, inp):
+    note = start(app, 'example text\n\nempty line')
+    from tests.e2e.web import text_holding
+    from tests.e2e.driver import Atspi
+    acc, at = text_holding(note, 'example text')
+    first = Atspi.Text.get_character_extents(acc, at, Atspi.CoordType.SCREEN)
+    x, y, w, h = note.box
+    inp.drag((x + w // 2, y + h - 60), (first.x + 1, first.y + first.height // 2), steps=16)
+    settle(0.3)
+    inp.type('X')
+    assert_saved(app, "paragraph('X')")

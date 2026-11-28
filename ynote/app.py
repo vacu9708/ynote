@@ -493,6 +493,13 @@ class PostItApp(Gtk.Application):
         self._switch_index = (self._switch_index + step) % len(order)
         target = order[self._switch_index]
         self._current_note = target
+        # A scroll is not input GNOME counts for a window, so until a note
+        # has been clicked or typed in, as right after a start, it takes the
+        # note coming forward for one stealing the focus and leaves it behind.
+        # The scroll's time, set as the note's last input, tells it otherwise.
+        gdk_window = target.get_window()
+        if gdk_window is not None and hasattr(gdk_window, 'set_user_time'):
+            gdk_window.set_user_time(time)
         target.present_with_time(time)
 
     def end_note_switch(self):

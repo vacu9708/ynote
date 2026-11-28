@@ -138,7 +138,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #scroll::-webkit-scrollbar { width: 10px; }
 #scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, .18); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
 #scroll::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 0, 0, .3); }
-#editor { padding: 8px 12px 12px; }
+/* The editor fills the space between the bars, with its padding inside it,
+   so a press anywhere there is in the text. */
+#editor { min-height: 100%; display: flex; flex-direction: column; }
+#editor > .ProseMirror { flex: 1; padding: 8px 12px 12px; }
 
 .ProseMirror {
   /* break-word, not anywhere: a word breaks only when it cannot fit, so a
@@ -294,18 +297,16 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-t
 :root.maximized .grip { display: none; }
 
 /* The find bar's All notes: the matches of every note, in place of the text. */
-.find-toggle.all { font: 600 11.5px var(--body); padding: 4px 7px; border-radius: 6px; color: #333; white-space: nowrap; }
-.find-toggle.all:hover { background: rgba(0, 0, 0, .09); }
+.find-toggle.all { font: 600 11px var(--body); padding: 2px 6px; white-space: nowrap; }
 .find-toggle[hidden], .find-bar .bar-btn[hidden] { display: none; }
 .all-results { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); padding: 4px 6px; }
 .all-results[hidden], #scroll[hidden] { display: none; }
-.result { display: grid; grid-template-columns: 9px auto 1fr auto; gap: 8px; align-items: baseline;
+.result { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr) auto; gap: 8px; align-items: baseline;
   padding: 4px 8px; border-radius: 6px; font-size: .95em; cursor: default; white-space: nowrap; }
 .result:hover { background: rgba(255, 255, 255, .5); }
 .result.sel { background: rgba(255, 255, 255, .85); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08); }
-.result .dot { width: 9px; height: 9px; border-radius: 50%; align-self: center; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2); }
-.result b { max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
+.result b { overflow: hidden; text-overflow: ellipsis; }
 .result .snippet { overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #333; }
 .result mark { background: #FFD45C; color: inherit; border-radius: 2px; }
-.result .tag { font-size: 11px; color: #6B7280; border: 1px solid rgba(0, 0, 0, .15); border-radius: 99px; padding: 0 6px; }
+.result .tag { font-size: 11px; line-height: 16px; color: #6B7280; border: 1px solid rgba(0, 0, 0, .15); border-radius: 99px; padding: 0 6px; }
 .no-results { padding: 10px 8px; color: rgba(0, 0, 0, .5); }

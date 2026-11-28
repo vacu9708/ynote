@@ -272,3 +272,24 @@ def test_T23_the_note_menu_starts_with_new_note_and_hidden_notes_and_ends_with_d
     names = [i.get_name() for i in menu_items(app)]
     assert names[0].startswith('New note') and names[1].startswith('Hidden notes'), names
     assert names[-1].startswith('Delete note'), names
+
+
+def test_T24_a_wheel_notch_scrolls_as_far_as_in_1x(app, inp):
+    note = start(app, '\n'.join(f'line {i}' for i in range(200)), h=700)
+    from tests.e2e.web import text_holding
+    from tests.e2e.driver import Atspi
+
+    def top_of(needle):
+        acc, at = text_holding(note, needle)
+        return Atspi.Text.get_character_extents(acc, at, Atspi.CoordType.SCREEN).y
+    before = top_of('line 30')
+    x, y = note.text_point(80, 100)
+    inp.scroll(x, y, down=True, notches=1)
+    settle(0.05)
+    at_once = before - top_of('line 30')
+    settle(0.6)
+    moved = before - top_of('line 30')
+    # As far as GTK's step, the view's height to the 2/3 power, about 75px
+    # here, and all of it at once, not animated.
+    assert 65 <= moved <= 90, moved
+    assert at_once == moved, (at_once, moved)

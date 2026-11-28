@@ -161,8 +161,9 @@ export function setupChrome(editor, post) {
   const prevBtn = barButton(strokeIcon('up', 16), 'Previous match (Shift+Enter)', () => step(editor.view, -1));
   const nextBtn = barButton(strokeIcon('down', 16), 'Next match (Enter)', () => step(editor.view, 1));
   const findBar = el('div', {class: 'find-bar', hidden: true},
-    el('div', {class: 'find-box'}, strokeIcon('search', 14), findInput, findCount, caseBtn, regexBtn),
-    allBtn, prevBtn, nextBtn,
+    // All notes at the box's end, where it stays as the arrows come and go.
+    el('div', {class: 'find-box'}, strokeIcon('search', 14), findInput, findCount, caseBtn, regexBtn, allBtn),
+    prevBtn, nextBtn,
     barButton(strokeIcon('cross', 16), 'Close (Esc)', () => closeFind()));
   titleBar.after(findBar);
 
