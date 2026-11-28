@@ -150,10 +150,13 @@ export const dragAcrossTablesPlugin = new Plugin({
           view.dom.classList.remove('drag-crossing');
           if (shown) view.dispatch(view.state.tr.setMeta(dragKey, null));
           if (Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y) < 4) return;
-          // After ProseMirror has read the browser's selection.
+          // Where the button went up, as the pointer was there: on a busy
+          // machine the browser's selection, which ProseMirror reads after,
+          // could still be short of it. Set after ProseMirror has read it.
+          const at = view.posAtCoords({left: e.clientX, top: e.clientY});
           setTimeout(() => {
             const {state} = view;
-            const head = state.selection.head;
+            const head = at ? Math.min(at.pos, state.doc.content.size) : state.selection.head;
             if (start.pos > state.doc.content.size || !crossesTable(state.doc, start.pos, head)) return;
             view.dispatch(state.tr.setSelection(
               TextSelection.between(state.doc.resolve(start.pos), state.doc.resolve(head))));

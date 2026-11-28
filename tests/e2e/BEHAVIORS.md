@@ -327,7 +327,7 @@ Where Ynote 2.0 follows Confluence over 1.x, the item says so.
 - U17 The note menu holds nothing a title bar button does
 - U18 Down from a table's last row in an expand goes below the expand, as in Confluence
 - U21 Find's Match case, regular expression, and All notes stay as last set, for every note and the next start, and apply in All notes too
-- U22 A drag up over a table selects everything it passes
+- U22 A drag up over a table selects everything it passes (on a busy machine it stopped short of where the button went up, as the browser had not yet told ProseMirror the last of the drag; it now ends where the pointer is)
 - U23 A drag from below the text selects up from the end, as the editor fills the note
 - U24 A drag from the empty line below a table, up over it, selects everything it passes (WebKit moved the drag's start to the table's edge)
 - U25 A drag over a table shows what it selects while dragging, not only once let go
