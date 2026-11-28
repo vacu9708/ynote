@@ -28,6 +28,9 @@ DEFAULT_NOTE = {
     'color': DEFAULT_COLOR,
     'opacity': MAX_OPACITY,
     'collapsed': False,
+    # Ynote 2.0: a see-through note turns solid while the mouse is on it or
+    # it is being typed in.
+    'solid_in_use': True,
 }
 
 
@@ -51,6 +54,7 @@ def normalize_note_data(data, note_id_factory=None):
     note['images'] = list(note.get('images') or [])
     note['tables'] = list(note.get('tables') or [])
     note['collapsed'] = bool(note.get('collapsed', False))
+    note['solid_in_use'] = bool(note.get('solid_in_use', True))
     note['font_size'] = int(note.get('font_size') or DEFAULT_NOTE['font_size'])
 
     if note.get('color') not in PALETTE:

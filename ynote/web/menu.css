@@ -1,0 +1,67 @@
+/* A menu: a white card with rows of icon, name, the Markdown typed for it,
+   and its keys. The page is transparent around the card, which leaves room
+   for its shadow (--room; web_popup.py SHADOW_ROOM). */
+:root {
+  --room: 14px;
+  --accent: #2F6FE4;
+  --accent-tint: #E8EFFD;
+  --ink: #1E1E1E;
+  --dim: #8A93A2;
+  --line: #ECEEF2;
+  --danger: #C42B32;
+  --body: Ubuntu, Cantarell, 'DejaVu Sans', 'Noto Sans CJK KR', sans-serif;
+  --mono: 'DejaVu Sans Mono', 'Noto Sans Mono', 'Ubuntu Mono', monospace;
+}
+html, body { margin: 0; background: transparent; overflow: hidden; }
+/* Without a compositor: no room for a shadow, and square corners. */
+:root.flat { --room: 0px; }
+:root.flat #menu { border-radius: 0; box-shadow: inset 0 0 0 1px #B8BEC8; }
+body { padding: var(--room); font: 13.5px/1.4 var(--body); color: var(--ink); -webkit-font-smoothing: antialiased;
+  user-select: none; cursor: default; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: default; }
+.icon { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+#menu {
+  display: inline-block; width: max-content; min-width: 180px; max-width: 420px; box-sizing: border-box;
+  max-height: calc(100vh - 2 * var(--room)); overflow-y: auto;
+  background: #fff; border-radius: 10px; padding: 5px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, .10), 0 3px 8px rgba(15, 23, 42, .10), 0 10px 22px rgba(15, 23, 42, .16);
+}
+.row {
+  display: grid; grid-template-columns: 20px 1fr auto auto; align-items: center; gap: 10px;
+  padding: 5px 8px; border-radius: 6px; white-space: nowrap;
+}
+.row.sel { background: var(--accent-tint); }
+.row .ic { display: flex; justify-content: center; color: #3D4350; }
+.row.on .ic { color: var(--accent); }
+.row.danger, .row.danger .ic { color: var(--danger); }
+.row.off { color: #A2A8B3; }
+.row.off .ic { color: #C3C8D0; }
+.row.off.sel { background: #F3F4F6; }
+.md { font: 11.5px var(--mono); color: #5D6573; background: #F1F3F6; border-radius: 4px; padding: 1px 5px; }
+.row.off .md { color: #B0B6C0; }
+.keys { display: inline-flex; gap: 3px; }
+kbd { font: 500 11px/16px var(--body); color: #4A5260; background: #fff; border: 1px solid #D5DAE1; border-bottom-width: 2px;
+  border-radius: 4px; padding: 0 4px; }
+.row.off kbd { color: #B0B6C0; }
+.chk { width: 16px; height: 16px; box-sizing: border-box; border-radius: 4px; border: 1.5px solid #C3C8D0; display: grid; place-items: center; }
+.chk.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chk .icon { stroke-width: 3; }
+.sep { height: 1px; background: var(--line); margin: 4px 6px; }
+.section { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); padding: 7px 8px 2px; }
+.footer { display: flex; gap: 12px; padding: 6px 8px 3px; border-top: 1px solid var(--line); margin-top: 4px; color: var(--dim); font-size: 11.5px; }
+
+.swatches { display: flex; gap: 7px; padding: 5px 8px 7px; }
+.swatch { width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18); }
+.swatch:hover { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35); }
+.swatch.on { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18), 0 0 0 2px #fff, 0 0 0 4px var(--ink); }
+.ctl { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 4px 8px; }
+.ctl.toggle { border-radius: 6px; padding: 5px 8px; }
+.ctl.toggle:hover { background: #F3F4F6; }
+.ctl-right { display: flex; align-items: center; gap: 8px; }
+.value { width: 34px; text-align: right; font-size: 12px; color: #6B7280; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 110px; margin: 0; accent-color: var(--accent); }
+.stepper { display: inline-flex; align-items: center; border: 1px solid #D5DAE1; border-radius: 6px; overflow: hidden; font-size: 12.5px; }
+.stepper button { padding: 1px 8px; }
+.stepper button:hover { background: #F1F3F6; }
+.stepper .num { padding: 1px 8px; border-left: 1px solid #D5DAE1; border-right: 1px solid #D5DAE1; font-variant-numeric: tabular-nums; min-width: 2ch; text-align: center; }

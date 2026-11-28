@@ -4,10 +4,10 @@ web/src draws the whole note, its bars and its ProseMirror editor.
 The window does what only the window can: where it is, its size, staying on
 top, hiding, snapping with Alt and the arrows. The page asks for those by
 messages (see _on_message()), and the window tells the page how the note
-looks through window.ynote (see web/src/main.js). For now this window is
-used only when YNOTE_WEB is set (see config.WEB).
+looks through window.ynote (see web/src/note.js). Its menus are shown by
+the popup window (web_popup.py). For now this window is used only when
+YNOTE_WEB is set (see config.WEB).
 """
-import json
 import os
 import shutil
 import sys
@@ -19,17 +19,28 @@ gi.require_version('Gdk', '3.0')
 gi.require_version('WebKit2', '4.1')
 from gi.repository import Gdk, GLib, Gtk, WebKit2
 
-from .config import IMAGES_DIR, PACKAGE_DIR, UNTITLED_LABEL
+from .config import IMAGES_DIR, UNTITLED_LABEL
 from .convert import doc_text, note_doc
 from .models import normalize_note_data
 from .snap import snap_rect
 from .styles import PALETTE
+from .web_popup import popup
+from .web_view import call_js, new_web_view, page_uri, run_js, unhandled
 
-PAGE_URI = GLib.filename_to_uri(os.path.join(PACKAGE_DIR, 'web', 'note.html'), None)
+PAGE_URI = page_uri('note.html')
 IMAGES_URI = GLib.filename_to_uri(IMAGES_DIR, None) + '/'
 
-# As tall as the page's title bar (--title-h in note.css): a collapsed note.
-TITLE_BAR_HEIGHT = 38
+# As tall as the page's title bar (--bar-h in note.css): a collapsed note.
+TITLE_BAR_HEIGHT = 34
+
+# What the context menu's editing items ask of WebKit, which runs them as the
+# keys would, through the page's own copy and paste.
+EDITING = {
+    'cut': WebKit2.EDITING_COMMAND_CUT,
+    'copy': WebKit2.EDITING_COMMAND_COPY,
+    'paste': WebKit2.EDITING_COMMAND_PASTE,
+    'paste-plain': WebKit2.EDITING_COMMAND_PASTE_AS_PLAIN_TEXT,
+}
 
 # The page's resize edges, by the names it sends.
 EDGES = {
@@ -43,29 +54,6 @@ SNAP_KEYS = {
     Gdk.KEY_Left: 'left', Gdk.KEY_Right: 'right',
     Gdk.KEY_Up: 'up', Gdk.KEY_Down: 'down',
 }
-
-# Every note's page runs in one web process: a process each would take about
-# 250 MB per note. A new view is related to a view that is still open.
-_views = []
-
-
-def _new_web_view():
-    live = [v for v in _views if v.get_parent() is not None]
-    view = (WebKit2.WebView.new_with_related_view(live[0]) if live
-            else WebKit2.WebView())
-    settings = view.get_settings()
-    settings.set_allow_file_access_from_file_urls(True)
-    # GL compositing costs hundreds of MB per note on some systems and gives
-    # a note nothing it needs.
-    settings.set_hardware_acceleration_policy(
-        WebKit2.HardwareAccelerationPolicy.NEVER)
-    settings.set_enable_back_forward_navigation_gestures(False)
-    settings.set_enable_developer_extras(bool(os.environ.get('YNOTE_DEBUG')))
-    settings.set_enable_write_console_messages_to_stdout(True)
-    view.set_background_color(Gdk.RGBA(0, 0, 0, 0))
-    _views.append(view)
-    return view
-
 
 def _alt_only(event):
     mods = event.state & Gtk.accelerator_get_default_mod_mask()
@@ -84,6 +72,8 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self._font_size = data['font_size']
         self._color = data['color']
         self._opacity = data['opacity']
+        self._solid_in_use = data['solid_in_use']
+        self._hovered = False
         self._collapsed = data['collapsed']
         self._expanded_height = data['h']
         self._normal_geometry = None
@@ -109,17 +99,11 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self.set_wmclass('ynote', 'Ynote')
         self.set_title(self.title or UNTITLED_LABEL)
 
-        self.view = _new_web_view()
-        manager = self.view.get_user_content_manager()
-        manager.register_script_message_handler('ynote')
-        manager.connect('script-message-received::ynote', self._on_message)
-        self.view.connect('decide-policy', self._on_decide_policy)
-        self.view.connect('context-menu', lambda *_: True)
+        self.view = new_web_view(self._on_message, 'note.html')
         self.view.connect('button-press-event', self._on_press)
         self.view.connect('scroll-event', self._on_scroll)
         self.view.connect('web-process-terminated', self._on_crash)
         self.add(self.view)
-        self.view.load_uri(PAGE_URI)
 
         self.connect('key-press-event', self._on_key_press)
         self.connect('key-release-event', self._on_key_release)
@@ -128,6 +112,11 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self.connect('delete-event', self._on_delete)
         self.connect('focus-in-event', lambda *_: self.app._on_note_focus_in(self))
         self.connect('focus-out-event', lambda *_: self.app._on_note_focus_out())
+        # Whether the note is in use, for Solid while in use.
+        self.add_events(Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self.connect('enter-notify-event', self._on_crossing, True)
+        self.connect('leave-notify-event', self._on_crossing, False)
+        self.connect('notify::is-active', lambda *_: self._apply_opacity())
 
         w, h = data['w'], data['h']
         self.set_default_size(w, TITLE_BAR_HEIGHT if self._collapsed else h)
@@ -138,44 +127,40 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         if not data.get('hidden'):
             self.show()
         self.set_keep_above(self._on_top)
+        self._apply_opacity()
 
     # --- talking to the page ----------------------------------------------
-
-    def _js(self, script):
-        self.view.evaluate_javascript(script, -1, None, None, None, None, None)
 
     def _send(self, **props):
         """Tell the page how the note looks now, such as its title."""
         if self._ready:
-            self._js(f'ynote.set({json.dumps(props)})')
+            call_js(self.view, 'ynote.set', props)
 
     def _look(self):
-        paper, bar = PALETTE[self._color]
+        app = self.app
         return {'title': self.title, 'pinned': self._on_top,
                 'collapsed': self._collapsed, 'fontSize': self._font_size,
-                'opacity': self._opacity, 'composited': self._composited,
-                'colors': {'paper': paper, 'bar': bar},
-                'maximized': self.is_maximized(),
-                'hiddenCount': self._hidden_count}
+                'opacity': self._opacity, 'solidInUse': self._solid_in_use,
+                'composited': self._composited,
+                'color': self._color, 'maximized': self.is_maximized(),
+                'hiddenCount': self._hidden_count,
+                'autostart': {'available': bool(getattr(app, 'autostart_available', False)),
+                              'enabled': bool(getattr(app, 'autostart_available', False)
+                                              and app.autostart_enabled())}}
 
-    def _on_message(self, _manager, result):
-        try:
-            message = json.loads(result.get_js_value().to_string())
-        except (ValueError, AttributeError):
-            return
-        handler = getattr(self, '_do_' + message.get('type', '').replace('-', '_'), None)
+    def _on_message(self, message):
+        kind = message.get('type', '')
+        handler = getattr(self, '_do_' + kind.replace('-', '_'), None)
         if handler is None:
-            print(f"ynote: the page sent {message.get('type')!r}, which is not handled",
-                  file=sys.stderr)
+            unhandled(kind, 'note.html')
             return
         handler(message)
 
     def _do_ready(self, _message):
         self._ready = True
-        note = dict(self._look(), doc=self._doc, imagesUrl=IMAGES_URI)
-        self._js(f'ynote.load({json.dumps(note)})')
+        call_js(self.view, 'ynote.load', dict(self._look(), doc=self._doc, imagesUrl=IMAGES_URI))
         if self._focus_on_load:
-            self._js('ynote.focus()')
+            run_js(self.view, 'ynote.focus()')
 
     def _do_changed(self, message):
         self._doc = message['doc']
@@ -223,17 +208,83 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self._send(pinned=self._on_top)
         self._queue_save()
 
+    def _do_set_color(self, message):
+        if message.get('color') in PALETTE:
+            self._color = message['color']
+            self._send(color=self._color)
+            self._queue_save()
+
+    def _do_set_opacity(self, message):
+        self._opacity = min(1.0, max(0.2, float(message.get('opacity', 1))))
+        self._apply_opacity(preview=True)
+        self._queue_save()
+
+    def _do_set_solid_in_use(self, message):
+        self._solid_in_use = bool(message.get('value'))
+        self._apply_opacity()
+        self._queue_save()
+
+    def _on_crossing(self, _window, event, inside):
+        # Moving onto the web view inside the window is not leaving it.
+        if event.detail == Gdk.NotifyType.INFERIOR:
+            return False
+        self._hovered = inside
+        self._apply_opacity()
+        return False
+
+    def _apply_opacity(self, preview=False):
+        """The whole note fades alike, text and bars, by the window's
+        opacity, which needs a compositor. While the note is in use, and Solid
+        while in use is on, it is solid; while its opacity is being set, it
+        shows it."""
+        if not self._composited:
+            return
+        in_use = (self._hovered or self.is_active()
+                  or popup().owner is self)
+        solid = self._solid_in_use and in_use and not preview
+        self.set_opacity(1.0 if solid else self._opacity)
+
+    def _do_set_font_size(self, message):
+        self._font_size = min(32, max(8, int(message.get('size', 14))))
+        self._queue_save()
+
     def _do_new_note(self, _message):
         self.app.new_note(near=self)
 
     def _do_hide(self, _message):
+        self._close_my_popup()
         self.hide()
         self.app.put_first_in_hidden([self])
         self.app._rebuild_indicator_menu()
         self._queue_save()
 
+    def _do_delete(self, _message):
+        self._close_my_popup()
+        self.app.delete_note(self.note_id)
+
     def _do_hidden_notes(self, _message):
         self.app.show_hidden_notes_manager(self)
+
+    def _do_help(self, _message):
+        from .help import show_help
+        show_help(self)
+
+    def _do_autostart(self, _message):
+        if getattr(self.app, 'autostart_available', False):
+            self.app.set_autostart(not self.app.autostart_enabled())
+            self._send(autostart=self._look()['autostart'])
+
+    def _do_quit(self, _message):
+        self.app.quit_app()
+
+    def _do_edit(self, message):
+        command = EDITING.get(message.get('command'))
+        if command:
+            self.view.execute_editing_command(command)
+
+    def _do_copy_text(self, message):
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clipboard.set_text(message.get('text') or '', -1)
 
     def _do_open_link(self, message):
         url = message.get('url', '')
@@ -251,30 +302,46 @@ class WebNoteWindow(Gtk.ApplicationWindow):
             self.insert_image_file(dialog.get_filename())
         dialog.destroy()
 
-    def _do_menu(self, _message):
-        # The right-click menu comes with the next step; until then the
-        # title can be edited from here.
-        self._js('ynote.editTitle()')
-
     def insert_image_file(self, path):
         """Copy an image into the images folder and put it at the cursor."""
         ext = os.path.splitext(path)[1].lower() or '.png'
         name = str(uuid.uuid4()) + ext
         os.makedirs(IMAGES_DIR, exist_ok=True)
         shutil.copyfile(path, os.path.join(IMAGES_DIR, name))
-        self._js(f'ynote.insertImage({json.dumps(name)}, '
-                 f'{json.dumps(os.path.basename(path))})')
+        call_js(self.view, 'ynote.insertImage', name, os.path.basename(path))
 
-    def _on_decide_policy(self, _view, decision, kind):
-        # The page is the note: nothing navigates away from it, such as a
-        # file dropped on it. A link opens in the browser.
-        if kind != WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
-            return False
-        uri = decision.get_navigation_action().get_request().get_uri()
-        if uri == PAGE_URI:
-            return False
-        decision.ignore()
-        return True
+    # --- menus, which the popup window shows --------------------------------
+
+    def _do_popup(self, message):
+        """Show a menu the page made, hung from a rectangle of the page."""
+        window = self.view.get_window()
+        if window is None:
+            return
+        _ok, ox, oy = window.get_origin()
+        a = message.get('anchor') or {}
+        anchor = (ox + int(a.get('x', 0)), oy + int(a.get('y', 0)),
+                  int(a.get('width', 0)), int(a.get('height', 0)))
+        popup().open(self, message.get('spec') or {}, anchor,
+                     side=message.get('side', 'below'),
+                     takes_input=message.get('input', True))
+
+    def _do_popup_close(self, _message):
+        self._close_my_popup()
+
+    def _close_my_popup(self):
+        if popup().owner is self:
+            popup().close()
+
+    def popup_pick(self, item_id):
+        call_js(self.view, 'ynote.popupPick', item_id)
+
+    def popup_change(self, item_id, value):
+        call_js(self.view, 'ynote.popupChange', item_id, value)
+
+    def popup_closed(self):
+        self._apply_opacity()
+        if self._ready:
+            run_js(self.view, 'ynote.popupClosed()')
 
     def _on_crash(self, _view, reason):
         print(f'ynote: the page of {self.title!r} stopped ({reason}); reloading',
@@ -399,7 +466,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
     def grab_text_focus(self):
         self.view.grab_focus()
         if self._ready:
-            self._js('ynote.focus()')
+            run_js(self.view, 'ynote.focus()')
         else:
             self._focus_on_load = True
 
@@ -437,5 +504,6 @@ class WebNoteWindow(Gtk.ApplicationWindow):
                     doc=self._doc, on_top=self._on_top,
                     hidden=not self.get_visible(), sort_order=self.sort_order,
                     font_size=self._font_size, color=self._color,
-                    opacity=self._opacity, collapsed=self._collapsed)
+                    opacity=self._opacity, solid_in_use=self._solid_in_use,
+                    collapsed=self._collapsed)
 

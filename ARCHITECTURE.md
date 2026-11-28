@@ -404,7 +404,9 @@ design. The GTK window stays, frameless, for what only a window can do.
 | --- | --- |
 | `ynote/web_note_window.py` | `WebNoteWindow`, one note's window: position, size, moving and resizing on the page's request, collapse, keep on top, hide, snapping, saving. It answers what `PostItApp` asks of a note, as `NoteWindow` does. |
 | `ynote/web/note.html`, `note.css` | The note page and its look. The window sets the note's colors and font size on `:root`. |
-| `web/src/` | The page's code, bundled by `web/build.sh` into `ynote/web/note.js`: `schema.js` (what a note holds), `editor.js` (keys, typed Markdown), `commands.js` (what menus and shortcuts do), `views.js` (expand and to-do buttons), `links.js`, `chrome.js` (the bars and menus), `main.js` (`window.ynote`). |
+| `ynote/web_popup.py`, `ynote/web/menu.html` | The popup window that shows every note's menus, so a menu may reach past its note. Opened by a click or key, it takes the mouse and keyboard as a GTK menu does. |
+| `ynote/web_view.py` | Makes the web views: one web process for all, a content manager each, nothing navigating away. |
+| `web/src/` | The pages' code, bundled by `web/build.sh` into `ynote/web/note.js` and `menu.js`: `actions.js` (every action once: name, icon, Markdown, keys), `schema.js` (what a note holds), `editor.js` (keys, typed Markdown), `commands.js` (editing), `views.js` (expand, to-do, and code block buttons), `links.js`, `find.js` (Ctrl+F), `menus.js` (what each menu holds), `chrome.js` (the bars, the find bar, the menus' coming and going), `note.js` (`window.ynote`), `menu.js` (the menu page). |
 | `ynote/convert.py` | Turns a 1.x note, text with ranges, into a 2.0 document, and a document into plain text for search. |
 
 - **Content.** A note is saved as its ProseMirror document's JSON, in its
@@ -423,9 +425,34 @@ design. The GTK window stays, frameless, for what only a window can do.
 - **One web process.** Every note's web view is related to another's, so all
   pages run in one web process: one each would take about 250 MB per note.
   Hardware acceleration is off, which saves hundreds of MB on some systems.
+  A related view would share its relative's content manager, and so its
+  messages, so each view gets one of its own. All views share one settings
+  object, made before the first view: a view made with default settings
+  starts with hardware acceleration, and turning it off after, with two
+  pages in the process, crashed the web process on a real GPU (Xvfb, which
+  renders in software, does not show it).
+- **Actions.** `actions.js` lists every action once. The toolbar, ＋, the
+  note's menu, and the keyboard shortcuts are made from it, so an action has
+  the same name, icon, Markdown, and keys everywhere. An action the window
+  does (`window: true`) posts its id to the app.
+- **Menus.** The page builds a menu as JSON and posts it with the rectangle it
+  hangs from; `WebPopup` shows it there, inside the monitor, flipping above or
+  below, and grabs the seat and GTK's input as a `Gtk.Menu` does, so a click
+  anywhere else closes it without acting. The menu page reports its size,
+  measured whole before the window fits it, and what is chosen, which the
+  note hears before the menu closes.
+- **Toolbar.** When the bottom bar is too narrow, its last tools hide and go to
+  the top of ＋'s menu (`layoutToolbar()`, on every resize).
+- **Opacity.** The window's opacity, so text and bars fade alike. With Solid
+  while in use (`solid_in_use`), a note is solid while the mouse is on it,
+  it is active, or its menu is open.
+- **Find.** A ProseMirror plugin (`find.js`) lights the matches of each block's
+  text, plain or as a regular expression. The current match's folded
+  expands open while it is current (not an undo step), and the others fold
+  back.
 - **Corners.** With a compositing window manager, the window has an RGBA
   visual and the page a transparent background, so the note's corners are
-  round. Without one, they are square.
+  round, and menus have room for a shadow. Without one, both are square.
 
 ## Why X11
 

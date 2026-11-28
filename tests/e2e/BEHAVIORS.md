@@ -288,3 +288,24 @@ of 2.0 (`YNOTE_WEB`).
 - S4 Ctrl+B while composing keeps the syllable as it was and bolds what follows
 - S5 Korean typed into a table cell, empty or selected by Tab, stays on the cell's line
 - S6 Korean typed into an expand's title and content stays where it is typed
+
+## T. The window of a 2.0 note: bars, menus, find
+
+A note of 2.0 (`YNOTE_WEB`). Its menus show in a popup window of their own,
+so they may reach past the note.
+
+- T1 A toolbar button applies its format to the selection
+- T2 A menu reaches past a small note, and choosing an item applies it: a divider puts the cursor on a line below it
+- T3 A click outside a menu closes it and does nothing else
+- T4 Keys move in a menu and Enter chooses
+- T5 Esc closes a menu and nothing changes
+- T6 A color from the note menu is the note's, and saved
+- T7 Font size from the note menu is saved
+- T8 Right-click in a table cell offers rows and columns: Insert row below adds one
+- T9 Copy on a code block copies the whole block
+- T10 Delete from the note menu asks on the note, and Delete deletes it
+- T11 F2 renames the note
+- T12 Find (Ctrl+F) moves through the matches with Enter, and Esc leaves the current one selected
+- T13 A match in a folded expand opens it
+- T14 A narrow note puts the end of the toolbar into ＋
+- T15 A tool's tooltip shows its name, the Markdown typed for it, and its keys, and only that

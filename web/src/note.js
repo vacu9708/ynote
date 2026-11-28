@@ -1,6 +1,7 @@
 // The note page: the editor and its bars, and window.ynote, through which
 // the app (ynote/web_note_window.py) loads the note and changes how it
-// looks. Messages go the other way through post(), as JSON.
+// looks. Messages go the other way through post(), as JSON. Bundled into
+// ynote/web/note.js.
 import {createEditor} from './editor.js';
 import {setupChrome} from './chrome.js';
 import {Selection} from 'prosemirror-state';
@@ -16,6 +17,7 @@ let loading = false;
 const editor = createEditor(document.getElementById('editor'), {
   onChange: doc => { if (!loading) post({type: 'changed', doc: doc.toJSON()}); },
   onOpenLink: url => post({type: 'open-link', url}),
+  onCopy: text => post({type: 'copy-text', text}),
 });
 const chrome = setupChrome(editor, post);
 
@@ -26,8 +28,13 @@ window.ynote = {
     chrome.set(note);
     editor.setDoc(note.doc);
     loading = false;
+    chrome.refresh();
   },
   set(props) { chrome.set(props); },
+  // The popup window's answers about the menu this note opened.
+  popupPick(id) { chrome.pick(id); },
+  popupChange(id, value) { chrome.change(id, value); },
+  popupClosed() { chrome.closed(); },
   focus() { editor.view.focus(); },
   editTitle() { chrome.editTitle(); },
   insertImage(file, name) {

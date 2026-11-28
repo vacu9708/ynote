@@ -1,6 +1,8 @@
-/* A note: a title bar and a bottom bar in the note's bar color around its
-   text on the note's color, with rounded corners when the desktop draws
-   transparency. The app sets the colors and sizes below on :root. */
+/* A note: a title bar in the note's bar color, its text on the note's
+   paper color, and a bottom bar between the two, with rounded corners when
+   the desktop draws transparency. The page sets --paper, --bar, --soft,
+   and --font-size on :root for the note's settings (web/src/palette.js).
+   Opacity is the window's, so the whole note fades alike. */
 
 @font-face {
   font-family: 'Ynote Heading';
@@ -15,24 +17,18 @@
 }
 
 :root {
-  --paper: #FFFF99;
-  --bar: #E8D800;
-  --bar-soft: #F7EE5C;
-  --tint: #FFFFC8;
-  --line: #AEA200;
-  --opacity: 1;
+  --paper: #FFF6A3;
+  --bar: #F3D64B;
+  --soft: #FAEA7E;
   --font-size: 14px;
-  --ink: #1F1F1F;
-  --ink-dim: rgba(0, 0, 0, .55);
-  --code-ink: #C53030;
-  --select: rgba(45, 107, 224, .28);
-  --accent: #2D6BE0;
-  --menu-bg: #FBFBFC;
-  --menu-hover: #ECEEF2;
-  --menu-line: #E1E4E9;
+  --ink: #1E1E1E;
+  --code-ink: #B4232C;
+  --select: rgba(47, 111, 228, .26);
+  --accent: #2F6FE4;
+  --danger: #C42B32;
+  --link: #1556B5;
   --radius: 10px;
-  --title-h: 38px;
-  --bottom-h: 42px;
+  --bar-h: 34px;
   --body: Ubuntu, Cantarell, 'DejaVu Sans', 'Noto Sans CJK KR', sans-serif;
   --mono: 'DejaVu Sans Mono', 'Noto Sans Mono', 'Ubuntu Mono', monospace;
   --heading: 'Ynote Heading', 'Noto Serif', serif;
@@ -53,42 +49,97 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #note {
   position: relative; height: 100%; display: flex; flex-direction: column;
   border-radius: var(--radius); overflow: hidden;
-  /* An edge a shade darker than the bar, so notes stand apart from what is
-     behind them without a shadow the window would need room for. */
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .14);
+  /* A hairline a shade darker than the note, so notes stand apart from what
+     is behind them without a shadow the window would need room for. */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .13);
 }
 
-/* --- Title bar ---------------------------------------------------------- */
-#titlebar {
-  flex: none; height: var(--title-h); box-sizing: border-box;
-  display: flex; align-items: center; gap: 2px; padding: 0 6px;
-  background: var(--bar);
+/* --- Bars ----------------------------------------------------------------- */
+#titlebar, #bottombar {
+  flex: none; height: var(--bar-h); box-sizing: border-box;
+  display: flex; align-items: center; gap: 1px; padding: 0 4px;
   user-select: none;
 }
+#titlebar { background: var(--bar); }
+#bottombar { background: var(--soft); border-top: 1px solid rgba(0, 0, 0, .07); height: 32px; overflow: hidden; }
+.bar-space { flex: 1; }
 #title {
-  flex: 1; min-width: 0; padding: 2px 4px; border-radius: 5px;
-  font-weight: 700; font-size: 15.5px; color: #222;
+  flex: 1; min-width: 0; padding: 1px 4px; border-radius: 5px;
+  font-weight: 700; font-size: 14.5px; color: #1A1A1A;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-#title.untitled { color: rgba(0, 0, 0, .45); }
+#title.untitled { color: rgba(0, 0, 0, .42); }
 #title[contenteditable="plaintext-only"], #title[contenteditable="true"] {
-  background: rgba(255, 255, 255, .7); outline: 2px solid var(--accent); user-select: text; text-overflow: clip;
+  background: #fff; box-shadow: 0 0 0 2px var(--accent); outline: none; user-select: text; text-overflow: clip;
 }
 .bar-btn {
-  height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
-  border-radius: 7px; color: #222;
+  position: relative; height: 26px; min-width: 26px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 6px; color: #262626;
 }
 .bar-btn:hover, .bar-btn.open { background: rgba(0, 0, 0, .09); }
 .bar-btn:active { background: rgba(0, 0, 0, .15); }
-.bar-btn.pin { color: rgba(0, 0, 0, .4); }
-.bar-btn.pin.on { color: #222; background: rgba(0, 0, 0, .12); }
-.bar-btn.text { padding: 0 6px 0 8px; font-weight: 500; }
-.bar-btn.lit { color: var(--accent); }
+.bar-btn.pin { color: rgba(0, 0, 0, .36); }
+.bar-btn.pin:hover { color: #262626; }
+.bar-btn.pin.on { color: #111; background: rgba(0, 0, 0, .13); }
+.bar-btn.tool { min-width: 28px; }
+.bar-btn.tool.on { color: var(--accent); background: rgba(255, 255, 255, .5); }
+.bar-btn.tool.off { color: rgba(0, 0, 0, .28); }
+.bar-btn.tool.off:hover { background: none; }
+.bar-btn[hidden] { display: none; }
+.bar-btn.find-btn.open { background: rgba(0, 0, 0, .13); }
+.glyph { font: 700 15px var(--body); }
+.bar-sep { width: 1px; height: 16px; background: rgba(0, 0, 0, .16); margin: 0 3px; flex: none; }
+.bar-sep[hidden] { display: none; }
 
-/* --- Text --------------------------------------------------------------- */
+/* To-do progress beside the title: a ring filling up, then a check. */
+.progress {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; margin-right: 2px;
+  font: 600 11.5px var(--body); color: #2A2A2A; background: rgba(255, 255, 255, .55);
+  border-radius: 99px; padding: 1px 7px 1px 5px; font-variant-numeric: tabular-nums;
+}
+.progress[hidden] { display: none; }
+.progress .ring { width: 10px; height: 10px; border-radius: 50%;
+  background: conic-gradient(#2B2B2B var(--done), rgba(0, 0, 0, .18) 0); }
+.progress.all-done .ring { background: #2B2B2B; }
+
+/* A tooltip: the name, the Markdown typed for it, and its keys. */
+.tip {
+  position: fixed; z-index: 40; display: flex; gap: 8px; align-items: center; white-space: nowrap;
+  background: #23262E; color: #F1F3F6; font: 12px/1.3 var(--body); padding: 5px 8px; border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .25); pointer-events: none;
+}
+.tip[hidden] { display: none; }
+.tip .md { font: 11.5px var(--mono); background: #3A3F4A; color: #D5DAE1; border-radius: 4px; padding: 1px 5px; }
+.tip .keys { display: inline-flex; gap: 3px; }
+.tip kbd { font: 500 11px/16px var(--body); background: #3A3F4A; color: #fff; border-radius: 4px; padding: 0 4px; }
+
+/* The find bar, below the title bar. */
+.find-bar {
+  flex: none; display: flex; align-items: center; gap: 2px; padding: 5px 6px;
+  background: var(--soft); border-bottom: 1px solid rgba(0, 0, 0, .07);
+}
+.find-bar[hidden] { display: none; }
+.find-box {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 3px 0 8px;
+  background: #fff; border-radius: 7px; box-shadow: 0 0 0 2px var(--accent); color: #6B7280;
+}
+.find-input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font: 13px var(--mono); color: var(--ink); }
+.find-input.none { color: var(--danger); }
+.find-count { font: 12px var(--mono); color: #6B7280; white-space: nowrap; }
+.find-toggle { font: 600 11.5px var(--mono); color: #5D6573; padding: 2px 5px; border-radius: 5px; }
+.find-toggle:hover { background: #F1F3F6; }
+.find-toggle.on { background: #E8EFFD; color: var(--accent); box-shadow: inset 0 0 0 1px #B9CDF6; }
+.ProseMirror .find-hit { background: #FFD45C; border-radius: 2px; box-shadow: 0 0 0 1px #E9A400; }
+.ProseMirror .find-hit.current { background: #FF9F1C; }
+
+/* A collapsed note is its title bar alone. */
+#note.collapsed #scroll, #note.collapsed #bottombar, #note.collapsed .find-bar { display: none; }
+
+/* --- Text ------------------------------------------------------------------ */
 #scroll {
   flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
-  background: color-mix(in srgb, var(--paper) calc(var(--opacity) * 100%), transparent);
+  background: var(--paper);
   cursor: text;
 }
 #scroll::-webkit-scrollbar { width: 10px; }
@@ -97,7 +148,9 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #editor { padding: 8px 12px 12px; }
 
 .ProseMirror {
-  outline: none; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere;
+  /* break-word, not anywhere: a word breaks only when it cannot fit, so a
+     table's columns stay as wide as their words. */
+  outline: none; white-space: pre-wrap; overflow-wrap: break-word;
   hyphens: none; -webkit-hyphens: none; tab-size: 4;
   font-variant-ligatures: none;
 }
@@ -105,88 +158,101 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .ProseMirror > :first-child, .item-content > :first-child, .expand-content > :first-child,
 td > :first-child, th > :first-child, blockquote > :first-child { margin-top: 0; }
 .ProseMirror p { margin: 0; min-height: 1.5em; }
-.ProseMirror h1 {
-  font: 900 1.3em/1.3 var(--heading); margin: .45em 0 .1em;
-}
+.ProseMirror h1 { font: 900 1.28em/1.3 var(--heading); margin: .5em 0 .12em; }
 .ProseMirror strong { font-weight: 700; }
 .ProseMirror h1 strong { font-weight: 900; }
 
 /* Inline code: its own box on each row it wraps to. */
 .ProseMirror code {
   font: .93em var(--mono); color: var(--code-ink);
-  background: color-mix(in srgb, var(--paper) 70%, #D0D0D0);
-  border: 1px solid rgba(0, 0, 0, .16); border-radius: 4px;
-  padding: 0 .3em; margin: 0 .1em;
+  background: rgba(255, 255, 255, .55); border: 1px solid rgba(0, 0, 0, .12); border-radius: 4px;
+  padding: 0 .28em; margin: 0 .08em;
   box-decoration-break: clone; -webkit-box-decoration-break: clone;
 }
+/* A code block and its Copy button share one grid cell: the button over the
+   block's top right, without positioning (see views.js CodeBlockView). */
+.code-block { display: grid; margin: 5px 0; }
+.code-block > * { grid-area: 1 / 1; }
 .ProseMirror pre {
-  font: .93em/1.45 var(--mono); color: #1F1F1F;
-  background: color-mix(in srgb, var(--paper) 25%, #F2F2F2);
-  border: 1px solid rgba(0, 0, 0, .16); border-radius: 6px;
-  padding: 6px 10px; margin: 6px 0;
-  width: fit-content; min-width: 4em; max-width: 100%; box-sizing: border-box;
+  font: .93em/1.5 var(--mono); color: #1E1E1E;
+  background: rgba(255, 255, 255, .6); border: 1px solid rgba(0, 0, 0, .12); border-radius: 7px;
+  padding: 6px 10px; margin: 0; min-width: 0; box-sizing: border-box;
   white-space: pre-wrap;
+}
+.code-copy {
+  justify-self: end; align-self: start; margin: 4px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px;
+  font: 500 12px var(--body); color: #333; background: #fff; cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, .14); border-radius: 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+  opacity: 0; transition: opacity .12s; user-select: none;
+}
+.code-block:hover > .code-copy, .code-copy.done { opacity: 1; }
+.code-copy:hover { background: #F3F4F6; }
+.code-copy.done { color: #1F7A3A; }
+
+/* A new, empty note says what it takes. */
+.ProseMirror p.empty::before {
+  content: attr(data-placeholder); float: left; height: 0; pointer-events: none;
+  color: rgba(0, 0, 0, .38);
 }
 .ProseMirror pre code { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; }
 
-.ProseMirror hr { border: 0; border-top: 2px solid rgba(0, 0, 0, .2); margin: 10px 0; }
+.ProseMirror hr { border: 0; border-top: 2px solid rgba(0, 0, 0, .16); margin: 10px 0; }
 .ProseMirror hr.ProseMirror-selectednode { border-top-color: var(--accent); }
 
 .ProseMirror blockquote {
-  margin: 4px 0; padding-left: 10px; border-left: 3px solid rgba(0, 0, 0, .32); color: rgba(0, 0, 0, .68);
+  margin: 4px 0; padding-left: 10px; border-left: 3px solid rgba(0, 0, 0, .28); color: rgba(0, 0, 0, .66);
 }
 
 /* Lists: a bullet or a to-do box beside each item. */
 .ProseMirror ul { margin: 0; padding-left: 1.45em; list-style-type: disc; }
 .ProseMirror li { position: relative; }
 .ProseMirror li.todo { list-style: none; }
-.ProseMirror ul:has(> li.todo:first-child) { padding-left: 1.45em; }
 .todo-box {
-  position: absolute; left: -1.35em; top: .3em; width: .9em; height: .9em; box-sizing: border-box;
-  border: 2px solid rgba(0, 0, 0, .62); border-radius: 3px; cursor: pointer;
+  position: absolute; left: -1.38em; top: .32em; width: .93em; height: .93em; box-sizing: border-box;
+  border: 2px solid rgba(0, 0, 0, .55); border-radius: 4px; cursor: pointer;
 }
 .todo-box:hover { border-color: #000; }
-li.done > .todo-box { background: rgba(0, 0, 0, .62); }
+li.done > .todo-box { background: #2B2B2B; border-color: #2B2B2B; }
 li.done > .todo-box::after {
-  content: ""; position: absolute; left: .22em; top: .02em; width: .22em; height: .48em;
+  content: ""; position: absolute; left: .25em; top: .04em; width: .2em; height: .45em;
   border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
-li.done > .item-content > p { color: rgba(0, 0, 0, .48); text-decoration: line-through; text-decoration-color: rgba(0, 0, 0, .3); }
+li.done > .item-content > p { color: rgba(0, 0, 0, .45); text-decoration: line-through; text-decoration-color: rgba(0, 0, 0, .3); }
 
 /* Expands: a box with a chevron before the title; folded, the title only. */
 .expand {
-  position: relative; margin: 6px 0; padding: 3px 8px 4px 28px;
-  border: 1px solid rgba(0, 0, 0, .14); border-radius: 7px;
-  background: color-mix(in srgb, var(--paper) 60%, #ffffff);
+  position: relative; margin: 5px 0; padding: 3px 8px 4px 27px;
+  border: 1px solid rgba(0, 0, 0, .12); border-radius: 7px; background: rgba(255, 255, 255, .35);
 }
 .expand:not(.open) { border-color: transparent; background: transparent; }
 .expand-toggle {
-  position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 5px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(0, 0, 0, .65);
+  position: absolute; left: 3px; top: 3px; width: 21px; height: 21px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(0, 0, 0, .62);
   transition: transform .12s;
 }
 .expand-toggle:hover { background: rgba(0, 0, 0, .09); color: #000; }
 .expand:not(.open) > .expand-toggle { transform: rotate(-90deg); }
 .expand:not(.open) > .expand-content > :not(:first-child) { display: none; }
-.expand-content > summary { display: block; font-weight: 500; color: rgba(0, 0, 0, .75); min-height: 1.5em; }
+.expand-content > summary { display: block; font-weight: 500; color: rgba(0, 0, 0, .74); min-height: 1.5em; }
 .expand-content > summary::-webkit-details-marker { display: none; }
 
 /* Tables: the first row is the header, shaded. */
-.ProseMirror .tableWrapper { overflow-x: auto; margin: 6px 0; }
-.ProseMirror table { border-collapse: collapse; table-layout: auto; }
+.ProseMirror .tableWrapper { overflow-x: auto; margin: 5px 0; }
+.ProseMirror table { border-collapse: collapse; table-layout: auto; margin: 5px 0; }
 .ProseMirror td, .ProseMirror th {
-  border: 1px solid rgba(0, 0, 0, .22); padding: 3px 8px; vertical-align: top; text-align: left;
+  border: 1px solid rgba(0, 0, 0, .17); padding: 2px 8px; vertical-align: top; text-align: left;
   min-width: 2.5em;
 }
 /* No cell is positioned: in a positioned cell WebKit puts what an input
    method composes, such as Korean, on a line of its own. */
-.ProseMirror th { background: color-mix(in srgb, var(--paper) 50%, #ffffff); font-weight: 700; }
+.ProseMirror th { background: rgba(255, 255, 255, .5); font-weight: 700; }
 .ProseMirror .selectedCell { background-image: linear-gradient(var(--select), var(--select)); }
 
 .ProseMirror img { max-width: 100%; vertical-align: bottom; border-radius: 3px; }
 .ProseMirror img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
 
-.ProseMirror .link { color: #1659B8; text-decoration: underline; text-underline-offset: 2px; }
+.ProseMirror .link { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
 
 .ProseMirror-gapcursor { display: none; pointer-events: none; position: absolute; }
 .ProseMirror-gapcursor:after {
@@ -196,38 +262,28 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .48); text-decoration: line-t
 @keyframes gapcursor-blink { to { visibility: hidden; } }
 .ProseMirror-focused .ProseMirror-gapcursor { display: block; }
 
-/* --- Bottom bar ---------------------------------------------------------- */
-#bottombar {
-  flex: none; height: var(--bottom-h); box-sizing: border-box;
-  display: flex; align-items: center; gap: 2px; padding: 0 6px;
-  background: var(--bar-soft); border-top: 1px solid rgba(0, 0, 0, .1);
-  user-select: none; overflow: hidden;
+/* --- Asking on the note itself, as before deleting it --------------------- */
+.veil {
+  position: absolute; inset: var(--bar-h) 0 0 0; z-index: 25; display: grid; place-items: center;
+  background: rgba(30, 30, 30, .28); border-radius: 0 0 var(--radius) var(--radius);
 }
-.bar-sep { width: 1px; height: 18px; background: rgba(0, 0, 0, .2); margin: 0 6px; flex: none; }
-
-/* A collapsed note is its title bar alone. */
-#note.collapsed #scroll, #note.collapsed #bottombar { display: none; }
-
-/* --- Menus --------------------------------------------------------------- */
-.menu {
-  position: absolute; z-index: 20; min-width: 200px; max-width: calc(100vw - 8px); overflow-y: auto; box-sizing: border-box;
-  background: var(--menu-bg); color: #1F1F1F; border-radius: 9px; padding: 5px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 8px 24px rgba(0, 0, 0, .22);
-  font-size: 14px; user-select: none;
+.sheet {
+  width: min(86%, 340px); box-sizing: border-box; display: grid; gap: 4px;
+  background: #fff; border-radius: 10px; padding: 12px; font-size: 13.5px; line-height: 1.45;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .25);
 }
-.menu-row {
-  display: grid; grid-template-columns: 22px auto 1fr auto; align-items: center; gap: 10px;
-  width: 100%; padding: 5px 8px; border-radius: 6px; text-align: left; white-space: nowrap;
+.sheet b { font-size: 14.5px; overflow-wrap: anywhere; }
+.sheet-buttons { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.btn {
+  height: 28px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center;
+  font-weight: 500; font-size: 13px; border: 1px solid #D5DAE1; background: #fff;
 }
-.menu-row:hover:not(:disabled) { background: var(--menu-hover); }
-.menu-row:disabled { opacity: .4; }
-.menu-row.active .menu-icon { color: var(--accent); }
-.menu-icon { display: flex; justify-content: center; font-size: 15px; }
-.menu-md { font: 12.5px var(--mono); color: rgba(0, 0, 0, .5); padding-left: 8px; }
-.menu-keys { font-size: 12.5px; color: rgba(0, 0, 0, .5); }
-@media (max-width: 420px) { .menu-md { display: none; } .menu-row { grid-template-columns: 22px 1fr auto; } }
+.btn:hover { background: #F3F4F6; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn.danger:hover { background: #A8232A; }
 
-/* --- Resize edges ---------------------------------------------------------- */
+/* --- Resize edges ----------------------------------------------------------- */
 .grip { position: absolute; z-index: 30; }
 .grip-n, .grip-s { left: 10px; right: 10px; height: 5px; }
 .grip-e, .grip-w { top: 10px; bottom: 10px; width: 5px; }
@@ -236,5 +292,6 @@ li.done > .item-content > p { color: rgba(0, 0, 0, .48); text-decoration: line-t
 .grip-ne, .grip-nw, .grip-se, .grip-sw { width: 10px; height: 10px; }
 .grip-ne { top: 0; right: 0; cursor: nesw-resize; } .grip-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 .grip-nw { top: 0; left: 0; cursor: nwse-resize; } .grip-se { bottom: 0; right: 0; cursor: nwse-resize; }
-#note.collapsed .grip-n, #note.collapsed .grip-s, #note.collapsed [class*="grip-n"], #note.collapsed [class*="grip-s"] { display: none; }
+#note.collapsed .grip-n, #note.collapsed .grip-s, #note.collapsed .grip-ne, #note.collapsed .grip-nw,
+#note.collapsed .grip-se, #note.collapsed .grip-sw { display: none; }
 :root.maximized .grip { display: none; }

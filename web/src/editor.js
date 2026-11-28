@@ -1,7 +1,7 @@
 // A note's editor: ProseMirror with Ynote's content, keys, and typed
 // Markdown. The app talks to it through window.ynote (see bridge.js).
 import {EditorState, Plugin, TextSelection} from 'prosemirror-state';
-import {EditorView} from 'prosemirror-view';
+import {EditorView, Decoration, DecorationSet} from 'prosemirror-view';
 import {Node} from 'prosemirror-model';
 import {keymap} from 'prosemirror-keymap';
 import {baseKeymap, chainCommands} from 'prosemirror-commands';
@@ -13,8 +13,9 @@ import {gapCursor} from 'prosemirror-gapcursor';
 import {dropCursor} from 'prosemirror-dropcursor';
 import {schema} from './schema.js';
 import * as cmd from './commands.js';
-import {ExpandView, ListItemView} from './views.js';
+import {CodeBlockView, ExpandView, ListItemView} from './views.js';
 import {linksPlugin} from './links.js';
+import {findPlugin} from './find.js';
 
 const {paragraph, heading, code_block, blockquote, horizontal_rule, bullet_list,
   list_item, expand, expand_title} = schema.nodes;
@@ -143,7 +144,15 @@ const keys = keymap({
 
 // --- The view --------------------------------------------------------------
 
-export function createEditor(place, {onChange, onOpenLink, onFocus}) {
+// A new note says what it takes: shown while the note is one empty line.
+const PLACEHOLDER = 'Type, or / for commands';
+const placeholder = new Plugin({props: {decorations(state) {
+  const doc = state.doc;
+  if (doc.childCount !== 1 || doc.firstChild.type !== paragraph || doc.firstChild.content.size) return null;
+  return DecorationSet.create(doc, [Decoration.node(0, doc.firstChild.nodeSize, {class: 'empty', 'data-placeholder': PLACEHOLDER})]);
+}}});
+
+export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy}) {
   const changes = new Plugin({
     view: () => ({
       update(view, prev) {
@@ -154,13 +163,14 @@ export function createEditor(place, {onChange, onOpenLink, onFocus}) {
   const plugins = [
     rules, keys, keymap(baseKeymap),
     history(), tableEditing(), gapCursor(), dropCursor({color: '#2D6BE0', width: 2}),
-    linksPlugin(onOpenLink), changes,
+    linksPlugin(onOpenLink), placeholder, findPlugin, changes,
   ];
   const view = new EditorView(place, {
     state: EditorState.create({schema, plugins}),
     nodeViews: {
       expand: (node, v, getPos) => new ExpandView(node, v, getPos),
       list_item: (node, v, getPos) => new ListItemView(node, v, getPos),
+      code_block: (node, v, getPos) => new CodeBlockView(node, v, getPos, onCopy),
     },
     handleDOMEvents: {focus: () => { onFocus && onFocus(); return false; }},
   });

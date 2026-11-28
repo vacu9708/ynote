@@ -143,11 +143,30 @@ export function toggleExpandAtTitle(state, dispatch) {
   return true;
 }
 
+// A divider at the cursor: above the line when the cursor starts it or the
+// line is empty, below it when the cursor ends it, else splitting the line
+// there. The cursor goes on below it, on a line made when there is none.
 export function insertDivider(state, dispatch) {
-  const {$from} = state.selection;
-  if ($from.parent.type === code_block) return false;
+  if (state.selection.$from.parent.type === code_block) return false;
   if (dispatch) {
-    const tr = state.tr.replaceSelectionWith(horizontal_rule.create());
+    const tr = state.tr.deleteSelection();
+    const $pos = tr.selection.$from;
+    let at;
+    if (!$pos.parent.isTextblock) {
+      at = $pos.pos;
+    } else if ($pos.parentOffset === 0) {
+      at = $pos.before();
+    } else if ($pos.parentOffset === $pos.parent.content.size) {
+      at = $pos.after();
+    } else {
+      tr.split($pos.pos);
+      at = $pos.pos + 1;
+    }
+    tr.insert(at, horizontal_rule.create());
+    const after = at + 1;
+    const next = tr.doc.resolve(after).nodeAfter;
+    if (!next || !next.isTextblock) tr.insert(after, paragraph.create());
+    tr.setSelection(TextSelection.create(tr.doc, after + 1));
     dispatch(tr.scrollIntoView());
   }
   return true;

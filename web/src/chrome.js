@@ -1,53 +1,22 @@
-// The note around the editor: the title bar, the bottom bar with the Format
-// and Insert menus, and the edges that resize the window. What the window
-// itself does (move, resize, hide) is asked of the app with post().
-import * as cmd from './commands.js';
-import {strokeIcon, CHEVRON_DOWN} from './views.js';
-import {schema} from './schema.js';
+// The note around the editor. The title bar is the note's: collapse, title,
+// to-do progress, pin, the note's menu, hide. The bottom bar is the text's:
+// the toolbar, ＋ for the rest, and find. The find bar opens below the title
+// bar. Menus show in the app's popup window (ynote/web_popup.py); what only
+// the window can do is asked of the app with post().
+import {el, strokeIcon} from './icons.js';
+import {PALETTE, DEFAULT_COLOR} from './palette.js';
+import {ACTION, TOOLBAR, perform, enabled} from './actions.js';
+import * as menus from './menus.js';
+import {findKey, setFind, step, endFind} from './find.js';
 
-const ICONS = {
-  down: CHEVRON_DOWN,
-  right: 'M9 6l6 6-6 6',
-  pin: ['M9 4h6l-1 6 3 3H7l3-3z', 'M12 13v7'],
-  plus: 'M12 5v14M5 12h14',
-  cross: 'M6 6l12 12M18 6L6 18',
-  hidden: ['M3 3l18 18', 'M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4.5 9.5 6a17 17 0 0 1-2.6 3.1M6.2 7.6A16 16 0 0 0 2.5 12c1 1.5 4.5 6 9.5 6 1.6 0 3-.4 4.2-1', 'M9.9 10a3 3 0 0 0 4.1 4.1'],
-  bullet: ['M9 7h11M9 12h11M9 17h11', 'M4.5 7h.01M4.5 12h.01M4.5 17h.01'],
-  check: ['M4 5h5v5H4z', 'M4 14l2 2 3-4', 'M12 7h8M12 15h8'],
-  quote: ['M5 5v14', 'M10 8h9M10 12h9M10 16h6'],
-  code: 'M9 7l-5 5 5 5M15 7l5 5-5 5',
-  divider: ['M4 12h16', 'M8 7h8M8 17h8'],
-  expand: ['M8 6l6 6-6 6', 'M17 6v12'],
-  table: ['M4 5h16v14H4z', 'M4 10h16M10 10v9'],
-  image: ['M4 5h16v14H4z', 'M4 16l5-5 4 4 2-2 5 5', 'M15.5 9h.01'],
-};
-const icon = (name, size) => strokeIcon(ICONS[name], size);
-
-function el(tag, attrs = {}, ...children) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(attrs)) {
-    if (key === 'class') node.className = value;
-    else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
-    else node.setAttribute(key, value);
-  }
-  node.append(...children.filter(c => c !== null && c !== undefined));
-  return node;
-}
-
-// A button of a bar: a click does it, and pressing it never takes the focus
-// from the text, so the cursor and the selection stay.
+// A button of a bar: pressing it never takes the focus from the text, so the
+// cursor and the selection stay.
 function barButton(content, label, onClick, extraClass = '') {
-  const button = el('button', {class: 'bar-btn ' + extraClass, title: label, 'aria-label': label, tabindex: '-1'},
-    ...[].concat(content));
+  const button = el('button', {class: 'bar-btn ' + extraClass, 'aria-label': label, tabindex: '-1'},
+    [].concat(content));
   button.addEventListener('mousedown', event => event.preventDefault());
   button.addEventListener('click', onClick);
   return button;
-}
-
-function mix(a, b, t) {
-  const parse = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-  const x = parse(a), y = parse(b);
-  return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
 }
 
 export function setupChrome(editor, post) {
@@ -56,43 +25,140 @@ export function setupChrome(editor, post) {
   const titleText = document.getElementById('title');
   const titleBar = document.getElementById('titlebar');
   const bottomBar = document.getElementById('bottombar');
-  let props = {title: '', pinned: false, collapsed: false, hiddenCount: 0};
+  let props = {title: '', pinned: false, collapsed: false, hiddenCount: 0, color: DEFAULT_COLOR,
+    opacity: 1, solidInUse: true, fontSize: 14, maximized: false, autostart: null};
+  const ctx = () => ({state: editor.view.state, dispatch: editor.view.dispatch, view: editor.view, post, chrome});
+  const run = id => {
+    const action = ACTION[id];
+    if (!action) return;
+    perform(action, ctx());
+    if (action.edits) editor.view.focus();
+  };
 
-  // Title bar: the chevron folds the note to its title bar, the pin keeps it
-  // on top; dragging anywhere else moves the window.
-  const collapseBtn = barButton(icon('down', 18), 'Collapse', () => post({type: 'collapse'}));
-  const pinBtn = barButton(icon('pin', 18), 'Always on Top (toggle)', () => post({type: 'pin'}), 'pin');
+  // --- Tooltips: an action's name, Markdown, and keys, after a moment.
+  const tip = el('div', {class: 'tip', role: 'tooltip', hidden: true});
+  document.body.append(tip);
+  let tipTimer = null;
+  function tipFor(button, action) {
+    button.addEventListener('mouseenter', () => {
+      clearTimeout(tipTimer);
+      tipTimer = setTimeout(() => showTip(button, action), 450);
+    });
+    button.addEventListener('mouseleave', hideTip);
+    button.addEventListener('mousedown', hideTip);
+  }
+  function showTip(button, action) {
+    // replaceChildren() would write a null out as "null".
+    tip.replaceChildren(...[el('span', {}, action.label),
+      action.md && el('span', {class: 'md'}, action.md),
+      action.keys && el('span', {class: 'keys'}, action.keys.map(k => el('kbd', {}, k)))].filter(Boolean));
+    // Its text as its name, as WebKit gives a tooltip's plain text to no one.
+    tip.setAttribute('aria-label', tip.textContent);
+    tip.hidden = false;
+    const b = button.getBoundingClientRect();
+    const t = tip.getBoundingClientRect();
+    const above = b.top - t.height - 6;
+    tip.style.top = (above >= 0 ? above : b.bottom + 6) + 'px';
+    tip.style.left = Math.max(4, Math.min(b.left + b.width / 2 - t.width / 2, innerWidth - t.width - 4)) + 'px';
+  }
+  function hideTip() { clearTimeout(tipTimer); tip.hidden = true; }
+
+  // --- Title bar. Dragging it anywhere but a button moves the window, from
+  // the press GTK saw, once the pointer moves: a double click still arrives
+  // and maximizes.
+  const collapseBtn = barButton(strokeIcon('down', 17), 'Collapse', () => run('collapse'));
+  const progress = el('span', {class: 'progress', hidden: true, title: 'To-dos done'},
+    el('span', {class: 'ring'}), el('span', {class: 'count'}));
+  const pinBtn = barButton(strokeIcon('pin', 17), 'Always on top', () => run('pin'), 'pin');
+  const moreBtn = barButton(strokeIcon('more', 17), 'Note menu', () => openNoteMenu(moreBtn));
+  const hideBtn = barButton(strokeIcon('cross', 17), 'Hide note', () => run('hide'));
   titleBar.prepend(collapseBtn);
-  titleBar.append(pinBtn);
+  titleBar.append(progress, pinBtn, moreBtn, hideBtn);
+  tipFor(collapseBtn, {label: 'Collapse'});
+  tipFor(pinBtn, ACTION.pin);
+  tipFor(moreBtn, {label: 'Note menu'});
+  tipFor(hideBtn, ACTION.hide);
+  let press = null;
   titleBar.addEventListener('mousedown', event => {
-    if (event.button !== 0 || event.detail > 1 || event.target.closest('button') || titleText.isContentEditable) return;
+    if (event.button !== 0 || event.target.closest('button') || titleText.isContentEditable) return;
     event.preventDefault();
+    press = event.detail > 1 ? null : {x: event.screenX, y: event.screenY};
+  });
+  document.addEventListener('mousemove', event => {
+    if (!press || !(event.buttons & 1)) { press = null; return; }
+    if (Math.abs(event.screenX - press.x) + Math.abs(event.screenY - press.y) < 4) return;
+    press = null;
     post({type: 'move'});
   });
+  document.addEventListener('mouseup', () => { press = null; });
   titleBar.addEventListener('dblclick', event => {
     if (event.target.closest('button') || titleText.isContentEditable) return;
     post({type: 'maximize'});
   });
   titleBar.addEventListener('contextmenu', event => {
     event.preventDefault();
-    post({type: 'menu'});
+    openNoteMenu(null, {x: event.clientX, y: event.clientY});
   });
 
-  // Bottom bar: the note's actions, then the text's.
-  const hiddenBtn = barButton(icon('hidden', 20), 'Hidden Notes', () => post({type: 'hidden-notes'}));
-  const formatBtn = barButton([el('span', {}, 'Format'), icon('down', 14)], 'Format text',
-    () => toggleMenu(formatBtn, formatItems), 'text');
-  const insertBtn = barButton([el('span', {}, 'Insert'), icon('down', 14)], 'Insert an element',
-    () => toggleMenu(insertBtn, insertItems), 'text');
-  bottomBar.append(
-    barButton(icon('plus', 18), 'New Note', () => post({type: 'new-note'})),
-    barButton(icon('cross', 18), 'Hide Note', () => post({type: 'hide'})),
-    hiddenBtn,
-    el('span', {class: 'bar-sep'}),
-    formatBtn, insertBtn,
-  );
+  // --- Toolbar: the text's actions; those that do not fit go into ＋.
+  const tools = TOOLBAR.map(id => {
+    if (id === '|') return {id, node: el('span', {class: 'bar-sep'})};
+    const action = ACTION[id];
+    const content = id === 'bold' ? el('b', {class: 'glyph'}, 'B') : strokeIcon(action.icon, 17);
+    const node = barButton(content, action.label, () => run(id), 'tool');
+    tipFor(node, action);
+    return {id, node};
+  });
+  const plusBtn = barButton(strokeIcon('plus', 17), 'More to insert', () => openMoreMenu());
+  tipFor(plusBtn, {label: 'More to insert'});
+  const findBtn = barButton(strokeIcon('search', 17), ACTION.find.label, () => openFind(), 'find-btn');
+  tipFor(findBtn, ACTION.find);
+  bottomBar.append(...tools.map(t => t.node), plusBtn, el('span', {class: 'bar-space'}), findBtn);
+  let overflow = [];
+  function layoutToolbar() {
+    tools.forEach(t => { t.node.hidden = false; });
+    overflow = [];
+    const room = () => bottomBar.scrollWidth <= bottomBar.clientWidth;
+    for (let i = tools.length - 1; i >= 0 && !room(); i--) {
+      tools[i].node.hidden = true;
+      if (tools[i].id !== '|') overflow.unshift(tools[i].id);
+    }
+    // No divider at the end.
+    const shown = tools.filter(t => !t.node.hidden);
+    if (shown.length && shown[shown.length - 1].id === '|') shown[shown.length - 1].node.hidden = true;
+  }
+  new ResizeObserver(layoutToolbar).observe(bottomBar);
 
-  // Edges and corners resize the window.
+  // The toolbar shows what is on at the cursor and what cannot be done.
+  function refreshTools() {
+    const c = ctx();
+    for (const t of tools) {
+      if (t.id === '|') continue;
+      const action = ACTION[t.id];
+      t.node.classList.toggle('on', !!(action.active && action.active(c)));
+      t.node.classList.toggle('off', !enabled(action, c));
+    }
+    refreshProgress();
+    refreshFindCount();
+  }
+
+  // --- To-do progress, beside the title.
+  function refreshProgress() {
+    let all = 0, done = 0;
+    editor.view.state.doc.descendants(node => {
+      if (node.type.name === 'list_item' && node.attrs.checked !== null) {
+        all++;
+        if (node.attrs.checked) done++;
+      }
+      return true;
+    });
+    progress.hidden = !all;
+    progress.querySelector('.count').textContent = `${done}/${all}`;
+    progress.style.setProperty('--done', all ? `${(done / all) * 100}%` : '0%');
+    progress.classList.toggle('all-done', all > 0 && done === all);
+  }
+
+  // --- Edges and corners resize the window.
   for (const edge of ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']) {
     note.append(el('div', {class: 'grip grip-' + edge, onmousedown: event => {
       if (event.button !== 0) return;
@@ -101,84 +167,169 @@ export function setupChrome(editor, post) {
     }}));
   }
 
-  // --- Format and Insert menus: each row shows the Markdown that typing
-  // makes it from and its shortcut.
-  const formatItems = () => [
-    {icon: el('b', {}, 'B'), name: 'Bold', md: '**text**', keys: 'Ctrl+B', run: cmd.toggleBold,
-      active: s => markActive(s, schema.marks.strong)},
-    {icon: el('b', {}, 'H'), name: 'Heading', md: '# text', keys: 'Ctrl+H', run: cmd.toggleHeading,
-      active: cmd.headingActive},
-    {icon: icon('code', 16), name: 'Inline code', md: '`text`', keys: 'Ctrl+E', run: cmd.toggleInlineCode,
-      active: s => markActive(s, schema.marks.code)},
-  ];
-  const insertItems = () => [
-    {icon: icon('bullet', 16), name: 'Bullet list', md: '- item', keys: 'Ctrl+8', run: cmd.toggleBullet},
-    {icon: icon('check', 16), name: 'Checklist', md: '[ ] item', keys: 'Ctrl+9', run: cmd.toggleChecklist},
-    {icon: icon('quote', 16), name: 'Quote', md: '> text', keys: '', run: cmd.toggleQuote},
-    {icon: icon('code', 16), name: 'Code block', md: '```', keys: 'Ctrl+Shift+C', run: cmd.toggleCodeBlock},
-    {icon: icon('divider', 16), name: 'Divider', md: '---', keys: '', run: cmd.insertDivider},
-    {icon: icon('expand', 16), name: 'Expand', md: '', keys: '', run: cmd.insertExpand},
-    {icon: icon('table', 16), name: 'Table', md: '', keys: '', run: cmd.insertTable},
-    {icon: icon('image', 16), name: 'Image…', md: '', keys: 'Ctrl+V', run: () => { post({type: 'choose-image'}); return true; },
-      always: true},
-  ];
+  // --- Find bar.
+  const findInput = el('input', {class: 'find-input', type: 'text', spellcheck: 'false', 'aria-label': 'Find',
+    placeholder: 'Find'});
+  const findCount = el('span', {class: 'find-count'});
+  const caseBtn = el('button', {class: 'find-toggle', title: 'Match case (Alt+C)', tabindex: '-1'}, 'Aa');
+  const regexBtn = el('button', {class: 'find-toggle', title: 'Regular expression (Alt+R)', tabindex: '-1'}, '.*');
+  const findBar = el('div', {class: 'find-bar', hidden: true},
+    el('div', {class: 'find-box'}, strokeIcon('search', 14), findInput, findCount, caseBtn, regexBtn),
+    barButton(strokeIcon('up', 16), 'Previous match (Shift+Enter)', () => step(editor.view, -1)),
+    barButton(strokeIcon('down', 16), 'Next match (Enter)', () => step(editor.view, 1)),
+    barButton(strokeIcon('cross', 16), 'Close (Esc)', () => closeFind()));
+  titleBar.after(findBar);
+  const findState = () => findKey.getState(editor.view.state);
+  findInput.addEventListener('input', () => setFind(editor.view, {query: findInput.value, current: 0}));
+  const toggle = (button, key) => {
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', () => {
+      setFind(editor.view, {[key]: !findState()[key]});
+      button.classList.toggle('on', findState()[key]);
+    });
+  };
+  toggle(caseBtn, 'caseSensitive');
+  toggle(regexBtn, 'regex');
+  findInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); step(editor.view, event.shiftKey ? -1 : 1); }
+    else if (event.key === 'Escape') { event.preventDefault(); closeFind(); }
+    else if (event.altKey && (event.key === 'c' || event.key === 'C')) { event.preventDefault(); caseBtn.click(); }
+    else if (event.altKey && (event.key === 'r' || event.key === 'R')) { event.preventDefault(); regexBtn.click(); }
+    event.stopPropagation();
+  });
+  function openFind() {
+    if (props.collapsed) post({type: 'collapse'});
+    findBar.hidden = false;
+    findBtn.classList.add('open');
+    const {from, to} = editor.view.state.selection;
+    const selected = editor.view.state.doc.textBetween(from, to);
+    if (selected && !selected.includes('\n')) findInput.value = selected;
+    findInput.focus();
+    findInput.select();
+    setFind(editor.view, {query: findInput.value, current: 0});
+  }
+  function closeFind() {
+    if (findBar.hidden) return;
+    findBar.hidden = true;
+    findBtn.classList.remove('open');
+    endFind(editor.view);
+    editor.view.focus();
+  }
+  function refreshFindCount() {
+    if (findBar.hidden) return;
+    const {matches, current, error, query} = findState();
+    findCount.textContent = error ? 'error' : query ? (matches.length ? `${current + 1}/${matches.length}` : '0/0') : '';
+    findCount.title = error || '';
+    findInput.classList.toggle('none', !!query && !matches.length);
+  }
 
+  // --- Menus. One is open at a time; the app shows it and sends back the
+  // id of the item chosen, to the handler kept here.
   let openMenu = null;
+  function popup(name, items, anchor, {side = 'below', button = null, byKeys = false} = {}) {
+    closeMenu();
+    hideTip();
+    openMenu = {name, button};
+    if (button) button.classList.add('open');
+    post({type: 'popup', spec: {items, byKeys}, anchor: rectOf(anchor), side, input: true});
+    return openMenu;
+  }
   function closeMenu() {
     if (!openMenu) return;
-    openMenu.menu.remove();
-    openMenu.button.classList.remove('open');
+    if (openMenu.button) openMenu.button.classList.remove('open');
     openMenu = null;
   }
-  function toggleMenu(button, items) {
-    const same = openMenu && openMenu.button === button;
-    closeMenu();
-    if (same) return;
-    const state = editor.view.state;
-    const menu = el('div', {class: 'menu bar-menu', role: 'menu'});
-    for (const item of items()) {
-      const enabled = item.always || item.run(state);
-      const row = el('button', {class: 'menu-row' + (item.active && item.active(state) ? ' active' : ''),
-        role: 'menuitem', tabindex: '-1'},
-      el('span', {class: 'menu-icon'}, item.icon),
-      el('span', {class: 'menu-name'}, item.name),
-      el('span', {class: 'menu-md'}, item.md),
-      el('span', {class: 'menu-keys'}, item.keys));
-      if (!enabled) row.disabled = true;
-      row.addEventListener('mousedown', event => event.preventDefault());
-      row.addEventListener('click', () => { closeMenu(); editor.run(item.run); });
-      menu.append(row);
+  function rectOf(anchor) {
+    if (anchor instanceof Element) {
+      const r = anchor.getBoundingClientRect();
+      return {x: r.left, y: r.top, width: r.width, height: r.height};
     }
-    note.append(menu);
-    // Above the button, inside the note; it scrolls when the note is short.
-    const bar = bottomBar.getBoundingClientRect();
-    const b = button.getBoundingClientRect();
-    menu.style.bottom = (window.innerHeight - bar.top + 4) + 'px';
-    menu.style.maxHeight = (bar.top - 8) + 'px';
-    menu.style.left = Math.max(4, Math.min(b.left, window.innerWidth - menu.offsetWidth - 4)) + 'px';
-    button.classList.add('open');
-    openMenu = {menu, button};
+    return {x: anchor.x, y: anchor.y, width: anchor.width || 0, height: anchor.height || 0};
   }
-  document.addEventListener('mousedown', event => {
-    if (openMenu && !openMenu.menu.contains(event.target) && !openMenu.button.contains(event.target)) closeMenu();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && openMenu) { closeMenu(); event.preventDefault(); event.stopPropagation(); }
-  }, true);
-  window.addEventListener('blur', closeMenu);
+  function toggleMenu(button, open) {
+    if (button && openMenu && openMenu.button === button) { post({type: 'popup-close'}); return; }
+    open();
+  }
 
-  // The Format button is lit while a format is on at the cursor.
-  function refreshFormat() {
-    const state = editor.view.state;
-    formatBtn.classList.toggle('lit', formatItems().some(item => item.active(state)));
+  function openMoreMenu() {
+    toggleMenu(plusBtn, () => popup('more', menus.moreMenu(ctx(), overflow), plusBtn, {side: 'above', button: plusBtn}));
   }
+  function openNoteMenu(button, point) {
+    toggleMenu(button, () => popup('note', menus.noteMenu(ctx(), props), button || point, {button}));
+  }
+  function openContextMenu(point, byKeys = false) {
+    const state = editor.view.state;
+    const link = linkAt(point);
+    popup('context', menus.contextMenu(state, {link, hasSelection: !state.selection.empty}), point, {byKeys}).link = link;
+  }
+  function linkAt(point) {
+    const target = point && document.elementFromPoint(point.x, point.y);
+    const link = target && target.closest && target.closest('.link');
+    return link ? link.dataset.url : null;
+  }
+  editor.view.dom.addEventListener('contextmenu', event => {
+    event.preventDefault();
+    // A right click outside the selection moves the cursor there first.
+    const pos = editor.view.posAtCoords({left: event.clientX, top: event.clientY});
+    const {from, to} = editor.view.state.selection;
+    if (pos && (pos.pos < from || pos.pos > to)) {
+      editor.run((state, dispatch) => {
+        dispatch(state.tr.setSelection(state.selection.constructor.near(state.doc.resolve(pos.pos))));
+        return true;
+      });
+    }
+    openContextMenu({x: event.clientX, y: event.clientY});
+  });
+
+  function pick(id) {
+    const menu = openMenu;
+    closeMenu();
+    if (!menu) return;
+    if (menu.name === 'context') {
+      if (id === 'open-link') post({type: 'open-link', url: menu.link});
+      else if (id === 'copy-link') post({type: 'copy-text', text: menu.link});
+      else if (['cut', 'copy', 'paste', 'paste-plain'].includes(id)) post({type: 'edit', command: id});
+      else if (menus.TABLE_ACTIONS[id]) editor.run(menus.TABLE_ACTIONS[id]);
+      return;
+    }
+    run(id);
+  }
+  function change(id, value) {
+    if (id === 'color') post({type: 'set-color', color: value});
+    else if (id === 'opacity') { props.opacity = value; post({type: 'set-opacity', opacity: value}); }
+    else if (id === 'solid-in-use') { props.solidInUse = value; post({type: 'set-solid-in-use', value}); }
+    else if (id === 'font-size') { set({fontSize: value}); post({type: 'set-font-size', size: value}); }
+  }
+
+  // --- Keys of the note, beside the editor's.
+  document.addEventListener('keydown', event => {
+    const ctrl = event.ctrlKey && !event.altKey && !event.metaKey;
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    let id = null;
+    if (event.key === 'F2') id = 'rename';
+    else if (event.key === 'F1') id = 'help';
+    else if (ctrl && !event.shiftKey && key === 'n') id = 'new-note';
+    else if (ctrl && !event.shiftKey && key === 'w') id = 'hide';
+    else if (ctrl && !event.shiftKey && key === 'f') id = 'find';
+    else if (event.key === 'Escape' && !findBar.hidden) { event.preventDefault(); closeFind(); return; }
+    else if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+      event.preventDefault();
+      const coords = editor.view.coordsAtPos(editor.view.state.selection.head);
+      openContextMenu({x: coords.left, y: coords.bottom}, true);
+      return;
+    }
+    if (id) { event.preventDefault(); run(id); }
+  });
+
   editor.view.setProps({dispatchTransaction(tr) {
     editor.view.updateState(editor.view.state.apply(tr));
-    refreshFormat();
+    refreshTools();
   }});
 
-  // --- Title editing: Enter keeps it, Esc puts the old one back.
+  // --- Rename in place: Enter keeps it, Esc puts the old one back.
   function editTitle() {
+    if (props.collapsed) post({type: 'collapse'});
+    titleText.textContent = props.title;
     titleText.contentEditable = 'plaintext-only';
     titleText.focus();
     const range = document.createRange();
@@ -198,6 +349,7 @@ export function setupChrome(editor, post) {
     editor.view.focus();
   }
   titleText.addEventListener('keydown', event => {
+    event.stopPropagation();
     if (event.key === 'Enter') { event.preventDefault(); endTitleEdit(true); }
     if (event.key === 'Escape') { event.preventDefault(); endTitleEdit(false); }
   });
@@ -207,38 +359,50 @@ export function setupChrome(editor, post) {
     titleText.classList.toggle('untitled', !props.title);
   }
 
+  // --- Delete: asked on the note itself, with Hide offered to keep it.
+  function confirmDelete() {
+    if (props.collapsed) post({type: 'collapse'});
+    const name = props.title ? `“${props.title}”` : 'this note';
+    const close = () => { veil.remove(); editor.view.focus(); };
+    const veil = el('div', {class: 'veil'},
+      el('div', {class: 'sheet', role: 'alertdialog', 'aria-label': `Delete ${name}?`},
+        el('b', {}, `Delete ${name}?`),
+        el('span', {}, 'Its text and images go away. Hide it instead to keep it.'),
+        el('div', {class: 'sheet-buttons'},
+          el('button', {class: 'btn', onclick: close}, 'Cancel'),
+          el('button', {class: 'btn', onclick: () => { veil.remove(); run('hide'); }}, 'Hide'),
+          el('button', {class: 'btn danger', onclick: () => post({type: 'delete'})}, 'Delete'))));
+    veil.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Escape') { event.preventDefault(); close(); }
+    });
+    note.append(veil);
+    veil.querySelector('.danger').focus();
+  }
+
   function set(next) {
     props = {...props, ...next};
-    if ('title' in next) renderTitle();
-    if (next.colors) {
-      const {paper, bar} = next.colors;
-      root.style.setProperty('--paper', paper);
-      root.style.setProperty('--bar', bar);
-      root.style.setProperty('--bar-soft', mix(paper, bar, 0.35));
-      root.style.setProperty('--tint', mix(paper, '#ffffff', 0.45));
-      root.style.setProperty('--line', mix(bar, '#000000', 0.25));
+    if ('title' in next && !titleText.isContentEditable) renderTitle();
+    if ('color' in next) {
+      const c = PALETTE[next.color] || PALETTE[DEFAULT_COLOR];
+      root.style.setProperty('--paper', c.paper);
+      root.style.setProperty('--bar', c.bar);
+      root.style.setProperty('--soft', c.soft);
     }
-    if ('opacity' in next) root.style.setProperty('--opacity', next.opacity);
     if ('fontSize' in next) root.style.setProperty('--font-size', next.fontSize + 'px');
     if ('composited' in next) root.classList.toggle('square', !next.composited);
     if ('pinned' in next) pinBtn.classList.toggle('on', next.pinned);
     if ('collapsed' in next) {
       note.classList.toggle('collapsed', next.collapsed);
-      collapseBtn.replaceChildren(icon(next.collapsed ? 'right' : 'down', 18));
-      collapseBtn.title = next.collapsed ? 'Expand' : 'Collapse';
+      collapseBtn.replaceChildren(strokeIcon(next.collapsed ? 'right' : 'down', 17));
+      collapseBtn.setAttribute('aria-label', next.collapsed ? 'Expand' : 'Collapse');
+      if (next.collapsed) closeFind();
     }
     if ('maximized' in next) root.classList.toggle('maximized', next.maximized);
-    if ('hiddenCount' in next) {
-      hiddenBtn.title = next.hiddenCount ? `Hidden Notes (${next.hiddenCount})` : 'Hidden Notes';
-    }
   }
 
   renderTitle();
-  return {set, editTitle, closeMenu};
-}
-
-function markActive(state, mark) {
-  const {from, $from, to, empty} = state.selection;
-  if (empty) return !!mark.isInSet(state.storedMarks || $from.marks());
-  return state.doc.rangeHasMark(from, to, mark);
+  const chrome = {set, editTitle, confirmDelete, openFind, closeFind, pick, change, closed: closeMenu,
+    refresh: refreshTools};
+  return chrome;
 }
