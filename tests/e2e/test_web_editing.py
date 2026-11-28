@@ -277,3 +277,19 @@ def test_U23_a_drag_from_below_the_text_selects_up_to_where_it_ends(app, inp):
     settle(0.3)
     inp.type('X')
     assert_saved(app, "paragraph('X')")
+
+
+def test_U24_a_drag_from_the_empty_line_below_a_table_up_over_it_selects_it_all(app, inp):
+    rows = [[{'text': 'k'}, {'text': 'v'}], [{'text': 'a'}, {'text': 'b'}]]
+    note = start(app, 'example text\n\n￼\n', tables=[{'offset': 14, 'rows': rows}])
+    from tests.e2e.web import text_holding
+    from tests.e2e.driver import Atspi
+    acc, at = text_holding(note, 'example text')
+    first = Atspi.Text.get_character_extents(acc, at, Atspi.CoordType.SCREEN)
+    acc2, at2 = text_holding(note, 'b')
+    last_cell = Atspi.Text.get_character_extents(acc2, at2, Atspi.CoordType.SCREEN)
+    below = last_cell.y + last_cell.height + 22          # the empty line after the table
+    inp.drag((first.x + 4, below), (first.x + 1, first.y + first.height // 2), steps=20)
+    settle(0.3)
+    inp.type('X')
+    assert_saved(app, "paragraph('X')")

@@ -317,6 +317,7 @@ so they may reach past the note.
 - T22 A click outside closes the shortcuts, as any menu, and does nothing else; a note whose menu is open closes it when another window takes the focus
 - T23 The note menu starts with New note and Hidden notes, which have no button, and ends with Delete, away from a quick click
 - T24 A wheel notch scrolls as far as in 1.x, about the view's height to the 2/3 power, and at once: WebKit's animated scroll, drawn in software, lagged on the desktop (Xvfb does not animate it, so the test does not catch that)
+- T25 Find's All notes stays where it is as it is turned on and off, beside Close
 - T20 F1 shows the keyboard shortcuts, made from the actions, with Ynote's version and where its notes are
 
 ## U. Editing in a 2.0 note
@@ -344,6 +345,7 @@ Where 2.0 follows Confluence over 1.x, the item says so.
 - U21 Find's Match case, regular expression, and All notes stay as last set, for every note and the next start, and apply in All notes too
 - U22 A drag up over a table selects everything it passes
 - U23 A drag from below the text selects up from the end, as the editor fills the note
+- U24 A drag from the empty line below a table, up over it, selects everything it passes (WebKit moved the drag's start to the table's edge)
 - U19 // where a word starts types today's date, as in Confluence
 - U20 // after other text, as in https://, stays as typed
 
@@ -370,4 +372,4 @@ Markdown on the clipboard; the right-click menu does the same.
 - X3 Scrolling back while Alt is held retraces the steps [WM]
 - X4 A quick second scroll is one step
 - X5 A hidden note shows again where it was
-- X6 Alt+scroll brings up stacked notes one after another, as in 1.x [WM] (right after a start, GNOME kept a note no one had clicked from coming forward, as a scroll is not input it counts; the note's input time is now set from the scroll, which openbox, which the tests run, does not need)
+- X6 Alt+scroll brings up stacked notes one after another, as in 1.x [WM] (right after a start, with another app focused, GNOME left the note behind when presented at the scroll's time; it is now presented at the X server's time, which openbox, which the tests run, does not need)

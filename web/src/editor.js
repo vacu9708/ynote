@@ -17,7 +17,7 @@ import {CodeBlockView, ExpandView, ListItemView} from './views.js';
 import {linksPlugin} from './links.js';
 import {today} from './actions.js';
 import {findPlugin} from './find.js';
-import {structurePlugin, headerBoldPlugin, codeClicksPlugin, normalize} from './structure.js';
+import {structurePlugin, headerBoldPlugin, codeClicksPlugin, dragAcrossTablesPlugin, normalize} from './structure.js';
 import {slashPlugin} from './slash.js';
 
 const {paragraph, heading, code_block, blockquote, horizontal_rule, bullet_list,
@@ -202,7 +202,7 @@ export function createEditor(place, {onChange, onOpenLink, onFocus, onCopy, onSl
   const plugins = [
     slashPlugin(key => onSlashKey(key)), clipboardKeys, rules, keys, keymap(baseKeymap),
     history(), tableEditing(), gapCursor(), dropCursor({color: '#2D6BE0', width: 2}),
-    linksPlugin(onOpenLink), placeholder, findPlugin, structurePlugin, headerBoldPlugin, codeClicksPlugin,
+    linksPlugin(onOpenLink), placeholder, findPlugin, structurePlugin, headerBoldPlugin, codeClicksPlugin, dragAcrossTablesPlugin,
     changes,
   ];
   const view = new EditorView(place, {

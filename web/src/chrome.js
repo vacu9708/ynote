@@ -161,9 +161,10 @@ export function setupChrome(editor, post) {
   const prevBtn = barButton(strokeIcon('up', 16), 'Previous match (Shift+Enter)', () => step(editor.view, -1));
   const nextBtn = barButton(strokeIcon('down', 16), 'Next match (Enter)', () => step(editor.view, 1));
   const findBar = el('div', {class: 'find-bar', hidden: true},
-    // All notes at the box's end, where it stays as the arrows come and go.
-    el('div', {class: 'find-box'}, strokeIcon('search', 14), findInput, findCount, caseBtn, regexBtn, allBtn),
-    prevBtn, nextBtn,
+    el('div', {class: 'find-box'}, strokeIcon('search', 14), findInput, findCount, caseBtn, regexBtn),
+    // All notes beside Close; the arrows keep their room in All notes, so
+    // nothing moves as it is turned on and off.
+    prevBtn, nextBtn, allBtn,
     barButton(strokeIcon('cross', 16), 'Close (Esc)', () => closeFind()));
   titleBar.after(findBar);
 
@@ -186,7 +187,8 @@ export function setupChrome(editor, post) {
     allBtn.setAttribute('aria-pressed', String(on));
     results.hidden = !on;
     scrollBox.hidden = on;
-    prevBtn.hidden = nextBtn.hidden = on;
+    prevBtn.classList.toggle('away', on);
+    nextBtn.classList.toggle('away', on);
     if (on) {
       setFind(editor.view, {query: ''});
       searchAll();

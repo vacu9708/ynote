@@ -293,3 +293,22 @@ def test_T24_a_wheel_notch_scrolls_as_far_as_in_1x(app, inp):
     # here, and all of it at once, not animated.
     assert 65 <= moved <= 90, moved
     assert at_once == moved, (at_once, moved)
+
+
+def test_T25_all_notes_stays_where_it_is_as_it_is_turned_on_and_off(app, inp):
+    note = start(app, 'hello')
+    inp.key('ctrl+f')
+    settle(0.3)
+    from tests.e2e.driver import extents
+
+    def all_box():
+        found = [b for b in find_all(note.frame, lambda a: role(a) in ('button', 'push button', 'toggle button'))
+                 if showing(b) and name(b) == 'All notes']
+        return extents(found[0]) if found else None
+    before = wait_until(all_box, what='All notes')
+    inp.key('alt+a')
+    settle(0.4)
+    assert all_box() == before
+    inp.key('alt+a')
+    settle(0.4)
+    assert all_box() == before

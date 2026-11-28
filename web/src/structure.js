@@ -79,3 +79,46 @@ export const codeClicksPlugin = new Plugin({
     },
   },
 });
+
+// A drag that starts outside a table and passes over one lost where it
+// started in WebKit, which moved the start to the table's edge. The start is
+// kept as the button goes down, and the selection is made from it to where
+// the drag ends.
+export const dragAcrossTablesPlugin = new Plugin({
+  props: {
+    handleDOMEvents: {
+      mousedown(view, event) {
+        dragStart = null;
+        if (event.button !== 0 || event.shiftKey || event.detail > 1) return false;
+        if (event.target.closest && event.target.closest('td, th')) return false;
+        const at = view.posAtCoords({left: event.clientX, top: event.clientY});
+        if (at) dragStart = {pos: at.pos, x: event.clientX, y: event.clientY};
+        return false;
+      },
+      mouseup(view, event) {
+        const start = dragStart;
+        dragStart = null;
+        if (!start || Math.abs(event.clientX - start.x) + Math.abs(event.clientY - start.y) < 4) return false;
+        // After ProseMirror has read the browser's selection.
+        setTimeout(() => {
+          const {state} = view;
+          const {head} = state.selection;
+          if (state.selection.anchor === start.pos || start.pos > state.doc.content.size) return;
+          const crossed = (a, b) => {
+            let found = false;
+            state.doc.nodesBetween(Math.min(a, b), Math.max(a, b), node => {
+              if (node.type.name === 'table') found = true;
+              return !found;
+            });
+            return found;
+          };
+          if (!crossed(start.pos, head)) return;
+          const sel = TextSelection.between(state.doc.resolve(start.pos), state.doc.resolve(head));
+          view.dispatch(state.tr.setSelection(sel));
+        }, 0);
+        return false;
+      },
+    },
+  },
+});
+let dragStart = null;

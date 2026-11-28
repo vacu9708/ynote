@@ -476,6 +476,10 @@ design. The GTK window stays, frameless, for what only a window can do.
   software, lagged behind the wheel, and a notch already moves about as far
   as GTK's views do. The editor fills the space between the bars, so a press
   or a drag below the text is in the editor, as on any line.
+- **Drags over tables.** WebKit moved the start of a drag that began
+  outside a table and passed over one to the table's edge; the start is
+  kept as the button goes down, and on release the selection is made from it
+  (`structure.js`, `dragAcrossTablesPlugin`).
 - **Menus and the focus.** A menu takes the mouse and keys once its window is
   mapped; if the desktop does not let it, the note's losing the focus closes
   it, so a click on another window does not leave it open.
@@ -499,10 +503,10 @@ design. The GTK window stays, frameless, for what only a window can do.
   text, plain or as a regular expression. The current match's folded
   expands open while it is current (not an undo step), and the others fold
   back.
-- **Alt+scroll.** A scroll is not input GNOME counts for a window, so a
-  note no one has clicked yet, as right after a start, was kept from coming
-  forward; the note's user time is set from the scroll before it is
-  presented (`PostItApp._step_note()`, for 1.x too).
+- **Alt+scroll.** The note it steps to is presented at the X server's
+  time, as from the tray: with the scroll's own time GNOME left it behind
+  while another app had the focus, as right after a start until a note was
+  clicked (`PostItApp._step_note()`, for 1.x too).
 - **Corners.** With a compositing window manager, the window has an RGBA
   visual and the page a transparent background, so the note's corners are
   round, and menus have room for a shadow. Without one, both are square.

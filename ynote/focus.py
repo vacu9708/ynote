@@ -41,3 +41,9 @@ def _present_again(window):
     if window.get_visible():
         _present_with_server_time(window)
     return False
+
+
+def present_at_server_time(window):
+    """Bring window forward at the X server's current time, which GNOME
+    takes for the user's own request; whether it could."""
+    return _present_with_server_time(window)
