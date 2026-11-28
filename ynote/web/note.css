@@ -83,9 +83,9 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 .bar-btn:hover, .bar-btn.open { background: rgba(0, 0, 0, .09); }
 .bar-btn:active { background: rgba(0, 0, 0, .15); }
-.bar-btn.pin { color: rgba(0, 0, 0, .36); }
-.bar-btn.pin:hover { color: #262626; }
-.bar-btn.pin.on { color: #111; background: rgba(0, 0, 0, .13); }
+/* Pin: an outline while off, filled while on. */
+.bar-btn.pin.on .icon path:first-child { fill: currentColor; }
+.bar-btn.more .icon path { fill: currentColor; }
 .bar-btn.tool { min-width: 28px; }
 .bar-btn.tool.on { color: var(--accent); background: rgba(255, 255, 255, .5); }
 .bar-btn.tool.off { color: rgba(0, 0, 0, .28); }

@@ -8,7 +8,9 @@ export const ICONS = {
   right: 'M9 6l6 6-6 6',
   up: 'M6 15l6-6 6 6',
   pin: ['M9 4h6l-1 6 3 3H7l3-3z', 'M12 13v7'],
-  more: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
+  // Dots as discs, bold enough beside the other icons.
+  more: ['M5 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z', 'M12 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z',
+    'M19 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z'],
   cross: 'M6 6l12 12M18 6L6 18',
   plus: 'M12 5v14M5 12h14',
   minus: 'M5 12h14',

@@ -70,7 +70,7 @@ export function setupChrome(editor, post) {
   // and maximizes.
   const collapseBtn = barButton(strokeIcon('down', 17), 'Collapse', () => run('collapse'));
   const pinBtn = barButton(strokeIcon('pin', 17), 'Always on top', () => run('pin'), 'pin');
-  const moreBtn = barButton(strokeIcon('more', 17), 'Note menu', () => openNoteMenu(moreBtn));
+  const moreBtn = barButton(strokeIcon('more', 17), 'Note menu', () => openNoteMenu(moreBtn), 'more');
   const hideBtn = barButton(strokeIcon('cross', 17), 'Hide note', () => run('hide'));
   titleBar.prepend(collapseBtn);
   titleBar.append(pinBtn, moreBtn, hideBtn);
