@@ -5,7 +5,7 @@
 // the window can do is asked of the app with post().
 import {el, strokeIcon} from './icons.js';
 import {PALETTE, DEFAULT_COLOR} from './palette.js';
-import {ACTION, TOOLBAR, SLASH, perform, enabled, menuRow} from './actions.js';
+import {ACTION, ACTIONS, TOOLBAR, SLASH, perform, enabled, menuRow} from './actions.js';
 import * as menus from './menus.js';
 import {findKey, setFind, step, endFind} from './find.js';
 import {slashKey, slashMatches} from './slash.js';
@@ -353,6 +353,13 @@ export function setupChrome(editor, post) {
     open();
   }
 
+  function openHelp() {
+    const r = note.getBoundingClientRect();
+    post({type: 'popup', spec: {items: menus.helpPage(ACTIONS, props), columns: true},
+      anchor: {x: r.left + 16, y: r.top + 40, width: 0, height: 0}, side: 'below', input: true});
+    openMenu = {name: 'help', button: null};
+  }
+
   function openMoreMenu() {
     toggleMenu(plusBtn, () => popup('more', menus.moreMenu(ctx(), overflow), plusBtn, {side: 'above', button: plusBtn}));
   }
@@ -517,6 +524,6 @@ export function setupChrome(editor, post) {
 
   renderTitle();
   const chrome = {set, editTitle, confirmDelete, openFind, closeFind, pick, change, closed: closeMenu,
-    refresh: refreshTools, slashKey: slashKeyPressed, allResults: showResults};
+    refresh: refreshTools, slashKey: slashKeyPressed, allResults: showResults, openHelp};
   return chrome;
 }

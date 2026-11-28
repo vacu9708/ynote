@@ -19,7 +19,8 @@ gi.require_version('Gdk', '3.0')
 gi.require_version('WebKit2', '4.1')
 from gi.repository import Gdk, GLib, Gtk, WebKit2
 
-from .config import IMAGES_DIR, UNTITLED_LABEL
+from . import __version__
+from .config import CONF_DIR, IMAGES_DIR, UNTITLED_LABEL, display_path
 from .convert import doc_text, note_doc
 from .search import find_matches
 from .models import normalize_note_data
@@ -35,6 +36,10 @@ IMAGES_URI = GLib.filename_to_uri(IMAGES_DIR, None) + '/'
 
 # As tall as the page's title bar (--bar-h in note.css): a collapsed note.
 TITLE_BAR_HEIGHT = 34
+# The smallest a note is resized to: room for the title bar's buttons and a
+# title, and for a few lines between the bars.
+MIN_WIDTH = 180
+MIN_HEIGHT = 120
 
 
 # The page's resize edges, by the names it sends.
@@ -113,7 +118,9 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self.connect('leave-notify-event', self._on_crossing, False)
         self.connect('notify::is-active', lambda *_: self._apply_opacity())
 
-        w, h = data['w'], data['h']
+        # A note saved smaller than it can be used opens at the least size.
+        w, h = max(data['w'], MIN_WIDTH), max(data['h'], MIN_HEIGHT)
+        self._expanded_height = h
         self.set_default_size(w, TITLE_BAR_HEIGHT if self._collapsed else h)
         self.move(data['x'], data['y'])
         if self._collapsed:
@@ -122,6 +129,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         if not data.get('hidden'):
             self.show()
         self.set_keep_above(self._on_top)
+        self._apply_min_size()
         self._apply_opacity()
 
     # --- talking to the page ----------------------------------------------
@@ -139,6 +147,7 @@ class WebNoteWindow(Gtk.ApplicationWindow):
                 'composited': self._composited,
                 'color': self._color, 'maximized': self.is_maximized(),
                 'hiddenCount': self._hidden_count,
+                'version': __version__, 'notesPath': display_path(CONF_DIR),
                 'autostart': {'available': bool(getattr(app, 'autostart_available', False)),
                               'enabled': bool(getattr(app, 'autostart_available', False)
                                               and app.autostart_enabled())}}
@@ -258,7 +267,13 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self.app.delete_note(self.note_id)
 
     def _do_hidden_notes(self, _message):
-        self.app.show_hidden_notes_manager(self)
+        self.show_hidden_list()
+
+    def show_hidden_list(self):
+        """The hidden notes, in a menu below the note's title bar."""
+        x, y = self.get_position()
+        width, _height = self.get_size()
+        show_hidden_list(self.app, (x + max(0, width - 300), y + TITLE_BAR_HEIGHT, 0, 0))
 
     def _do_help(self, _message):
         from .help import show_help
@@ -520,16 +535,26 @@ class WebNoteWindow(Gtk.ApplicationWindow):
         self.set_size_request(width if locked else -1, -1)
         self.set_resizable(not locked)
 
+    def _apply_min_size(self):
+        """A note is never resized smaller than it can be used; collapsed,
+        it is its title bar."""
+        hints = Gdk.Geometry()
+        hints.min_width = MIN_WIDTH
+        hints.min_height = TITLE_BAR_HEIGHT if self._collapsed else MIN_HEIGHT
+        self.set_geometry_hints(None, hints, Gdk.WindowHints.MIN_SIZE)
+
     def _collapse(self):
         width, height = self.get_size()
         self._expanded_height = height
         self._collapsed = True
+        self._apply_min_size()
         self._send(collapsed=True)
         self._lock_size(True, width)
         self.resize(width, TITLE_BAR_HEIGHT)
 
     def _expand(self):
         self._collapsed = False
+        self._apply_min_size()
         self._lock_size(False)
         self._send(collapsed=False)
         self.resize(self.get_size()[0], self._expanded_height)
@@ -584,3 +609,36 @@ class WebNoteWindow(Gtk.ApplicationWindow):
                     opacity=self._opacity, solid_in_use=self._solid_in_use,
                     collapsed=self._collapsed)
 
+
+def show_hidden_list(app, anchor):
+    """A menu of the hidden notes, the latest hidden first, at anchor, a
+    rectangle on the screen: choosing one shows it, or Show all shows them
+    all."""
+    items = []
+    for note_id, window in app.hidden_notes():
+        items.append({'id': 'note:' + note_id, 'label': window.title or UNTITLED_LABEL,
+                      'md': window.first_text(40) or None, 'colorName': window._color})
+    if not items:
+        items.append({'id': 'none', 'label': 'No hidden notes', 'disabled': True})
+    items += [{'sep': True},
+              {'id': 'show-all', 'icon': 'open', 'label': 'Show all', 'disabled': items[0]['id'] == 'none'}]
+    popup().open(_HiddenChoice(app), {'items': items, 'byKeys': True}, anchor)
+
+
+class _HiddenChoice:
+    """What the hidden notes menu chose."""
+
+    def __init__(self, app):
+        self.app = app
+
+    def popup_pick(self, item_id, _value=None):
+        if item_id and item_id.startswith('note:'):
+            self.app.show_note(item_id[len('note:'):])
+        elif item_id == 'show-all':
+            self.app.show_all()
+
+    def popup_change(self, _item_id, _value):
+        pass
+
+    def popup_closed(self):
+        pass

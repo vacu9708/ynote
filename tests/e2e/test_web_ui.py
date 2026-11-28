@@ -161,3 +161,78 @@ def test_T14_a_narrow_note_puts_the_toolbar_end_into_plus(app, inp):
     note.press('More to insert')
     first = [i.get_name() for i in menu_items(app)]
     assert any(n.startswith('Table') for n in first[:4]), first
+
+
+def test_T16_a_note_is_not_resized_smaller_than_it_can_be_used(app, inp):
+    note = start(app, 'hello')
+    x, y, w, h = note.box
+    inp.drag((x + w - 3, y + h - 3), (x + 10, y + 10))
+    settle(0.5)
+    _x, _y, w, h = note.box
+    assert w >= 180 and h >= 120, (w, h)
+
+
+def test_T17_a_note_saved_too_small_opens_at_the_least_size(app, inp):
+    note = start(app, 'hello', w=20, h=10)
+    _x, _y, w, h = note.box
+    assert w >= 180 and h >= 120, (w, h)
+
+
+def hide(app, inp, title):
+    note = app.note(title)
+    from tests.e2e.web import WebNote
+    WebNote(app, note.frame).press('Hide note')
+
+
+def test_T18_hidden_notes_lists_them_latest_hidden_first_and_shows_one(app, inp):
+    notes = [{'id': n, 'title': n, 'text': n, 'x': 60 + 360 * i, 'y': 80, 'w': 300, 'h': 300}
+             for i, n in enumerate(['test', 'a', 'b'])]
+    app.write_notes(notes)
+    app.start()
+    hide(app, inp, 'a')
+    hide(app, inp, 'b')
+    from tests.e2e.web import WebNote
+    note = WebNote(app, app.note('test').frame)
+    note.press('Note menu')
+    choose(app, 'Hidden notes')
+    names = [i.get_name() for i in menu_items(app)]
+    assert names[0].startswith('b') and names[1].startswith('a'), names
+    choose(app, 'a')
+    app.note('a')
+    wait_until(lambda: saved_note(app, 'a').get('hidden') is False, what='a shown')
+
+
+def test_T19_show_all_shows_every_hidden_note(app, inp):
+    notes = [{'id': n, 'title': n, 'text': n, 'x': 60 + 360 * i, 'y': 80, 'w': 300, 'h': 300}
+             for i, n in enumerate(['test', 'a', 'b'])]
+    app.write_notes(notes)
+    app.start()
+    hide(app, inp, 'a')
+    hide(app, inp, 'b')
+    from tests.e2e.web import WebNote
+    WebNote(app, app.note('test').frame).press('Note menu')
+    choose(app, 'Hidden notes')
+    choose(app, 'Show all')
+    app.note('a')
+    app.note('b')
+
+
+def test_T20_f1_shows_the_shortcuts_with_their_keys_and_the_version(app, inp):
+    from tests.e2e.driver import Atspi
+    from ynote import __version__
+    start(app, 'hello')
+    inp.key('F1')
+
+    def page_text():
+        for window in app.windows():
+            if role(window) != 'window':
+                continue
+            texts = []
+            for acc in find_all(window, lambda a: a.get_text_iface() is not None, limit=40):
+                texts.append(Atspi.Text.get_text(acc, 0, Atspi.Text.get_character_count(acc)))
+            text = ' '.join(texts)
+            if 'Bold' in text:
+                return text
+        return None
+    text = wait_until(page_text, what='the shortcuts')
+    assert f'Ynote {__version__}' in text and 'Ctrl' in text, text[:400]

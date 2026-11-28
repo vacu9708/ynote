@@ -603,6 +603,16 @@ class PostItApp(Gtk.Application):
                                   at=None):
         if parent_note is None and not from_tray:
             parent_note = self._current_note
+        if WEB:
+            # 2.0 lists them in a menu: below the note, or at the pointer.
+            from .web_note_window import show_hidden_list
+            if parent_note is not None and parent_note.get_visible():
+                parent_note.show_hidden_list()
+            else:
+                pointer = Gdk.Display.get_default().get_default_seat().get_pointer()
+                _screen, x, y = pointer.get_position()
+                show_hidden_list(self, (x, y, 0, 0))
+            return
         if self._hidden_notes_window is None:
             self._hidden_notes_window = HiddenNotesWindow(self)
             self._hidden_notes_window.connect(

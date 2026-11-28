@@ -63,6 +63,21 @@ export function contextMenu(state, {link, hasSelection}) {
   return items;
 }
 
+// The keyboard shortcuts page: every action with keys or Markdown, by
+// group, in two columns; then the version and where the notes are.
+export function helpPage(actions, props) {
+  const items = [];
+  let group = null;
+  for (const a of actions) {
+    if (!a.keys && !(a.md && !a.md.startsWith('/'))) continue;
+    if (a.group !== group) { group = a.group; items.push({section: group}); }
+    items.push({static: true, label: a.label.replace('…', ''), md: a.md, keys: a.keys});
+  }
+  items.push({section: 'Insert anything'}, {static: true, label: 'Type / at the start of a line', md: '/table'});
+  items.push({note: `Ynote ${props.version || ''} · notes in ${props.notesPath || '~/.config/ynote'}`});
+  return items;
+}
+
 export const TABLE_ACTIONS = {
   'row-above': addRowBefore, 'row-below': addRowAfter,
   'col-left': addColumnBefore, 'col-right': addColumnAfter,

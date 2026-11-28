@@ -309,6 +309,11 @@ so they may reach past the note.
 - T13 A match in a folded expand opens it
 - T14 A narrow note puts the end of the toolbar into ＋
 - T15 A tool's tooltip shows its name, the Markdown typed for it, and its keys, and only that
+- T16 A note is not resized smaller than it can be used: 180 × 120, or its title bar collapsed
+- T17 A note saved smaller than that opens at the least size
+- T18 Hidden notes, in the note menu (or the tray), lists them latest hidden first, and choosing one shows it (1.x's arrows to reorder them are gone: the latest hidden first is the order, and Find's All notes finds any)
+- T19 Show all shows every hidden note
+- T20 F1 shows the keyboard shortcuts, made from the actions, with Ynote's version and where its notes are
 
 ## U. Editing in a 2.0 note
 

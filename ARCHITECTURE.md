@@ -453,6 +453,14 @@ design. The GTK window stays, frameless, for what only a window can do.
 - **Tables at the end of an expand.** As in Confluence, Down from a table's
   last row leaves the expand, and Right at the end of its last cell puts the
   cursor after the table, in the expand, where typing starts a line.
+- **Hidden notes and Help.** In 2.0 both are menus of the popup window:
+  the hidden notes, latest hidden first, below the note or at the pointer
+  from the tray (`web_note_window.show_hidden_list()`), and the keyboard
+  shortcuts, made from the actions (`menus.helpPage()`), in two columns with
+  the version and where the notes are.
+- **Least size.** A note is never resized below 180 × 120, its title bar's
+  height when collapsed (`_apply_min_size()`, a GDK geometry hint), and a
+  note saved smaller opens at that size.
 - **Finding in every note.** The find bar's All notes asks the window for
   the matches of the query in every note, hidden ones too
   (`search.find_matches()` over each note's text), and lists them in place of

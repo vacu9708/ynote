@@ -13,6 +13,7 @@
 // Choosing an item sends {type: 'pick', id}; a swatch, slider, or stepper
 // sends {type: 'change', id, value} and leaves the menu open.
 import {el, strokeIcon} from './icons.js';
+import {PALETTE} from './palette.js';
 
 function post(message) {
   const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ynote;
@@ -47,9 +48,17 @@ function keysOf(keys) {
 }
 
 function row(item) {
+  // A row of the shortcuts page only shows; it is not chosen.
+  if (item.static) {
+    return el('div', {class: 'row static'}, el('span', {class: 'label'}, item.label),
+      item.md ? el('span', {class: 'md'}, item.md) : el('span'), keysOf(item.keys));
+  }
+  const color = item.colorName && (PALETTE[item.colorName] || PALETTE.yellow).paper;
+  const mark = color ? el('span', {class: 'dot', style: `background:${color}`})
+    : item.icon ? strokeIcon(item.icon, 16) : null;
   const node = el('div', {class: ['row', item.on && 'on', item.danger && 'danger', item.disabled && 'off'].filter(Boolean).join(' '),
     role: 'menuitem', 'aria-disabled': item.disabled ? 'true' : null},
-  el('span', {class: 'ic'}, item.icon ? strokeIcon(item.icon, 16) : null),
+  el('span', {class: 'ic'}, mark),
   el('span', {class: 'label'}, item.label),
   item.md ? el('span', {class: 'md'}, item.md) : el('span'),
   item.check !== undefined
@@ -121,6 +130,7 @@ function render(items) {
   root.replaceChildren(...items.map(item => {
     if (item.sep) return el('div', {class: 'sep'});
     if (item.section) return el('div', {class: 'section'}, item.section);
+    if (item.note) return el('div', {class: 'note-line'}, item.note);
     if (item.swatches) return swatches(item.swatches);
     if (item.slider) return slider(item.slider);
     if (item.stepper) return stepper(item.stepper);
@@ -143,7 +153,19 @@ window.menu = {
   // large it is, as the window is made to fit it.
   show(spec) {
     document.documentElement.classList.toggle('flat', !!spec.flat);
+    root.classList.toggle('columns', !!spec.columns);
     render(spec.items || []);
+    // In columns, a section stays whole in one column.
+    if (spec.columns) {
+      const groups = [];
+      for (const node of [...root.children]) {
+        if (node.classList.contains('section') || !groups.length || node.classList.contains('note-line')) {
+          groups.push(el('div', {class: node.classList.contains('note-line') ? '' : 'group'}));
+        }
+        groups[groups.length - 1].append(node);
+      }
+      root.replaceChildren(...groups.map(g => g.className ? g : g.firstChild));
+    }
     if (spec.light !== undefined && spec.light >= 0) light(spec.light);
     else if (spec.byKeys) step(1);
     sendSize();
