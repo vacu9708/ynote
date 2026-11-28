@@ -87,8 +87,11 @@ tests/e2e/run.sh all
 
 They build the package, install it in Ubuntu 26.04 and 22.04 containers with
 a virtual desktop, and drive it with real mouse and key input, reading what it
-shows through its accessibility tree, the clipboard, and its files. They need
-Docker and the test images, built once:
+shows through its accessibility tree, the clipboard, and its files. The
+desktop runs openbox; what only GNOME does, as how it focuses and stacks
+notes, is tested on GNOME's own window manager, run headless in the same
+containers (`tests/e2e/gnome.py`). They need Docker and the test images,
+built once (again after the Dockerfile changes):
 
 ```bash
 docker build --build-arg BASE=ubuntu:26.04 -t ynote-e2e:26.04 tests/e2e

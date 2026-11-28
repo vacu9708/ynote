@@ -35,6 +35,8 @@ else:
             'markers', 'web: the test runs Ynote 2.0, whose notes are web pages')
         config.addinivalue_line(
             'markers', 'ime: Ynote takes keys through the Korean input method')
+        config.addinivalue_line(
+            'markers', "gnome: Ynote runs on GNOME's window manager (tests/e2e/gnome.py)")
 
     @pytest.fixture
     def app(home, inp, request):

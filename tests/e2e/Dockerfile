@@ -23,3 +23,8 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends locales
     && rm -rf /var/lib/apt/lists/* \
     && sed -i 's/^# *\(en_US.UTF-8\)/\1/' /etc/locale.gen && locale-gen
 ENV LANG=en_US.UTF-8
+# GNOME's window manager, headless with Xwayland, for what only it does
+# (gnome.py), and xprop to read what it did: python-xlib fails on a second
+# display.
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends mutter xwayland x11-utils \
+    && rm -rf /var/lib/apt/lists/*

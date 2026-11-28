@@ -527,15 +527,17 @@ class PostItApp(Gtk.Application):
 
     def scroll_amount(self, event):
         """How far a scroll goes, in notches, down positive. GTK on X11
-        cannot tell the first smooth scroll's amount, as it has no amount
-        before it to measure from, and gives 0: that one counts as a notch
-        the way the last one went, down at first, so the first Alt+scroll
-        after a start is not lost. A touchpad's stop has no amount and is
-        not a scroll."""
+        measures a smooth scroll from the one before it, and starts over as
+        the pointer comes into a window: the first scroll after that, as
+        after a start, or after Alt+scroll brings up a note under the
+        pointer, gives 0, marked as a stop. That one counts as a notch the
+        way the last one went, down at first, or every other notch would be
+        lost. Xwayland passes on no touchpad stop, so on X11 a scroll of 0
+        is only ever that."""
         direction = event.direction
         if direction == Gdk.ScrollDirection.SMOOTH:
             _ok, dx, dy = event.get_scroll_deltas()
-            if dx == 0 and dy == 0 and not getattr(event, 'is_stop', False):
+            if dx == 0 and dy == 0:
                 dy = self._last_scroll
         elif direction == Gdk.ScrollDirection.DOWN:
             dy = 1

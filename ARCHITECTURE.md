@@ -513,9 +513,11 @@ design. The GTK window stays, frameless, for what only a window can do.
 - **Alt+scroll.** The note it steps to is brought forward at the X
   server's time, as from the tray, and gets the focus when Alt is let go
   (`end_note_switch()`): GNOME keeps the focus where it was while Alt is
-  held. GTK on X11 gives the first smooth scroll no amount, having none
-  before it to measure from; `scroll_amount()` counts it as a notch the way
-  the last went. Both are shared with 1.x.
+  held. GTK on X11 starts measuring smooth scrolls over as the pointer
+  comes into a window, after a start or as a note comes up under it, and
+  gives the first no amount, marked as a stop; `scroll_amount()` counts it
+  as a notch the way the last went (Xwayland sends no touchpad stop). Both
+  are shared with 1.x.
 - **Corners.** With a compositing window manager, the window has an RGBA
   visual and the page a transparent background, so the note's corners are
   round, and menus have room for a shadow. Without one, both are square.

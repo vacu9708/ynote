@@ -6,7 +6,8 @@ in the real app: real mouse and key input (XTEST), and results read from
 notes.json, the clipboard, the accessibility tree (AT-SPI), or pixels.
 
 Marks: **[WM]** needs a window manager (the test desktop runs openbox) ·
-**[px]** checked by pixels · **[2204]** also checked on Ubuntu 22.04
+**[GNOME]** runs on GNOME's window manager, mutter, headless with Xwayland
+and its own input (`gnome.py`) · **[px]** checked by pixels · **[2204]** also checked on Ubuntu 22.04
 
 When what should happen is unclear, Ynote follows Confluence. Where it does
 not, the item says why.
@@ -376,4 +377,6 @@ Markdown on the clipboard; the right-click menu does the same.
 - X5 A hidden note shows again where it was
 - X6 Alt+scroll brings up stacked notes one after another, as in 1.x [WM] (right after a start, with another app focused, GNOME left the note behind when presented at the scroll's time; it is now presented at the X server's time, which openbox, which the tests run, does not need)
 - X7 Letting go of Alt gives the note Alt+scroll stopped on the focus, as Alt+Tab does: GNOME brings a note forward while Alt is held but keeps the focus where it was (openbox focuses it at once, so the test does not catch that)
-- X8 The first Alt+scroll after a start steps too: GTK on X11 gives the first smooth scroll no amount, which now counts as a notch the way the last one went, down at first (Xvfb gives the amount, so no test catches it)
+- X8 The first Alt+scroll after a start steps too: GTK on X11 gives the first smooth scroll no amount, which counts as a notch the way the last one went, down at first (tested on GNOME, X9: Xvfb gives the amount)
+- X9 Every Alt+scroll notch steps, in 1.x and 2.0, also the first after a start and the first after a note comes up under the pointer [GNOME] (GTK starts measuring scrolls over as the pointer comes into a window, and gives the first no amount, marked as a stop: that was taken for a touchpad's stop and dropped, so every other notch did nothing, and the notes seemed to come up out of order)
+- X10 Letting go of Alt leaves the note stepped to active and on top [GNOME]
