@@ -41,44 +41,44 @@ placing notes across two monitors (D4, D9: much effort for little).
 
 ## B. A note's window
 
-- B1 The + button makes a square note right of the current one, else left, wholly on a monitor
-- B2 ✕ hides the note and puts it first in Hidden Notes
-- B3 The window manager's close button or Alt+F4 hides that note; Ynote keeps running [WM]
-- B4 Delete asks first for a note with text; an empty note goes at once
-- B5 One of seven colors is picked in the popover and saved
+- B1 The + button makes a square note right of the current one, else left, wholly on a monitor [2.0]
+- B2 ✕ hides the note and puts it first in Hidden Notes [2.0]
+- B3 The window manager's close button or Alt+F4 hides that note; Ynote keeps running [WM] [2.0]
+- B4 Delete asks first for a note with text; an empty note goes at once [2.0]
+- B5 One of seven colors is picked in the popover and saved [2.0]
 - B6 Opacity is saved, and text in a see-through note keeps an opaque strip behind it (not tested)
-- B7 A− and A+ step the font size by one, between 8 and 32
-- B8 A new title is saved; a note without one shows a dimmed, italic Untitled
-- B9 Collapsing leaves the title bar, opening restores the height, and the state is saved
-- B10 A double click on the title bar maximizes and restores; the size before is saved [WM]
-- B11 While maximized, collapse is disabled; while collapsed, maximize does nothing [WM]
-- B12 Every edge resizes the note [WM]
-- B13 Pin keeps the note on top, and is saved [WM]
+- B7 A− and A+ step the font size by one, between 8 and 32 [2.0]
+- B8 A new title is saved; a note without one shows a dimmed, italic Untitled [2.0]
+- B9 Collapsing leaves the title bar, opening restores the height, and the state is saved [2.0]
+- B10 A double click on the title bar maximizes and restores; the size before is saved [WM] [2.0]
+- B11 While maximized, collapse is disabled; while collapsed, maximize does nothing [WM] [2.0]
+- B12 Every edge resizes the note [WM] [2.0]
+- B13 Pin keeps the note on top, and is saved [WM] [2.0]
 - B14 Right-clicking the title or bottom bar opens the popover: color, opacity, font size, title, delete, Start at Login, Help, About
-- B15 Start at Login turned off turns the autostart entry off, and it stays off on later starts
-- B16 About shows the version, where notes are saved, and where the running copy is
-- B17 Help lists only shortcuts nothing on screen shows (not the menus' Markdown or shortcuts)
+- B15 Start at Login turned off turns the autostart entry off, and it stays off on later starts [2.0]
+- B16 About shows the version, where notes are saved, and where the running copy is (2.0: in the keyboard shortcuts, F1) [2.0]
+- B17 Help lists only shortcuts nothing on screen shows (not the menus' Markdown or shortcuts) [2.0]
 
 ## C. Hidden Notes
 
-- C1 The Hidden Notes window lists hidden notes, the latest hidden first
+- C1 The Hidden Notes window lists hidden notes, the latest hidden first [2.0]
 - C2 Notes hidden together (Hide All) come first in that order
-- C3 A double click or Restore shows the note and closes the window
-- C4 Restore right after the window opens restores the note hidden last (first, chosen already)
-- C5 The arrow buttons reorder hidden notes, and the order is saved
-- C6 Restore All
-- C7 The eye button's tooltip tells how many notes are hidden
+- C3 A double click or Restore shows the note and closes the window [2.0]
+- C4 Restore right after the window opens restores the note hidden last (first, chosen already) (not in 2.0: its list has no Restore button)
+- C5 The arrow buttons reorder hidden notes, and the order is saved (not in 2.0, see T18)
+- C6 Restore All [2.0]
+- C7 The eye button's tooltip tells how many notes are hidden (2.0: the note menu's Hidden notes) [2.0]
 
 ## D. Arranging notes
 
-- D1 Alt+Left/Right snap into the left or right half of the monitor, keeping height and y
-- D2 Alt+Up/Down alone move the note up or down by its height, keeping x and width, and stop at the screen's edge
-- D3 Alt with two arrows sends the note to a corner
+- D1 Alt+Left/Right snap into the left or right half of the monitor, keeping height and y [2.0]
+- D2 Alt+Up/Down alone move the note up or down by its height, keeping x and width, and stop at the screen's edge [2.0]
+- D3 Alt with two arrows sends the note to a corner [2.0]
 - D4 Alt+Left/Right again from an edge column goes to the next monitor, if there is one (not tested)
-- D5 A collapsed note snaps to its new width at once
-- D6 Snapping does nothing while maximized [WM]
-- D7 Alt+scroll steps through notes from the latest used; the order holds while Alt is held, so scrolling back retraces it, and the note stopped on counts as the latest once Alt is let go [WM]
-- D8 Small scrolls add up to one step, and a quick second one is ignored
+- D5 A collapsed note snaps to its new width at once [2.0]
+- D6 Snapping does nothing while maximized [WM] [2.0]
+- D7 Alt+scroll steps through notes from the latest used; the order holds while Alt is held, so scrolling back retraces it, and the note stopped on counts as the latest once Alt is let go [WM] [2.0]
+- D8 Small scrolls add up to one step, and a quick second one is ignored [2.0]
 - D9 Notes are placed within the work area, panels left out, across monitors (not tested)
 
 ## E. Text formats: bold, heading, inline code
