@@ -485,3 +485,31 @@ def test_Q11_bold_in_a_heading_is_drawn_bolder_in_korean_too(app, inp):
     plain = ink(note, '한글제목 ')
     bold = ink(note, ' 한글제목')
     assert bold > plain * 1.05, (plain, bold)
+
+
+def colored_share(area):
+    """The share of an area's pixels that have a color, not gray."""
+    x, y, w, h = area
+    pb = screenshot('/tmp/e2e-color.png', (x, y, w, h))
+    n, stride, data = pb.get_n_channels(), pb.get_rowstride(), pb.get_pixels()
+    colored = 0
+    for yy in range(pb.get_height()):
+        for xx in range(pb.get_width()):
+            i = yy * stride + xx * n
+            r, g, b = data[i], data[i + 1], data[i + 2]
+            if max(r, g, b) - min(r, g, b) > 70 and not (r > 200 and g > 200):
+                colored += 1
+    return colored / max(1, pb.get_width() * pb.get_height())
+
+
+@pytest.mark.parametrize('emoji', ['😀', '❤️', '✅', '👍'])
+def test_J5_emoji_are_drawn_in_color(app, inp, emoji):
+    # On a gray note, so only the emoji has color; in the body's fonts, where
+    # one with black-and-white emoji, as DejaVu Sans, may come first.
+    app.write_notes([{'id': 'test', 'title': 'test', 'text': 'see ' + emoji + ' here', 'color': 'gray',
+                      'x': 100, 'y': 80, 'w': 420, 'h': 300}])
+    app.start()
+    note = WebNote(app, app.note('test').frame)
+    settle(0.5)
+    area = box(note, emoji)
+    assert colored_share(area) > 0.15, (emoji, colored_share(area))

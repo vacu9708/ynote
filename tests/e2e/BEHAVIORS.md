@@ -121,6 +121,7 @@ two monitors (D4, D9: much effort for little).
 - G4 Tab and Shift+Tab indent and outdent an item by one level
 - G5 Tab over a selection indents each item in it
 - G6 Backspace at a top item's start takes its bullet; at a nested item's, outdents it one level
+- G6b Backspace at the start of the line after a list joins the line to the last item's text, as in Confluence, so Backspace held on an empty last item ends the list once and goes on into the item before (the item came and went)
 - G7 Delete at a line's end joins the next item's line to it
 - G8 A click on a to-do's box checks it without moving the cursor; done items are gray
 - G9 Ctrl+Enter checks or unchecks the to-dos on the selected lines only
@@ -155,6 +156,7 @@ two monitors (D4, D9: much effort for little).
 - J2 http and https addresses are links: Ctrl+click opens one, and a click only places the cursor
 - J3 A link leaves out the punctuation after it, and keeps parentheses, queries, and ports
 - J4 Emoji… (the right-click menu, ＋, /emoji, or Ctrl+.) finds emoji by name and puts one at the cursor; the ones used last come first
+- J5 Emoji are drawn in color, not in a text font's black and white, as DejaVu Sans drew 😀 [px]
 
 ## K. Images
 

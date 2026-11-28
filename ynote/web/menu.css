@@ -1,6 +1,15 @@
 /* A menu: a white card with rows of icon, name, the Markdown typed for it,
    and its keys. The page is transparent around the card, which leaves room
    for its shadow (--room; web_popup.py SHADOW_ROOM). */
+/* Emoji in color: the color emoji font for their code points alone, ahead
+   of the text fonts, as DejaVu Sans draws some, as 😀, in black and white. */
+@font-face {
+  font-family: 'Ynote Emoji';
+  src: local('Noto Color Emoji'), local('NotoColorEmoji');
+  unicode-range: U+1F000-1FAFF, U+2600-27BF, U+2B00-2BFF, U+231A-231B, U+2328, U+23CF, U+23E9-23F3,
+    U+23F8-23FA, U+24C2, U+25AA-25AB, U+25B6, U+25C0, U+25FB-25FE, U+2934-2935, U+203C, U+2049,
+    U+2139, U+3030, U+303D, U+3297, U+3299, U+200D, U+20E3, U+FE0F, U+E0020-E007F;
+}
 :root {
   --room: 14px;
   --accent: #2F6FE4;
@@ -9,8 +18,8 @@
   --dim: #8A93A2;
   --line: #ECEEF2;
   --danger: #C42B32;
-  --body: Ubuntu, Cantarell, 'DejaVu Sans', 'Noto Sans CJK KR', sans-serif;
-  --mono: 'DejaVu Sans Mono', 'Noto Sans Mono', 'Ubuntu Mono', monospace;
+  --body: 'Ynote Emoji', Ubuntu, Cantarell, 'DejaVu Sans', 'Noto Sans CJK KR', sans-serif;
+  --mono: 'Ynote Emoji', 'DejaVu Sans Mono', 'Noto Sans Mono', 'Ubuntu Mono', monospace;
 }
 html, body { margin: 0; background: transparent; overflow: hidden; }
 /* Without a compositor: no room for a shadow, and square corners. */
